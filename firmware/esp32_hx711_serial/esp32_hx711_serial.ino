@@ -34,6 +34,8 @@
 
 #include <Arduino.h>
 #include "HX711.h"
+#include <math.h>      // fabsf, isnan
+#include <limits.h>    // LONG_MIN
 
 // ===============================================================
 // CONFIGURAZIONE UTENTE (tutto qui in alto per facilità di tuning)
@@ -99,7 +101,8 @@ float rbSlow[RB_SLOW_SZ]; int iSlow=0, nSlow=0;
 long drift_bucket_counts = 0;
 
 // Display su seriale
-long gDispPrev = LONG_MIN;        // ultimo valore intero “mostrato”
+long  gDispPrev   = LONG_MIN;     // ultimo valore intero “mostrato” (retro-compat)
+float gPrintPrev  = NAN;          // ultimo valore FLOAT che ha fatto scattare la stampa (per dead-band reale)
 
 // Timing
 unsigned long lastSampleMs = 0;
@@ -112,7 +115,7 @@ unsigned long lastSampleMs = 0;
 long readRawAvg(int n) {
   long s = 0;
   for (int i = 0; i < n; i++) {
-    while (!scale.is_ready()) { /* attendo conversione */ }
+    while (!scale.is_ready()) { delayMicroseconds(200); } // evita busy-wait “puro”
     s += scale.read();
   }
   return s / n;
@@ -163,7 +166,7 @@ void zeroTrackIfNearZero(float g, long raw) {
 
   long target = OFFSET_RAW + drift_bucket_counts; // dove “vorremmo” stare
   long diff = raw - target;
-  if (abs(diff) > ZT_STEP_MIN) {
+  if (labs(diff) > ZT_STEP_MIN) {
     drift_bucket_counts += (diff > 0 ? 1 : -1); // passo 1 count per ciclo (lento, controllato)
   }
 }
@@ -190,6 +193,12 @@ void calibrateWithKnown(float g_ref) {
   delay(50);
 
   // 2) Chiedo conferma da seriale quando il peso noto è appoggiato
+  if (g_ref <= 0.0f) {
+    Serial.println(F("[ERR] cal=XXXX: valore non valido (deve essere > 0)"));
+    return;
+  }
+
+  drift_bucket_counts = 0; // evito di “sporcare” la CAL con drift accumulato
   Serial.println(F("Posa il peso di riferimento e premi INVIO (inizio calibrazione)..."));
   while (Serial.available()) Serial.read();
   while (!Serial.available()) { delay(10); }
@@ -310,20 +319,19 @@ void loop() {
   // Se il peso si muove (UNSTABLE), spendo il drift subito (riallineo offset)
   spendDriftOnChange();
 
-  // Visualizzazione su seriale con dead-band
-  long gDisp = lroundf(g); // arrotondo al grammo
+  // Visualizzazione su seriale con dead-band REALE (su float, non sull'intero arrotondato)
   bool mustPrint = false;
-
-  if (gDispPrev == LONG_MIN) { // prima stampa
-    mustPrint = true;
-  } else if (labs(gDisp - gDispPrev) > lroundf(DISPLAY_DEAD_BAND)) {
-    mustPrint = true;
+  if (isnan(gPrintPrev)) {
+    mustPrint = true;              // prima stampa
+  } else if (fabsf(g - gPrintPrev) > DISPLAY_DEAD_BAND) {
+    mustPrint = true;              // stampa solo se la differenza reale supera la banda
   }
-
-  if (DEBUG_VERBOSE) mustPrint = true;
+  if (DEBUG_VERBOSE) mustPrint = true; // debug forza sempre la stampa
 
   if (mustPrint) {
-    gDispPrev = gDisp;
+  long gDisp = lroundf(g);       // arrotondo al grammo solo quando stampo
+  gDispPrev  = gDisp;            // mantengo anche la versione “storica” intera
+  gPrintPrev = g;                // e salvo il valore FLOAT che ha causato la stampa
     if (DEBUG_VERBOSE) {
       // Telemetria estesa (utile per capire range finestre e deriva)
       float rngFast = rangeRB(rbFast, nFast);
