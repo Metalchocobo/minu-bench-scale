@@ -1,0 +1,12 @@
+# Arduino/PlatformIO ignores
+*.pio
+.pioenvs
+.vscode/
+.DS_Store
+*.bin
+*.elf
+*.map
+*.hex
+*.lst
+*.o
+*.d
