@@ -1,6 +1,6 @@
 // =======================================================
-// ESP32 + HX711 — Stati + ZT + Snap + DriftBucket + Auto-TARE after-stabilization (±16 kg)
-//  • Lettura: read(1) → Median(3) → MovingAverage(non-bloccante)
+// ESP32 + NAU7802 — Stati + ZT + Snap + DriftBucket + Auto-TARE after-stabilization (±16 kg)
+//  • Lettura: NAU7802 → Median(3) → MovingAverage(non-bloccante)
 //  • Stati STABLE/UNSTABLE (preset rapidi: m fine / m work)
 //  • Zero-Tracking (AZT) prudente + Snap-to-zero allo scarico
 //  • Drift Bucket: stima creep in STABLE + APPLICAZIONE alla transizione ST→UNST (uscita da sosta)
@@ -8,17 +8,17 @@
 //  • Comandi: t, c <g>, p, s, m normal|fine|fine-only|work, st on/off/?,
 //             zt on/off/reset/?, dr on/off/reset/?
 //
-// Nota: con DRIFT_APPLY_ON_LEAVE=true il bucket viene applicato quando lasci STABLE.
-//       In tal caso NON viene ri-applicato allo snap (guard nel codice).
+// Nota: DRIFT_APPLY_ON_LEAVE=true = bucket applicato quando lasci STABLE
 // =======================================================
 
 #include <Arduino.h>
-#include <HX711.h>
+#include <Wire.h>
+#include "SparkFun_Qwiic_Scale_NAU7802_Arduino_Library.h"
 #include <Preferences.h>
 #include <math.h>
 
 // ========================= CONFIG (TUTTO QUI) =========================
-// [0] Calibrazione seed (dai tuoi log). Dopo CAL+SAVE userai NVS.
+// [0] Calibrazione seed (dai tuoi log HX). Dopo CAL+SAVE userai NVS.
 const long  DEFAULT_REF_RAW  = 268427;   // raw medio con 2000 g
 const long  DEFAULT_ZERO_RAW = 54608;    // raw medio a vuoto
 const long  DEFAULT_REF_G    = 2000;     // grammi di riferimento
@@ -51,12 +51,12 @@ const float DB_UNSTABLE_F = 0.10f;  // deadband in UNSTABLE (fine)
 
 // [4] Stati STABLE/UNSTABLE (soglie robuste)
 const bool  ST_ENABLE_DEFAULT = true; // true = stati ON, false = LIVE
-float    ST_DELTA_LEAVE_G   = 1.20f;  // range ≥ 1.20 g (win breve) → lascia STABLE
+float    ST_DELTA_LEAVE_G   = 1.80f;  // range ≥ 1.8 g (win breve) → lascia STABLE
 uint32_t ST_TO_UNSTABLE_MS  = 500;    // finestra breve (ms)
-float    ST_SLOPE_GPS       = 2.00f;  // |slope| ≥ 2.0 g/s e |g−latch| ≥ 1.5 g
-uint32_t ST_SLOPE_WIN_MS    = 1000;   // finestra slope (ms)
-float    ST_FROM_LATCH_G    = 1.50f;  // distanza minima dal latch per lasciare STABLE
-float    ST_DELTA_ENTER_G   = 1.00f;  // range < 1.00 g (win lunga) → rientra STABLE
+float    ST_SLOPE_GPS       = 4.00f;  // |slope| ≥ 4.0 g/s e |g−latch| ≥ ST_FROM_LATCH_G
+uint32_t ST_SLOPE_WIN_MS    = 800;    // finestra slope (ms)
+float    ST_FROM_LATCH_G    = 2.0f;   // distanza minima dal latch per lasciare STABLE
+float    ST_DELTA_ENTER_G   = 0.9f;   // range < 0.9 g (win lunga) → rientra STABLE
 uint32_t ST_TO_STABLE_MS    = 2000;   // finestra lunga (ms)
 
 // [5] Zero-Tracking (separato da OFFSET_RAW)
@@ -98,13 +98,14 @@ float    DRIFT_CAP_G          = 10.0f;          // limite assoluto bucket (±10 
 // [7b] DOVE applicare il drift bucket
 const bool DRIFT_APPLY_ON_LEAVE = true;  // true: applica il bucket alla transizione ST→UNST (uscita da sosta)
 
-// [8] Campionamento HX711 (scheda @10 SPS ≈ 110 ms)
-const uint32_t SAMPLE_MS = 110;
+// [8] Cadenzamento logica (non il sample rate del NAU)
+const uint32_t SAMPLE_MS = 110;  // ~9 Hz logica, NAU a 40 SPS → diversi campioni mediati
 
 // ========================= PIN & OGGETTI =========================
-#define HX_DOUT 25
-#define HX_SCK   5
-HX711       scale;
+const int I2C_SDA = 21;
+const int I2C_SCL = 22;
+
+NAU7802     myScale;
 Preferences prefs;
 
 // ========================= CALIBRAZIONE RUNTIME =========================
@@ -119,20 +120,69 @@ bool  ztEnable = ZT_ENABLE_DEFAULT;
 
 // ========================= FILTRI =========================
 long medBuf[3]={0,0,0}; int medIdx=0, medCount=0;
-long median3(long a,long b,long c){ long M=max(a,max(b,c)), m=min(a,min(b,c)); return a+b+c-M-m; }
-long pushMedian3(long x){ medBuf[medIdx]=x; medIdx=(medIdx+1)%3; if(medCount<3) medCount++; if(medCount<3){ long s=0; for(int i=0;i<medCount;i++) s+=medBuf[i]; return s/(medCount?medCount:1);} return median3(medBuf[0],medBuf[1],medBuf[2]); }
+long median3(long a,long b,long c){
+  long M=max(a,max(b,c)), m=min(a,min(b,c));
+  return a+b+c-M-m;
+}
+long pushMedian3(long x){
+  medBuf[medIdx]=x;
+  medIdx=(medIdx+1)%3;
+  if(medCount<3) medCount++;
+  if(medCount<3){
+    long s=0; for(int i=0;i<medCount;i++) s+=medBuf[i];
+    return s/(medCount?medCount:1);
+  }
+  return median3(medBuf[0],medBuf[1],medBuf[2]);
+}
 void resetMedian(){ medIdx=0; medCount=0; medBuf[0]=medBuf[1]=medBuf[2]=0; }
 
 long maBuf[8]; int maIdx=0, maCount=0, maN=MA_DEFAULT; long maSum=0;
-void setMA(int n){ maN=constrain(n,1,8); maIdx=0; maCount=0; maSum=0; for(int i=0;i<8;i++) maBuf[i]=0; }
-long pushMA(long x){ if(maCount==maN) maSum-=maBuf[maIdx]; else maCount++; maBuf[maIdx]=x; maSum+=x; maIdx++; if(maIdx>=maN) maIdx=0; return maSum/(maCount?maCount:1); }
+void setMA(int n){
+  maN=constrain(n,1,8);
+  maIdx=0; maCount=0; maSum=0;
+  for(int i=0;i<8;i++) maBuf[i]=0;
+}
+long pushMA(long x){
+  if(maCount==maN) maSum-=maBuf[maIdx];
+  else maCount++;
+  maBuf[maIdx]=x;
+  maSum+=x;
+  maIdx++;
+  if(maIdx>=maN) maIdx=0;
+  return maSum/(maCount?maCount:1);
+}
 
 // ========================= STORICO (range/slope) =========================
 const int MAX_HIST=64; float gHist[MAX_HIST]; int hIdx=0,hCount=0;
-void  pushHist(float g){ gHist[hIdx]=g; hIdx=(hIdx+1)%MAX_HIST; if(hCount<MAX_HIST) hCount++; }
-float histAt(int k){ if(hCount==0) return 0.0f; k=constrain(k,0,min(hCount,MAX_HIST)-1); int idx=(hIdx-1-k+MAX_HIST)%MAX_HIST; return gHist[idx]; }
-float rangeLastNSamples(int n){ n=min(n,hCount); if(n<=0) return 0.0f; float mn=histAt(0), mx=mn; for(int i=1;i<n;i++){ float v=histAt(i); if(v<mn) mn=v; if(v>mx) mx=v; } return mx-mn; }
-float slopeLastNSamples(int n){ n=min(n,hCount); if(n<2) return 0.0f; float last=histAt(0), first=histAt(n-1); float dt=((n-1)*(SAMPLE_MS/1000.0f)); if(dt<=0) return 0.0f; return (last-first)/dt; }
+void  pushHist(float g){
+  gHist[hIdx]=g;
+  hIdx=(hIdx+1)%MAX_HIST;
+  if(hCount<MAX_HIST) hCount++;
+}
+float histAt(int k){
+  if(hCount==0) return 0.0f;
+  k=constrain(k,0,min(hCount,MAX_HIST)-1);
+  int idx=(hIdx-1-k+MAX_HIST)%MAX_HIST;
+  return gHist[idx];
+}
+float rangeLastNSamples(int n){
+  n=min(n,hCount); if(n<=0) return 0.0f;
+  float mn=histAt(0), mx=mn;
+  for(int i=1;i<n;i++){
+    float v=histAt(i);
+    if(v<mn) mn=v;
+    if(v>mx) mx=v;
+  }
+  return mx-mn;
+}
+float slopeLastNSamples(int n){
+  n=min(n,hCount);
+  if(n<2) return 0.0f;
+  float last=histAt(0), first=histAt(n-1);
+  float dt=((n-1)*(SAMPLE_MS/1000.0f));
+  if(dt<=0) return 0.0f;
+  return (last-first)/dt;
+}
 
 // ========================= STATI & DISPLAY =========================
 enum State { STABLE, UNSTABLE };
@@ -156,6 +206,30 @@ float driftEstCounts = 0.0f;   // EMA lenta dell'errore raw vs atteso
 long  driftBucketCounts = 0;   // bucket clampato (counts) applicato quando esci da STABLE
 float driftAlpha = 0.0f;       // coefficiente EMA per DRIFT_TAU_MS
 
+// ========================= FUNZIONI NAU: LETTURA MEDIA =========================
+
+// Lettura NAU bloccante di un singolo sample
+long readRawNAUOnceBlocking() {
+  unsigned long t0 = millis();
+  while (!myScale.available()) {
+    if (millis() - t0 > 200) {
+      return 0; // timeout di sicurezza
+    }
+    delay(2);
+  }
+  return myScale.getReading();
+}
+
+// Media di N letture (usata per TARE/CAL/autoTare)
+long readRawNAUAvg(int n) {
+  if (n <= 1) return readRawNAUOnceBlocking();
+  long s = 0;
+  for (int i = 0; i < n; i++) {
+    s += readRawNAUOnceBlocking();
+  }
+  return s / n;
+}
+
 // ========================= NVS / UTILITY =========================
 void printHelp(){
   Serial.println(F("\nComandi:"));
@@ -168,6 +242,7 @@ void printHelp(){
   Serial.println(F("  zt on/off/reset/? -> zero-tracking (AZT/snap) toggle/reset"));
   Serial.println(F("  dr on/off/reset/? -> drift bucket toggle/reset/info"));
 }
+
 void loadFromNVS(){
   prefs.begin("minu_scale", true);
   long  off = prefs.getLong ("offset", 0);
@@ -178,6 +253,7 @@ void loadFromNVS(){
   REF_G     = rg;
   OFFSET_RAW= off; // placeholder, poi auto-tare se attiva
 }
+
 void saveToNVS(){
   prefs.begin("minu_scale", false);
   prefs.putLong ("offset", OFFSET_RAW);
@@ -185,29 +261,6 @@ void saveToNVS(){
   prefs.putLong ("ref_g",  REF_G);
   prefs.end();
   Serial.println(F("[SAVE] Parametri salvati."));
-}
-void doTare(){
-  long rawZero=scale.read_average(15);
-  OFFSET_RAW=rawZero;
-  zero_track_counts=0;
-  driftEstCounts=0.0f; driftBucketCounts=0;
-  resetMedian(); setMA(maN); hIdx=0; hCount=0; state=UNSTABLE; dispInit=false;
-  Serial.print(F("[TARE] OFFSET_RAW=")); Serial.println(OFFSET_RAW);
-}
-void doCal(long ref_g){
-  long rawRef=scale.read_average(15);
-  long delta =rawRef - OFFSET_RAW; if(delta==0) delta=1;
-  SCALE_CPG = (float)delta / (float)ref_g;
-  zero_track_counts=0;
-  driftEstCounts=0.0f; driftBucketCounts=0;
-  resetMedian(); setMA(maN); hIdx=0; hCount=0; state=UNSTABLE; dispInit=false;
-  Serial.print(F("[CAL]  SCALE_CPG=")); Serial.println(SCALE_CPG,6);
-}
-void setMode(const String& mode){
-  if(mode.equalsIgnoreCase("normal")){ setMA(MA_DEFAULT); deadbandUnstable=DB_UNSTABLE_N; Serial.println(F("[MODE] normal  (MA=6, DB=0.20 g)")); }
-  else if(mode.equalsIgnoreCase("fine")){ setMA(MA_FINE); deadbandUnstable=DB_UNSTABLE_F; Serial.println(F("[MODE] fine    (MA=4, DB=0.10 g)")); }
-  else { Serial.println(F("[MODE] sconosciuta. Usa: m normal | m fine | m fine-only | m work")); return; }
-  dispInit=false;
 }
 
 // ========================= ZERO-TRACKING CORE =========================
@@ -241,7 +294,7 @@ bool trySnapOnUnload(float gNow, float slope_now, bool quietNow){
   if (now - lastSnapMs < UNLOAD_COOLDOWN_MS) return false;
 
   if (slope_now > UNLOAD_SLOPE_GPS_NEG) return false;                 // deve essere ≤ soglia (negativa)
-  if (fabsf(gNow) > UNLOAD_CROSS_WIN_G) return false;                  // vicino a 0
+  if (fabsf(gNow) > UNLOAD_CROSS_WIN_G) return false;                 // vicino a 0
   if (!quietNow){
     int nSt = constrain((int)ceil((float)UNLOAD_STABLE_MS / (float)SAMPLE_MS), 2, MAX_HIST);
     float rngSt = rangeLastNSamples(nSt);
@@ -264,6 +317,52 @@ bool trySnapOnUnload(float gNow, float slope_now, bool quietNow){
   return true;
 }
 
+// ========================= TARE / CAL =========================
+void doTare(){
+  long rawZero = readRawNAUAvg(15);
+  OFFSET_RAW = rawZero;
+  zero_track_counts=0;
+  driftEstCounts=0.0f; driftBucketCounts=0;
+  resetMedian(); setMA(maN); hIdx=0; hCount=0; state=UNSTABLE; dispInit=false;
+  Serial.print(F("[TARE] OFFSET_RAW=")); Serial.println(OFFSET_RAW);
+}
+
+void doCal(long ref_g){
+  long rawRef = readRawNAUAvg(15);
+  long delta  = rawRef - OFFSET_RAW;
+  if (delta == 0) delta = 1;
+  SCALE_CPG = (float)delta / (float)ref_g;
+  zero_track_counts=0;
+  driftEstCounts=0.0f; driftBucketCounts=0;
+  resetMedian(); setMA(maN); hIdx=0; hCount=0; state=UNSTABLE; dispInit=false;
+  Serial.print(F("[CAL]  SCALE_CPG=")); Serial.println(SCALE_CPG,6);
+}
+
+void setMode(const String& mode){
+  if(mode.equalsIgnoreCase("normal")){
+    setMA(MA_DEFAULT);
+    deadbandUnstable=DB_UNSTABLE_N;
+    // non tocchiamo ST/ZT/DR qui: restano come sono
+    Serial.println(F("[MODE] normal  (MA=6, DB=0.20 g)"));
+  }
+  else if(mode.equalsIgnoreCase("fine")){
+    setMA(MA_FINE);
+    deadbandUnstable=DB_UNSTABLE_F;
+    // Micro-pesate: niente stati, niente drift, niente zero-tracking automatico
+    stEnable    = false;
+    driftEnable = false;
+    driftEstCounts   = 0.0f;
+    driftBucketCounts= 0;
+    ztEnable   = false;
+    Serial.println(F("[PRESET] micro: m=fine, MA=4, DB=0.10 g, ST=off, ZT=off, DR=off"));
+  }
+  else {
+    Serial.println(F("[MODE] sconosciuta. Usa: m normal | m fine | m fine-only | m work"));
+    return;
+  }
+  dispInit=false;
+}
+
 // ========================= AUTO-TARE AFTER-STABILIZATION =========================
 void autoTareOnBoot(){
   if(!AUTO_TARE_ON_BOOT){
@@ -275,7 +374,7 @@ void autoTareOnBoot(){
   delay(AUTO_TARE_SETTLE_MS); // piccolo warm-up
 
   if (!AUTO_TARE_WAIT_STABLE) {
-    long rawZero = scale.read_average(AUTO_TARE_SAMPLES);
+    long rawZero = readRawNAUAvg(AUTO_TARE_SAMPLES);
     OFFSET_RAW = rawZero; zero_track_counts = 0;
     driftEstCounts=0.0f; driftBucketCounts=0;
     resetMedian(); setMA(maN); hIdx=0; hCount=0; state=UNSTABLE; dispInit=false;
@@ -283,7 +382,7 @@ void autoTareOnBoot(){
     return;
   }
 
-  // Attesa stabilità (range+slop bassi) entro timeout
+  // Attesa stabilità (range+slope bassi) entro timeout
   float cpg = (SCALE_CPG > 0.01f) ? SCALE_CPG : DEFAULT_CPG;
   long  rangeCountsMax = lroundf(AT_RANGE_G * cpg);
 
@@ -297,8 +396,13 @@ void autoTareOnBoot(){
   bool stabilized = false;
 
   while (millis() - t0 < AT_WAIT_MAX_MS){
-    if (!scale.wait_ready_timeout(30)) continue;
-    long r = scale.read();
+    unsigned long tStart = millis();
+    while (!myScale.available() && (millis() - tStart < 30)) {
+      delay(1);
+    }
+    if (!myScale.available()) continue;
+
+    long r = myScale.getReading();
     if (n < N){ buf[n++] = r; } else { buf[head] = r; head = (head+1)%N; }
 
     if (n >= N){
@@ -321,12 +425,7 @@ void autoTareOnBoot(){
     }
   }
 
-  if (!scale.wait_ready_timeout(200)){
-    Serial.println(F("[BOOT] Auto-TARE abortita: HX711 non pronto."));
-    return;
-  }
-
-  long rawZero = scale.read_average(AUTO_TARE_SAMPLES);
+  long rawZero = readRawNAUAvg(AUTO_TARE_SAMPLES);
   OFFSET_RAW = rawZero;
   zero_track_counts = 0;
   driftEstCounts = 0.0f;
@@ -343,15 +442,74 @@ void autoTareOnBoot(){
   }
 }
 
+// ========================= INIT NAU7802 =========================
+bool initNAU7802() {
+  Serial.println(F("[NAU] Init NAU7802..."));
+
+  if (!myScale.begin()) {
+    Serial.println(F("[NAU] begin() FAIL – modulo non trovato"));
+    return false;
+  }
+
+  bool ok = true;
+  Serial.println(F("[NAU] CONFIG:"));
+
+  // LDO interno 3.3V
+  if (myScale.setLDO(NAU7802_LDO_3V3) == false) {
+    Serial.println(F("  LDO       = 3.3V (NAU7802_LDO_3V3)  esito: FAIL"));
+    ok = false;
+  } else {
+    Serial.println(F("  LDO       = 3.3V (NAU7802_LDO_3V3)  esito: OK"));
+  }
+
+  // Gain 128
+  if (myScale.setGain(NAU7802_GAIN_128) == false) {
+    Serial.println(F("  Gain      = 128  (NAU7802_GAIN_128) esito: FAIL"));
+    ok = false;
+  } else {
+    Serial.println(F("  Gain      = 128  (NAU7802_GAIN_128) esito: OK"));
+  }
+
+  // Sample rate 40 SPS (meno rumore di 80 SPS)
+  if (myScale.setSampleRate(NAU7802_SPS_40) == false) {
+    Serial.println(F("  SampleRate= 40SPS (NAU7802_SPS_40)  esito: FAIL"));
+    ok = false;
+  } else {
+    Serial.println(F("  SampleRate= 40SPS (NAU7802_SPS_40)  esito: OK"));
+  }
+
+  myScale.setChannel(NAU7802_CHANNEL_1);
+
+  if (myScale.calibrateAFE() == false) {
+    Serial.println(F("  calibrazione AFE                     esito: FAIL"));
+    ok = false;
+  } else {
+    Serial.println(F("  calibrazione AFE                     esito: OK"));
+  }
+
+  uint8_t rev = myScale.getRevisionCode();
+  Serial.print(F("[NAU] Revision code = 0x"));
+  Serial.println(rev, HEX);
+
+  return ok;
+}
+
 // ========================= SETUP =========================
-void setup(){
+void setup() {
   Serial.begin(115200);
   delay(200);
-  Serial.println(F("\n=== ESP32 + HX711 — Stati + ZT + Snap + DriftBucket + AT-after-stabilization (±16 kg) ==="));
+  Serial.println(F("\n=== ESP32 + NAU7802 — Stati + ZT + Snap + DriftBucket + AT-after-stabilization (±16 kg) ==="));
+
   printHelp();
 
-  scale.begin(HX_DOUT, HX_SCK);
-  scale.set_gain(128); // canale A, 10 SPS
+  // I2C su ESP32: SDA=21, SCL=22
+  Wire.begin(I2C_SDA, I2C_SCL);
+  Wire.setClock(400000);
+
+  if (!initNAU7802()) {
+    Serial.println(F("[NAU] ERRORE inizializzazione – controlla I2C/alimentazione."));
+    // se vuoi bloccare: while(1){ delay(500); }
+  }
 
   // coefficiente EMA per il drift (alpha = 1 - exp(-dt/tau))
   driftAlpha = 1.0f - expf(-(float)SAMPLE_MS / (float)DRIFT_TAU_MS);
@@ -398,11 +556,7 @@ void loop(){
 
     // ====== PRESET "UN TASTO" ======
     else if (cmd.equalsIgnoreCase("m fine")) {
-      setMA(MA_FINE);      // MA=4, deadband=±0.10 g
-      deadbandUnstable=DB_UNSTABLE_F;
-      ztEnable = true;      // zero-tracking ON
-      stEnable = false;     // stati OFF → LIVE
-      Serial.println(F("[PRESET] micro: m=fine, zt=on, st=off"));
+      setMode("fine");
     }
     else if (cmd.equalsIgnoreCase("m fine-only")) {
       setMA(MA_FINE);
@@ -410,23 +564,21 @@ void loop(){
       Serial.println(F("[MODE] fine-only (solo MA/deadband)"));
     }
     else if (cmd.equalsIgnoreCase("m normal")) {
-      setMA(MA_DEFAULT);    // MA=6, deadband=±0.20 g
-      deadbandUnstable=DB_UNSTABLE_N;
-      Serial.println(F("[MODE] normal (solo MA/deadband)"));
+      setMode("normal");
     }
     else if (cmd.equalsIgnoreCase("m work")) {
       setMA(MA_DEFAULT);    // filtro “normal”
       deadbandUnstable=DB_UNSTABLE_N;
-      ztEnable = true;      // ZT on
-      stEnable = true;      // stati ON
-      Serial.println(F("[PRESET] work: m=normal, zt=on, st=on"));
+      ztEnable    = true;   // ZT on
+      stEnable    = true;   // stati ON
+      driftEnable = true;   // drift on
+      Serial.println(F("[PRESET] work: m=normal, zt=on, st=on, dr=on"));
     }
     // ====== /PRESET ======
 
     else if (cmd.equalsIgnoreCase("st on"))  { stEnable=true;  Serial.println(F("[ST] on"));  }
     else if (cmd.equalsIgnoreCase("st off")) {
       stEnable=false; Serial.println(F("[ST] off (LIVE)"));
-      // Pulizia consigliata quando disattivi gli stati durante un carico
       driftEstCounts=0.0f; driftBucketCounts=0;
     }
     else if (cmd.equalsIgnoreCase("st ?"))   { Serial.print(F("[ST] ")); Serial.println(stEnable?"on":"off"); }
@@ -457,10 +609,19 @@ void loop(){
   unsigned long now=millis();
   if (now - lastSample < SAMPLE_MS) return;
   lastSample += SAMPLE_MS;
-  if (!scale.wait_ready_timeout(30)) return;
 
-  // 1) Lettura grezza
-  long raw = scale.read();
+  if (!myScale.isConnected()) {
+    Serial.println(F("[ERR] NAU non connesso (isConnected=false)."));
+    return;
+  }
+
+  if (!myScale.available()) {
+    // nessun dato pronto, salta questo giro
+    return;
+  }
+
+  // 1) Lettura grezza NAU
+  long raw = myScale.getReading();
 
   // 2) Filtri
   long rawMed = pushMedian3(raw);
@@ -513,7 +674,6 @@ void loop(){
         if (DRIFT_APPLY_ON_LEAVE && driftEnable && (fabsf(gLatch) >= DRIFT_MIN_LOAD_G) && (driftBucketCounts != 0)) {
           zero_track_counts += driftBucketCounts;
 
-          // clamp come per ZT
           long cap = lroundf(ZT_MAX_G * SCALE_CPG);
           if (zero_track_counts >  cap) zero_track_counts =  cap;
           if (zero_track_counts < -cap) zero_track_counts = -cap;
@@ -526,9 +686,8 @@ void loop(){
           driftEstCounts = 0.0f;
           driftBucketCounts = 0;   // evita ri-applicazioni
         }
-        // ————————————————————————————————————————————————
 
-        state=UNSTABLE; 
+        state=UNSTABLE;
         dispInit=false;
       }
       gDisp = lroundf(gLatch);
