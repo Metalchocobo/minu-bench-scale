@@ -1,3 +1,5 @@
+//NOTA-> qUESTA VERSION HA MOLTE FUNZIONALITà PER CELLA INSTABILE. Utilizzare nel caso si notasse deriva o pesate imprecise
+// 
 // =======================================================
 // ESP32 + NAU7802 — Stati + ZT + Snap + DriftBucket + Auto-TARE after-stabilization (±16 kg)
 //  • Lettura: NAU7802 → Median(3) → MovingAverage(non-bloccante)
