@@ -1,78 +1,19 @@
+
 // =======================================================
-// ESP32 + NAU7802 (5 V) — versione "light" + OLED SSD1322 SPI
-//  • Lettura: NAU7802 → Median(3) → MovingAverage
-//  • Stati STABLE/UNSTABLE SEMPLICI (facili da tarare)
-//  • Zero-Tracking:
-//      - Snap-to-zero allo scarico
-//      - Micro-correzione lentissima vicino a 0
-//  • Modalità: m work / m normal / m fine / m live
-//  • Display OLED 3.12" 256x64 SSD1322 SPI via U8g2
+// ESP32 DevKit + NAU7802 (5 V) + OLED SSD1322 256x64
+// Versione "light" con stati STABLE/UNSTABLE + ZT + OLED
+//  • NAU7802 su I2C (D27 = SDA, D26 = SCL)
+//  • OLED SSD1322 su SPI hardware (CLK=18, MOSI=23)
+//    CS=D21, DC=D22, RST=D19  (tutti lato basso destro)
 // =======================================================
 
 #include <Arduino.h>
 #include <Wire.h>
+#include <SPI.h>
+#include <U8g2lib.h>
 #include "SparkFun_Qwiic_Scale_NAU7802_Arduino_Library.h"
 #include <Preferences.h>
 #include <math.h>
-
-// ========================= OLED SSD1322 =========================
-// IMPORTANTISSIMO per schermi larghi 256 px
-#define U8G2_16BIT
-#include <U8g2lib.h>
-
-// Scegli 3 GPIO OUTPUT liberi sulla tua ESP32.
-// EVITA: 34-39 (solo input), 6-11 (flash), 0/2/12/15 se non sai cosa stai facendo.
-static const int OLED_CS  = 27;   // cambia se non esiste sulla tua scheda
-static const int OLED_DC  = 26;   // cambia se non esiste sulla tua scheda
-static const int OLED_RST = 25;   // cambia se non esiste sulla tua scheda
-// SPI hardware ESP32 (VSPI): SCK=18, MOSI=23
-
-U8G2_SSD1322_NHD_256X64_F_4W_HW_SPI oled(
-  U8G2_R0,
-  OLED_CS,
-  OLED_DC,
-  OLED_RST
-);
-
-// Aggiornamento display anti-flicker
-void oledShow(long gDisp, bool stable, bool overload, bool stEnabled){
-  static long lastShown = LONG_MIN;
-  static bool lastStable = false;
-  static bool lastOver = false;
-  static bool lastStEn = false;
-
-  if (gDisp == lastShown && stable == lastStable && overload == lastOver && stEnabled == lastStEn){
-    return;
-  }
-  lastShown = gDisp;
-  lastStable = stable;
-  lastOver = overload;
-  lastStEn = stEnabled;
-
-  oled.clearBuffer();
-
-  // Peso grande
-  oled.setFont(u8g2_font_logisoso32_tn); // numeri grandi
-  char buf[20];
-  snprintf(buf, sizeof(buf), "%ld", gDisp);
-  oled.drawStr(0, 44, buf);
-
-  // Unita' e stato
-  oled.setFont(u8g2_font_6x12_tr);
-  oled.drawStr(200, 12, "g");
-
-  if (!stEnabled){
-    oled.drawStr(0, 62, "LIVE");
-  } else {
-    oled.drawStr(0, 62, stable ? "STABLE" : "UNSTABLE");
-  }
-
-  if (overload){
-    oled.drawStr(160, 62, "OVER");
-  }
-
-  oled.sendBuffer();
-}
 
 // ========================= CONFIG =========================
 
@@ -101,9 +42,9 @@ float       deadbandUnstable = DB_UNSTABLE_N;
 
 // [4] Stati STABLE/UNSTABLE (semplificati)
 const bool  ST_ENABLE_DEFAULT   = true;
-float       ST_LEAVE_DELTA_G    = 0.80f;  // se |gLive - gLatch| ≥ 0.40 g → UNSTABLE
-float       ST_ENTER_RANGE_G    = 0.60f;  // range < 0.30 g → STABLE
-uint32_t    ST_TO_STABLE_MS     = 1200;   // finestra per valutare il rientro (1 s)
+float       ST_LEAVE_DELTA_G    = 0.80f;  // se |gLive - gLatch| ≥ 0.80 g → UNSTABLE
+float       ST_ENTER_RANGE_G    = 0.60f;  // range < 0.60 g → STABLE
+uint32_t    ST_TO_STABLE_MS     = 1200;   // finestra per valutare il rientro (1.2 s)
 
 // [5] Zero-Tracking (solo near-zero + snap allo scarico)
 const bool  ZT_ENABLE_DEFAULT   = true;
@@ -130,12 +71,31 @@ float       UNLOAD_SNAP_MAX_G    = 5.0f;    // correzione max snap (g)
 // [6] Campionamento logica (non il sample rate del NAU)
 const uint32_t SAMPLE_MS = 60; // ~16 Hz logica, NAU a 40 SPS
 
+// [OLED] Cadenzamento refresh
+const uint32_t OLED_UPDATE_MS = 120;
+
 // ========================= PIN & OGGETTI =========================
-const int I2C_SDA = 21;
-const int I2C_SCL = 22;
+
+// NAU7802: I2C spostato su D27 (SDA) e D26 (SCL) per averli vicini
+const int I2C_SDA = 32;  // etichetta scheda: D27 (GPIO27)
+const int I2C_SCL = 33;  // etichetta scheda: D26 (GPIO26)
+
+// OLED SSD1322 su SPI hardware (lato basso destro)
+//   CLK  = GPIO18  (pin D18, fisso SPI HW)
+//   MOSI = GPIO23  (pin D23, fisso SPI HW)
+static const int OLED_CS  = 25;  // pin D21 (GPIO21)
+static const int OLED_DC  = 26;  // pin D22 (GPIO22)
+static const int OLED_RST = 27;  
 
 NAU7802     myScale;
 Preferences prefs;
+
+// U8g2: SSD1322 256x64, 4-wire SPI hardware, full buffer
+// Assicurati che in u8g2.h sia attivo U8G2_16BIT per 256x64.
+U8G2_SSD1322_NHD_256X64_F_4W_HW_SPI oled(U8G2_R0,
+                                         /* cs=*/ OLED_CS,
+                                         /* dc=*/ OLED_DC,
+                                         /* reset=*/ OLED_RST);
 
 // ========================= CALIBRAZIONE RUNTIME =========================
 // g = (rawAvg - (OFFSET_RAW + zero_track_counts)) / SCALE_CPG
@@ -250,6 +210,7 @@ bool  dispInit = false;
 unsigned long lastSampleMs  = 0;
 unsigned long lastZTtickMs  = 0;
 unsigned long lastSnapMs    = 0;
+unsigned long lastOledMs    = 0;
 
 // ========================= UTILITY =========================
 inline long effectiveOffsetCounts(){
@@ -488,23 +449,38 @@ bool initNAU7802(){
   return ok;
 }
 
+// ========================= OLED: FUNZIONE DI RENDER =========================
+void oledRender(long gDisp, const char* modeLabel){
+  oled.clearBuffer();
+
+  // Peso grande centrato (solo valore intero, niente unità)
+  char buf[16];
+  snprintf(buf, sizeof(buf), "%ld", gDisp);
+
+  oled.setFont(u8g2_font_logisoso32_tn); // 0–9 grandi
+  int textW = oled.getStrWidth(buf);
+  int x = (oled.getDisplayWidth() - textW) / 2;
+  int y = 48; // baseline scelta a occhio per stare centrato su 64 px
+  oled.drawStr(x, y, buf);
+
+  // Stato in alto a sinistra
+  oled.setFont(u8g2_font_6x12_tr);
+  oled.drawStr(0, 12, modeLabel);
+
+  oled.sendBuffer();
+}
+
 // ========================= SETUP =========================
 void setup(){
   Serial.begin(115200);
   delay(200);
-  Serial.println(F("\n=== ESP32 + NAU7802 — versione light (5 V) ==="));
+  Serial.println(F("\n=== ESP32 + NAU7802 — versione light (5 V) + OLED SSD1322 ==="));
 
   printHelp();
 
+  // I2C per NAU
   Wire.begin(I2C_SDA, I2C_SCL);
   Wire.setClock(400000);
-
-  // Init OLED subito, così vedi BOOT anche se NAU non parte
-  oled.begin();
-  oled.clearBuffer();
-  oled.setFont(u8g2_font_6x12_tr);
-  oled.drawStr(0, 20, "BOOT...");
-  oled.sendBuffer();
 
   if (!initNAU7802()){
     Serial.println(F("[NAU] ERRORE inizializzazione, controlla cablaggio/alimentazione."));
@@ -521,8 +497,15 @@ void setup(){
 
   autoTareOnBoot();
 
-  // Primo rendering coerente a fine boot
-  oledShow(0, false, false, stEnable);
+  // SPI + OLED
+  SPI.begin(18, -1, 23, OLED_CS); // SCK=18, MISO unused, MOSI=23, SS=OLED_CS
+  oled.begin();
+  oled.clearBuffer();
+  oled.setFont(u8g2_font_6x12_tr);
+  oled.drawStr(0, 12, "BOOT");
+  oled.sendBuffer();
+
+  lastOledMs = millis();
 }
 
 // ========================= LOOP =========================
@@ -606,7 +589,14 @@ void loop(){
 
   // --- Cadenzamento letture ---
   unsigned long now = millis();
-  if (now - lastSampleMs < SAMPLE_MS) return;
+  if (now - lastSampleMs < SAMPLE_MS) {
+    // comunque aggiorno OLED se è ora
+    if (now - lastOledMs >= OLED_UPDATE_MS) {
+      // niente nuovo dato, ma puoi tenerlo aggiornato con l'ultimo gDisp
+      // (non faccio nulla qui: gDisp verrà aggiornato nel ramo principale)
+    }
+    return;
+  }
   lastSampleMs += SAMPLE_MS;
 
   if (!myScale.available()){
@@ -635,7 +625,7 @@ void loop(){
   float rng2s      = rangeLastNSamples(n2s);
   float slope_gps  = slopeLastNSamples(nSlope);
 
-  // 5) State machine STABLE/UNSTABLE + display
+  // 5) State machine STABLE/UNSTABLE + display numerico
   long  gDisp = 0;
   bool  overload = false;
   const char* modeLabel = stEnable ? (state == STABLE ? "STABLE" : "UNSTABLE") : "LIVE";
@@ -709,10 +699,6 @@ void loop(){
     if (gDisp < -(long)MAX_DISPLAY_G) gDisp = -(long)MAX_DISPLAY_G;
   }
 
-  // 7b) Update OLED
-  bool stableForDisp = stEnable && (state == STABLE);
-  oledShow(gDisp, stableForDisp, overload, stEnable);
-
   // 8) Log
   Serial.print(F("rawAvg="));   Serial.print(rawAvg);
   Serial.print(F("  g="));      Serial.print(gLive,2);
@@ -725,4 +711,10 @@ void loop(){
   Serial.print(F("  zt_cnt=")); Serial.print(zero_track_counts);
   Serial.print(F("  off="));    Serial.print(OFFSET_RAW);
   Serial.print(F("  sc="));     Serial.println(SCALE_CPG,4);
+
+  // 9) OLED update cadenzato
+  if (now - lastOledMs >= OLED_UPDATE_MS){
+    lastOledMs = now;
+    oledRender(gDisp, modeLabel);
+  }
 }
