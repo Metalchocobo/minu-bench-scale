@@ -448,6 +448,33 @@ bool initNAU7802(){
 
   return ok;
 }
+// ------------------------------------------------------
+// Helpers per testo centrato
+// ------------------------------------------------------
+void drawCenteredText(const char *str, int16_t y) {
+  int16_t w = oled.getStrWidth(str);
+  int16_t x = (256 - w) / 2;
+  oled.drawStr(x, y, str);
+}
+void drawCenteredTextUTF8(const char *str, int16_t y) {
+  int16_t w = oled.getUTF8Width(str);   // larghezza testo UTF-8
+  int16_t x = (256 - w) / 2;           // 256 = larghezza display
+  oled.drawUTF8(x, y, str);
+}
+
+// ========================= OLED: MESSAGGI DI BOOT =========================
+void drawLayoutBoot() {
+  oled.begin();
+  oled.clearBuffer();
+  // Splash iniziale
+  oled.setFont(u8g2_font_logisoso30_tf);
+  drawCenteredTextUTF8("Minù Ronin 00", 34);
+  oled.setFont(u8g2_font_6x12_tr);
+  drawCenteredText("Boot Inizializzato...", 51);
+  oled.sendBuffer();
+  delay(3000);
+}
+
 
 // ========================= OLED: FUNZIONE DI RENDER =========================
 void oledRender(long gDisp, const char* modeLabel){
@@ -499,11 +526,7 @@ void setup(){
 
   // SPI + OLED
   SPI.begin(18, -1, 23, OLED_CS); // SCK=18, MISO unused, MOSI=23, SS=OLED_CS
-  oled.begin();
-  oled.clearBuffer();
-  oled.setFont(u8g2_font_6x12_tr);
-  oled.drawStr(0, 12, "BOOT");
-  oled.sendBuffer();
+  drawLayoutBoot();
 
   lastOledMs = millis();
 }
