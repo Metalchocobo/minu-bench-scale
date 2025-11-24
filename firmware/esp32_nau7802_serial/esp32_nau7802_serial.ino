@@ -14,6 +14,7 @@
 #include "SparkFun_Qwiic_Scale_NAU7802_Arduino_Library.h"
 #include <Preferences.h>
 #include <math.h>
+#include "battery_monitor.h"
 
 // ========================= CONFIG =========================
 
@@ -87,6 +88,7 @@ static const int OLED_CS  = 25;  // pin D21 (GPIO21)
 static const int OLED_DC  = 26;  // pin D22 (GPIO22)
 static const int OLED_RST = 27;  
 
+
 NAU7802     myScale;
 Preferences prefs;
 
@@ -106,6 +108,7 @@ long  REF_G      = DEFAULT_REF_G;
 // Zero-Tracking accumulatore (solo software)
 long  zero_track_counts = 0;
 bool  ztEnable = ZT_ENABLE_DEFAULT;
+
 
 // ========================= FILTRI =========================
 long medBuf[3] = {0,0,0};
@@ -529,6 +532,8 @@ void setup(){
   drawLayoutBoot();
 
   lastOledMs = millis();
+  
+  battery_init();
 }
 
 // ========================= LOOP =========================

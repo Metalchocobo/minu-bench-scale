@@ -18,6 +18,7 @@
 #include "SparkFun_Qwiic_Scale_NAU7802_Arduino_Library.h"
 #include <Preferences.h>
 #include <math.h>
+#include "battery_monitor.h"
 
 // ========================= CONFIG (TUTTO QUI) =========================
 // [0] Calibrazione seed (dai tuoi log HX). Dopo CAL+SAVE userai NVS.
