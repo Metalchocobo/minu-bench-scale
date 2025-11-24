@@ -72,7 +72,7 @@ float       UNLOAD_SNAP_MAX_G    = 5.0f;    // correzione max snap (g)
 const uint32_t SAMPLE_MS = 60; // ~16 Hz logica, NAU a 40 SPS
 
 // [OLED] Cadenzamento refresh
-const uint32_t OLED_UPDATE_MS = 120;
+const uint32_t OLED_UPDATE_MS = 60;
 
 // ========================= PIN & OGGETTI =========================
 
