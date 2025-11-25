@@ -535,7 +535,8 @@ void setup(){
   
   battery_init();
 }
-
+//debug batteria
+static uint32_t lastBattDebug = 0;
 // ========================= LOOP =========================
 void loop(){
   // --- Comandi seriale ---
@@ -630,6 +631,17 @@ void loop(){
   if (!myScale.available()){
     return; // nessun nuovo dato dal NAU
   }
+
+  
+  //aggiorno stato batteria
+  battery_update(now);
+
+   // ogni 3 secondi stampa lo stato batteria
+    if (now - lastBattDebug > 3000) {
+        lastBattDebug = now;
+        BatteryStatus st = battery_get_status();
+        battery_debug_print(st);
+    }
 
   // 1) Lettura grezza NAU
   long raw = myScale.getReading();
@@ -745,4 +757,5 @@ void loop(){
     lastOledMs = now;
     oledRender(gDisp, modeLabel);
   }
+
 }
