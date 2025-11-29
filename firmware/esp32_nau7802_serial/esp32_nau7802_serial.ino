@@ -14,6 +14,7 @@
 #include "SparkFun_Qwiic_Scale_NAU7802_Arduino_Library.h"
 #include "battery_monitor.h"
 #include "ui_display.h"
+#include "keypad.h"
 #include "scale_core.h"
 #include <Preferences.h>
 #include <math.h>
@@ -194,6 +195,10 @@ enum State { STABLE, UNSTABLE };
 bool  stEnable = ST_ENABLE_DEFAULT;
 State state    = UNSTABLE;
 
+enum ScaleMode { SCALE_MODE_WORK = 0, SCALE_MODE_LIVE };
+ScaleMode currentMode = SCALE_MODE_WORK;
+
+
 float gLive = 0.0f;
 float gLatch = 0.0f;
 float dispUnstable = 0.0f;
@@ -358,6 +363,7 @@ void setMode(const String& mode){
     stEnable = true;
     ztEnable = true;
     resetFiltersAndState();
+    currentMode = SCALE_MODE_WORK;
     Serial.println(F("[MODE] work/normal: MA=6, DB=0.10 g, ST=on, ZT=on"));
   }
   else if (mode.equalsIgnoreCase("fine") || mode.equalsIgnoreCase("live")){
@@ -367,10 +373,61 @@ void setMode(const String& mode){
     stEnable = false;   // live
     ztEnable = true;
     resetFiltersAndState();
+    currentMode = SCALE_MODE_LIVE;
     Serial.println(F("[MODE] fine/live: MA=4, DB=0.05 g, ST=off, ZT=on"));
   }
   else {
     Serial.println(F("[MODE] sconosciuta. Usa: m work | m normal | m fine | m live"));
+  }
+}
+
+
+void toggleModeFromKeypad(){
+  if (currentMode == SCALE_MODE_WORK){
+    // Passa a modalità LIVE (fine)
+    setMode("live");
+  } else {
+    // Torna a modalità WORK (normal)
+    setMode("work");
+  }
+}
+
+// Gestione degli eventi tastiera frontale
+void handleKeyEvent(KeyCode key){
+  switch (key){
+    case KEY_TARE:
+      // TARA: usa la logica esistente
+      doTare();
+      break;
+
+    case KEY_MODE:
+      // MODE: toggle Work <-> Live
+      toggleModeFromKeypad();
+      break;
+
+    // Tasti ancora non utilizzati, lasciati intenzionalmente liberi:
+    case KEY_ENTER:
+      // FUTURO: conferma selezione menu / preset
+      break;
+    case KEY_ZERO:
+      // FUTURO: zero manuale / offset visuale
+      break;
+    case KEY_UP:
+      // FUTURO: scorrimento voci menu / incremento
+      break;
+    case KEY_UNIT:
+      // FUTURO: cambio unità o preset
+      break;
+    case KEY_SET:
+      // FUTURO: setup avanzato / calibrazione
+      break;
+    case KEY_CALI:
+      // FUTURO: entry-point calibrazione guidata
+      break;
+
+    case KEY_NONE:
+    default:
+      break;
   }
 }
 
@@ -464,7 +521,9 @@ void setup(){
   lastOledMs = millis();
   
   battery_init();
+  keypad_init();
 }
+
 //debug batteria
 static uint32_t lastBattDebug = 0;
 // ========================= LOOP =========================
@@ -546,8 +605,16 @@ void loop(){
     }
   }
 
-  // --- Cadenzamento letture ---
+  // --- Cadenzamento letture + tastiera ---
   unsigned long now = millis();
+
+  // Tastiera frontale
+  keypad_update(now);
+  KeyCode key = keypad_get_event();
+  if (key != KEY_NONE){
+    handleKeyEvent(key);
+  }
+
   if (now - lastSampleMs < SAMPLE_MS) {
     // comunque aggiorno OLED se è ora
     if (now - lastOledMs >= OLED_UPDATE_MS) {
