@@ -19,6 +19,7 @@
 #include <Preferences.h>
 #include <math.h>
 #include "battery_monitor.h"
+#include "buzzer.h"
 Preferences prefs; 
 NAU7802 myScale;
 
@@ -397,12 +398,14 @@ void handleKeyEvent(KeyCode key){
   switch (key){
     case KEY_TARE:
       // TARA: usa la logica esistente
+      buzzerKeyClick();
       doTare();
       break;
 
     case KEY_MODE:
       // MODE: toggle Work <-> Live
       toggleModeFromKeypad();
+      buzzerOk(); 
       break;
 
     // Tasti ancora non utilizzati, lasciati intenzionalmente liberi:
@@ -503,6 +506,8 @@ bool initNAU7802(){
 void setup(){
   Serial.begin(115200);
   delay(200);
+  buzzerInit();
+  
   Serial.println(F("\n=== ESP32 + NAU7802 — versione light (5 V) + OLED SSD1322 ==="));
 
   printHelp();
@@ -516,12 +521,16 @@ void setup(){
 
   // UI / OLED
   ui_init();
+  
   ui_showBoot();
+  buzzerBootMelody();
+  //delay(3000);
 
   lastOledMs = millis();
   
   battery_init();
   keypad_init();
+
 }
 
 //debug batteria

@@ -287,7 +287,7 @@ void ui_showBoot() {
   drawCenteredText("Boot inizializzato...", 62);
 
   oled.sendBuffer();
-  delay(3000);
+ 
 }
 
 // -----------------------------------------------------------------------------
