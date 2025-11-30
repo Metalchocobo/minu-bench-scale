@@ -399,11 +399,13 @@ void handleKeyEvent(KeyCode key){
     case KEY_TARE:
       Serial.println(F("[KEYPAD] TARE pressed"));
       doTare();
+      buzzerKeyClick();
       break;
 
     case KEY_MODE:
       Serial.println(F("[KEYPAD] MODE pressed"));
       toggleModeFromKeypad();
+      buzzerOk();
       break;
 
     // Tasti ancora non utilizzati, lasciati intenzionalmente liberi:

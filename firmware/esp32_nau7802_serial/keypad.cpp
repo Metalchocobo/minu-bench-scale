@@ -77,30 +77,19 @@ void keypad_init() {
   pendingEvent  = KEY_NONE;
 }
 
+static KeyCode lastStableKey = KEY_NONE;
+
 void keypad_update(uint32_t nowMs) {
+  (void)nowMs; // non usato
+
   KeyCode k = keypad_scan_once();
 
-  if (k != rawKeyLast) {
-    rawKeyLast = k;
-    rawChangeMs = nowMs;
-    return;
-  }
-
-  // Se stabile abbastanza a lungo, aggiorna stableKey
-  if ((nowMs - rawChangeMs) >= DEBOUNCE_MS) {
-    if (k != stableKey) {
-      stableKey = k;
-
-      // Genera evento solo sul fronte di pressione
-      if (stableKey != KEY_NONE && stableKey != lastReported) {
-        pendingEvent = stableKey;
-        lastReported = stableKey;
-      }
-
-      if (stableKey == KEY_NONE) {
-        lastReported = KEY_NONE;
-      }
+  if (k != lastStableKey) {
+    if (k != KEY_NONE) {
+      // genera evento quando passa da NONE -> tasto
+      pendingEvent = k;
     }
+    lastStableKey = k;
   }
 }
 

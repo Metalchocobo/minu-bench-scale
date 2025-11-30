@@ -15,12 +15,13 @@ static void buzzerSilence() {
   ledcWriteTone(BUZZER_PIN, 0); // 0 = off
 }
 
-static void playToneHz(uint32_t freq, uint32_t durationMs) {
-  if (freq == 0) {
+void playToneHz(uint32_t freq, uint32_t durationMs) {
+  if (freq == 0 || durationMs == 0) {
     buzzerSilence();
-    delay(durationMs);
+    if (durationMs > 0) delay(durationMs);
     return;
   }
+
   ledcWriteTone(BUZZER_PIN, freq);
   delay(durationMs);
   buzzerSilence();
