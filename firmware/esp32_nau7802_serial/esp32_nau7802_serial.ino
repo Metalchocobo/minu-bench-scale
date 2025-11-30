@@ -397,35 +397,38 @@ void toggleModeFromKeypad(){
 void handleKeyEvent(KeyCode key){
   switch (key){
     case KEY_TARE:
-      // TARA: usa la logica esistente
-      buzzerKeyClick();
+      Serial.println(F("[KEYPAD] TARE pressed"));
       doTare();
       break;
 
     case KEY_MODE:
-      // MODE: toggle Work <-> Live
+      Serial.println(F("[KEYPAD] MODE pressed"));
       toggleModeFromKeypad();
-      buzzerOk(); 
       break;
 
     // Tasti ancora non utilizzati, lasciati intenzionalmente liberi:
     case KEY_ENTER:
-      // FUTURO: conferma selezione menu / preset
+      Serial.println(F("[KEYPAD] ENTER pressed"));
       break;
+
     case KEY_ZERO:
-      // FUTURO: zero manuale / offset visuale
+      Serial.println(F("[KEYPAD] ZERO pressed"));
       break;
+
     case KEY_UP:
-      // FUTURO: scorrimento voci menu / incremento
+      Serial.println(F("[KEYPAD] UP pressed"));
       break;
+
     case KEY_UNIT:
-      // FUTURO: cambio unità o preset
+      Serial.println(F("[KEYPAD] UNIT pressed"));
       break;
+
     case KEY_SET:
-      // FUTURO: setup avanzato / calibrazione
+      Serial.println(F("[KEYPAD] SET pressed"));
       break;
+
     case KEY_CALI:
-      // FUTURO: entry-point calibrazione guidata
+      Serial.println(F("[KEYPAD] CALI pressed"));
       break;
 
     case KEY_NONE:
@@ -433,6 +436,7 @@ void handleKeyEvent(KeyCode key){
       break;
   }
 }
+
 
 // ========================= AUTO-TARE ALL’AVVIO =========================
 void autoTareOnBoot(){

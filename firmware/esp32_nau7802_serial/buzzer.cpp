@@ -46,26 +46,39 @@ void buzzerInit() {
 //
 // Frequenze in DO maggiore, zona C5–C6.
 
-static Note bootMelody[] = {
-  // (SALE) "ta ra ta ta"
-  {  523, 140 },  // C5  ta
-  {  659, 140 },  // E5  ra
-  {  784, 140 },  // G5  ta
-  {  880, 140 },  // A5  ta
-  {    0,  40 },  // pausa breve
+Note bootMelody[] = {
+  // C#5 ♪
+  { 554,  83 },   // C#5
+  {   0,  83 },   // pausa breve
 
-  // (SCENDE POCO, ONDINA) "taa"
-  {  988, 140 },  // B5  ta
-  {  880, 140 },  // A5  ra (scende poco)
-  {  784, 140 },  // G5  ta
-  {  880, 360 },  // A5  taa (più lunga)
-  {    0,  40 },  // pausa breve
+  // C#5 ♪
+  { 554,  83 },   // C#5
+  {   0,  83 },   // pausa breve
 
-  // (SALE) "ta ta taaa"
-  {  880, 140 },  // A5  ta
-  {  988, 140 },  // B5  ta
-  { 1047, 900 }   // C6  taaa (finale pieno)
+  // C#5 ♪♪ (un po' più lunga)
+  { 554, 166 },   // C#5
+  {   0,  83 },   // pausa breve
+
+  // C#5 ─── (lunga)
+  { 554, 415 },   // C#5
+
+  // A4 ─── (lunga)
+  { 440, 498 },   // A4
+
+  // B4 ─── (lunga)
+  { 494, 498 },   // B4
+
+  // C#5 ♪
+  { 554,  83 },   // C#5
+  {   0, 249 },   // pausa un po' più lunga
+
+  // B4 ♪
+  { 494,  83 },   // B4
+
+  // C#5 ───── (coda finale fino a 3 s totali)
+  { 554, 581 }    // C#5
 };
+
 
 static const size_t bootMelodyLen = sizeof(bootMelody) / sizeof(bootMelody[0]);
 
