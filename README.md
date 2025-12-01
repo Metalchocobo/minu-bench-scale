@@ -535,3 +535,44 @@ Alcune linee guida, da combinare con i parametri nel codice:
   - Considera `LOW` come “inizia a pensare alla ricarica”
   - Considera `CRITICAL` come “finisci la pesata e ricarica”
   - Usa `charging=YES` per capire al volo, dalla UI, se sei in carica o stai lavorando solo a batteria.
+
+  
+## 10. Buzzer di sistema (boot + suoni UI)
+
+### 10.1 Hardware
+
+- Tipo: **buzzer passivo 2 pin** (non attivo), marcato “SPEAKER”.
+- Collegamento attuale:
+  - `+` buzzer → **GPIO22** (pin di uscita dell’ESP32)
+  - `−` buzzer → **GND comune**
+- Pilotaggio:
+  - pilotato a **3,3 V** tramite il GPIO dell’ESP32
+  - nessuna resistenza o condensatore **in serie / parallelo** al buzzer nella configurazione attuale
+  - eventuali condensatori di disaccoppiamento (0,1 µF + elettrolitico) sono solo sulla **rail 3V3** vicino all’ESP32, NON direttamente ai capi del buzzer per non ridurre troppo il volume.
+
+Nota: è normale percepire un **leggero fruscio di fondo** dovuto al rumore presente su 3V3/GND con il buzzer collegato direttamente al GPIO. Sono già state valutate soluzioni con R+C in parallelo al buzzer: riducono il fruscio ma attenuano troppo il volume. Un eventuale miglioramento futuro prevede l’uso di un **driver a transistor + rail dedicata** o il passaggio a un **buzzer attivo**.
+
+### 10.2 Firmware e API (buzzer.h / buzzer.cpp)
+
+Il buzzer è gestito da un modulo dedicato:
+
+- `buzzer.h`
+- `buzzer.cpp`
+
+Pin e impostazioni principali:
+
+- `BUZZER_PIN = 22`
+- risoluzione LEDC: `RES_BITS = 10`
+- uso della nuova API ESP32:
+  - `ledcAttach(pin, freq, resolutionBits)`
+  - `ledcWrite(pin, duty)`
+  - `ledcWriteTone(pin, freq)`
+  - `ledcDetach(pin)`
+
+Struttura dati interna:
+
+```cpp
+struct Note {
+  uint16_t freqHz;   // 0 = pausa
+  uint16_t durMs;    // durata in millisecondi
+};
