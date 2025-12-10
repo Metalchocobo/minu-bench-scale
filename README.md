@@ -1,186 +1,186 @@
-# Bilancia ESP32 + NAU7802 + OLED SSD1322 + INA219 — Prototipo 6 V (v2025-11-27)
+# Bilancia ESP32 + NAU7802 + OLED SSD1322 + INA219 · Prototipo 6 V (v2025-12-10)
 
-Prototipo di bilancia da banco con:
+Prototipo di **bilancia da banco** per laboratorio (gelato / pasticceria) basata su:
 
 - ESP32 DevKit
-- NAU7802 (ADC 24 bit) per la cella di carico
-- OLED 3.12″ SSD1322, 256×64 per la UI (SPI)
-- Alimentazione da batteria piombo 6 V con CTK3S + buck 5 V
-- **INA219 (CJMCU-219) per monitor batteria (tensione, corrente, livello, stato di carica)**
+- ADC 24 bit **NAU7802** per la cella di carico
+- Display **OLED SSD1322** 256×64 (3,12", SPI)
+- Alimentazione a **batteria piombo 6 V** con modulo CTK3S
+- Monitor batteria con **INA219** (CJMCU-219, lato alto)
 
-Firmware “light” con:
-
-- Stati STABLE / UNSTABLE / LIVE
-- Filtro mediana + media mobile
-- Zero-tracking vicino a 0 (micro correzione lenta)
-- Snap-to-zero allo scarico
-- UI base su OLED (peso in grande + stato, pronto per icona batteria)
-- Comandi via Serial Monitor (calibrazione, tare, preset filtri)
+> Progetto pensato per uso interno in laboratorio, non per pesate legali a fini commerciali.
 
 ---
 
-## 1. Architettura elettrica attuale (batteria 6 V + CTK3S + buck 5 V + INA219)
+## 0. Scopo e stato del progetto
+
+- Portata target: **20 kg**  
+- Risoluzione visibile: **1 g** (clamp a ±16 kg per sicurezza)
+- Uso tipico: pesate di ingredienti in laboratorio (gelateria Minù), con focus su stabilità e lettura “ferma”.
+- Piattaforma: **ESP32 DevKit** + firmware in C++ stile Arduino.
+
+Stato attuale:
+
+- ✅ Lettura affidabile tramite NAU7802 con filtri (mediana + media mobile)
+- ✅ Macchina di stati **STABLE / UNSTABLE / LIVE**
+- ✅ **Zero-tracking** vicino a zero + **snap-to-zero** allo scarico
+- ✅ Auto-tare opzionale all’avvio
+- ✅ UI base su OLED (peso grande + indicatore di stato)
+- ✅ Tastierino frontale 4×2: **TARE** e **MODE** già operativi
+- ✅ Monitor batteria con INA219: 4 livelli (FULL / GOOD / LOW / CRITICAL) + flag *charging*
+- ✅ Buzzer di sistema (suono di boot + suoni UI gestiti da modulo dedicato)
+
+Cose previste / TODO:
+
+- Menù di calibrazione e setup **solo da tastiera**
+- Icona batteria su OLED (4 tacche + simbolo “fulmine” in carica)
+- Migliore gestione errori (ADC, I2C, out-of-range, ecc.)
+- Eventuale logging avanzato via seriale o Wi-Fi
+
+---
+
+## 1. Hardware
+
+### 1.1 Moduli principali
+
+- **ESP32 DevKit** (form factor tipo NodeMCU / JOY-IT)
+- **Cella di carico 4 fili** (20–30 kg)
+- **Breakout NAU7802** (ADC 24 bit, alimentato a 5 V, I2C a 3,3 V)
+- **OLED 3,12" SSD1322 256×64**, interfaccia SPI 4-wire
+- **INA219 CJMCU-219** per tensione/corrente batteria (alto lato)
+- **Batteria piombo 6 V** (SLA/AGM)
+- **Modulo CTK3S** per:
+  - carica da alimentatore 12 V
+  - protezione da sovrascarica tramite uscita LOAD (LVD integrato)
+- **Buck step-down 5 V**, regolabile, per alimentare logica e sensori
+- **Tastierino 4×2 (8 tasti)** pannello frontale
+- **Buzzer passivo 2 pin** su GPIO ESP32
+
+### 1.2 Architettura di alimentazione
 
 Schema logico:
 
-- Batteria piombo 6 V (SLA/AGM)
-- CTK3S:
-  - ingresso PV da alimentatore 12 V (caricabatterie)
-  - morsetti BAT+ / BAT− collegati direttamente alla batteria
-  - uscita LOAD+ / LOAD− verso l’impianto
-- Buck step-down 5 V:
-  - ingresso dal LOAD del CTK3S
-  - uscita regolata a 5,05–5,10 V verso ESP32 + NAU + OLED
-- **INA219 ad alta side sul ramo BAT+ → CTK3S B+**:
-  - BAT+ → fusibile → VIN+ INA219 → VIN− INA219 → B+ CTK3S
-  - misura tensione batteria e corrente che entra/esce dalla batteria
+1. **Alimentatore 12 V** → ingresso **PV** del CTK3S.
+2. Morsetti **BAT+ / BAT−** del CTK3S → direttamente alla batteria 6 V.
+3. Uscita **LOAD+ / LOAD−** del CTK3S → ingresso del buck step-down 5 V.
+4. Uscita **5 V** del buck → rail 5 V che alimenta:
+   - VIN/5V dell’ESP32
+   - VCC del NAU7802
+   - VCC dell’OLED SSD1322
+5. **INA219** montato dal lato batteria (alto lato):
+   - BAT+ → fusibile → VIN+ INA219 → VIN− INA219 → B+ CTK3S
+   - BAT− → B− CTK3S → GND comune.
 
-Perché usare LOAD e non BAT:
+Motivazione uso di LOAD e non BAT:
 
-- L’LVD del CTK3S lavora solo sulla porta LOAD
-- Se si preleva da BAT, l’LVD non interviene e rischi scarica profonda della batteria
-- Così invece:
-  - quando la batteria scende sotto soglia (~5,3–5,4 V), il CTK3S stacca LOAD
-  - riattacca solo dopo risalita (~5,6–5,9 V, da verificare sul tuo esemplare)
+- L’LVD interno del CTK3S agisce solo sulla porta **LOAD**.
+- Prelevando corrente da LOAD si evita la scarica profonda della batteria:
+  - sotto soglia la porta LOAD viene scollegata
+  - viene riattivata solo dopo risalita sopra una tensione di hysteresis.
 
-Condensatori e disposizione fisica:
+Condensatori consigliati:
 
-- Ingresso buck (da LOAD CTK3S)
-  - 220 µF elettrolitico (≥16 V)
+- **Ingresso buck (da LOAD CTK3S)**
+  - 220 µF elettrolitico (≥ 16 V)
   - 100 nF ceramico
-  - in parallelo, montati vicino ai morsetti IN del buck
-- Uscita buck (rail 5 V)
-  - 470 µF elettrolitico (≥10–16 V)
+- **Uscita buck (rail 5 V)**
+  - 470 µF elettrolitico (≥ 10–16 V)
   - 100 nF ceramico
-  - in parallelo, montati vicino ai morsetti OUT
-- Vicino all’ESP32 (VIN/5V ↔ GND)
+- **Vicino all’ESP32 (VIN/5V ↔ GND)**
   - 10–47 µF elettrolitico
   - 100 nF ceramico
-  - il più vicino possibile ai pin VIN/5V e GND (decoupling locale per i picchi Wi-Fi)
 
-Fusibili consigliati:
+Fusibili tipici:
 
-- Tra alimentatore 12 V ↔ CTK3S (PV+): 2 A rapido/medio
-- Tra BAT+ ↔ VIN+ INA219 (verso CTK3S): 1–2 A rapido
-- Tra LOAD+ ↔ buck 5 V: 2 A rapido
-- Sul 5 V dopo il buck (opzionale): 1 A rapido per protezione locale
+- 2 A sul ramo **12 V → PV CTK3S**
+- 1–2 A fra **BAT+ → VIN+ INA219**
+- 2 A fra **LOAD+ → ingresso buck 5 V**
+- opzionale 1 A sul **5 V** dopo il buck per protezione locale
 
-Note operative:
+### 1.3 Pinout ESP32 (riassunto)
 
-- Regola il buck a 5,05–5,10 V sotto carico leggero
-- In carica la batteria può stare a 7,2–7,5 V: è normale
-- Nessun LVD esterno necessario finché il buck resta collegato a LOAD
+| Funzione                 | Modulo          | GPIO ESP32 | Note                                          |
+|--------------------------|-----------------|-----------:|----------------------------------------------|
+| I2C SDA                  | NAU7802 + INA   |       32   | bus I2C comune per ADC e monitor batteria    |
+| I2C SCL                  | NAU7802 + INA   |       33   |                                              |
+| SPI SCK                  | OLED SSD1322    |       18   | bus VSPI                                     |
+| SPI MOSI                 | OLED SSD1322    |       23   |                                              |
+| SPI CS                   | OLED SSD1322    |       25   |                                              |
+| SPI DC                   | OLED SSD1322    |       26   |                                              |
+| SPI RST                  | OLED SSD1322    |       27   |                                              |
+| Tastiera R1              | Keypad 4×2      |        4   | fila 1                                       |
+| Tastiera R2              | Keypad 4×2      |        5   | fila 2                                       |
+| Tastiera R3              | Keypad 4×2      |       13   | fila 3                                       |
+| Tastiera R4              | Keypad 4×2      |       14   | fila 4                                       |
+| Tastiera C1              | Keypad 4×2      |       19   | colonna 1                                    |
+| Tastiera C2              | Keypad 4×2      |       21   | colonna 2                                    |
+| Buzzer                   | Buzzer passivo  |       22   | pilotato con LEDC                            |
+| 5 V (VIN)                | Rail 5 V buck   |      VIN   | alimentazione logica                         |
+| 3V3                      | Rail 3V3 ESP32  |      3V3   | alimentazione INA219                         |
+| GND                      | Massa comune    |      GND   | in comune con CTK3S, buck, NAU, OLED, INA    |
 
----
+> Verificare sempre la serigrafia reale del DevKit (D18, D19, ecc.) per evitare confusioni fra “Dx” e GPIO.
 
-## 2. Concetti chiave firmware (NAU7802 + stati + ZT)
+### 1.4 Cablaggio dettagliato
 
-- **Counts (raw)**  
-  Il NAU7802 fornisce un valore grezzo (`raw`) proporzionale alla forza sulla cella.
+#### Cella di carico ↔ NAU7802
 
-- **OFFSET_RAW**  
-  Valore di `rawAvg` a vuoto dopo una TARE. È la baseline in counts.
+Corrispondenza tipica (controllare colori reali del cavo):
 
-- **SCALE_CPG (counts per grammo)**  
-  Si ricava con un peso noto:  
-  `SCALE_CPG = (raw_con_peso - OFFSET_RAW) / peso_grammi`
+- E+ / EXC+ → alimentazione ponte + (di solito **rosso**)
+- E− / EXC− → alimentazione ponte − (di solito **nero**)
+- A+ / SIG+ → segnale + (tipicamente **verde**)
+- A− / SIG− → segnale − (tipicamente **bianco**)
 
-- **Conversione in grammi**  
-  Dopo i filtri, usiamo:  
-  `gLive = (rawAvg - (OFFSET_RAW + zero_track_counts)) / SCALE_CPG`
+Consigli:
 
-- **Stati STABLE / UNSTABLE / LIVE**
-  - In modalità ST on:
-    - STABLE: il peso è fermo e il display mostra un valore “agganciato” (`gLatch`)
-    - UNSTABLE: stai muovendo il carico; il display segue `gLive` con una deadband (per non tremare)
-    - passaggio UNSTABLE→STABLE quando il range in una finestra (~1,2 s) scende sotto `ST_ENTER_RANGE_G`
-    - uscita da STABLE quando \|gLive − gLatch\| ≥ `ST_LEAVE_DELTA_G`
-  - In modalità ST off: stato “LIVE”, il display segue la misura filtrata senza latch.
+- Usare cavo twistato e schermato.
+- Collegare la **calza di schermatura a GND lato scheda**.
 
-- **Zero-tracking (ZT) vicino a 0**
-  - Attivo solo se \|g\| ≤ `ZT_WINDOW_G` (tipicamente 1–1,5 g)
-  - Il sistema controlla che la bilancia sia “silenziosa” (range basso + slope bassa)
-  - Ogni `ZT_PERIOD_MS` sposta lentamente `zero_track_counts` verso azzerare la lettura (passi di ~0,02 g)
-  - Il totale della correzione è limitato (±`ZT_MAX_G`, tipicamente 3 g) per non far “scappare” la calibrazione.
+#### NAU7802 ↔ ESP32 (I2C)
 
-- **Snap-to-zero allo scarico**
-  - Se stai scaricando velocemente (pendenza ≤ `UNLOAD_SLOPE_GPS_NEG` e \|g\| ≤ `UNLOAD_CROSS_WIN_G`),
-    il firmware fa uno “snap” rapido a zero regolando `zero_track_counts` fino a un massimo di `UNLOAD_SNAP_MAX_G`.
-
-- **Deadband display**
-  - In UNSTABLE/LIVE si aggiorna il numero solo se la differenza supera `deadbandUnstable`
-  - Tipicamente 0,10–0,20 g in fine/normal per ridurre il tremolio visivo.
-
----
-
-## 3. Hardware e cablaggio
-
-### Moduli principali
-
-- ESP32 DevKit (tipo NodeMCU ESP32 / JOY-IT)
-- NAU7802 breakout (alimentato a 5 V, I2C a 3,3 V)
-- Cella di carico 4 fili (20–30 kg, secondo modello)
-- OLED 3,12" SSD1322 256×64 (WAVGAT / compatibile NHD, SPI 4-wire)
-- **CJMCU-219 / INA219 per monitor batteria (I2C)**
-
-### Collegamento cella di carico ↔ NAU7802
-
-Dipende dal breakout, ma in generale:
-
-- E+ / EXC+ → filo rosso (alimentazione ponte +)
-- E− / EXC− → filo nero (alimentazione ponte −)
-- A+ / SIG+ → filo verde (segnale +)
-- A− / SIG− → filo bianco (segnale −)
-
-Cavo cella:
-
-- meglio se twistato e schermato, con la calza collegata a GND lato scheda.
-
-### Collegamento NAU7802 ↔ ESP32 (I2C)
-
-Mappatura attuale “definitiva” (cluster da 5 pin):
-
-- SDA → D32 (GPIO32)
-- SCL → D33 (GPIO33)
+- SDA → GPIO32
+- SCL → GPIO33
 - VCC → 5 V (dal buck)
 - GND → GND comune
 
-In codice:
+Nel codice:
 
 ```cpp
-const int I2C_SDA = 32;  // D32
-const int I2C_SCL = 33;  // D33
+const int I2C_SDA = 32;
+const int I2C_SCL = 33;
 
 Wire.begin(I2C_SDA, I2C_SCL);
 Wire.setClock(400000);
 ```
 
-### Collegamento OLED SSD1322 ↔ ESP32 (SPI)
+#### OLED SSD1322 ↔ ESP32 (SPI)
 
-Bus SPI hardware (VSPI):
+Bus VSPI:
 
-- SCK → D18 (GPIO18)
-- MOSI → D23 (GPIO23)
-- MISO non usato
+- SCK → GPIO18
+- MOSI → GPIO23
+- (MISO non usato)
 
-Segnali di controllo (cluster da 3 pin contigui):
+Segnali di controllo:
 
-- CS → D25 (GPIO25)
-- DC → D26 (GPIO26)
-- RST → D27 (GPIO27)
+- CS  → GPIO25
+- DC  → GPIO26
+- RST → GPIO27
 
-Alimentazione:
+Alimentazione display:
 
-- VCC → 5 V (dal buck, stessa rail dell’ESP32)
+- VCC → 5 V (stessa rail dell’ESP32)
 - GND → GND comune
 
-In codice (U8g2):
+Inizializzazione tipica (U8g2):
 
 ```cpp
 #include <U8g2lib.h>
-static const int OLED_CS  = 25;  // D25
-static const int OLED_DC  = 26;  // D26
-static const int OLED_RST = 27;  // D27
+
+static const int OLED_CS  = 25;
+static const int OLED_DC  = 26;
+static const int OLED_RST = 27;
 
 U8G2_SSD1322_NHD_256X64_F_4W_HW_SPI oled(
   U8G2_R0,
@@ -190,77 +190,143 @@ U8G2_SSD1322_NHD_256X64_F_4W_HW_SPI oled(
 );
 
 // SPI
-SPI.begin(18, -1, 23, OLED_CS); // SCK=18, MISO unused, MOSI=23, SS=OLED_CS
+SPI.begin(18, -1, 23, OLED_CS);
 ```
 
-### Collegamento INA219 ↔ batteria + ESP32
+#### INA219 ↔ batteria + ESP32
 
-**Lato potenza (alto lato batteria 6 V):**
+Lato potenza:
 
-- BAT+ → fusibile 1–2 A → VIN+ INA219
+- BAT+ → fusibile → VIN+ INA219
 - VIN− INA219 → B+ CTK3S
-- BAT− → B− CTK3S (massa comune)
+- BAT− → B− CTK3S → GND comune
 
-**Lato logica (I2C + alimentazione):**
+Lato logica:
 
 - VCC → 3V3 ESP32
 - GND → GND comune
-- SDA → D32 (GPIO32, stesso bus NAU)
-- SCL → D33 (GPIO33, stesso bus NAU)
+- SDA → GPIO32 (I2C)
+- SCL → GPIO33 (I2C)
 
-Indirizzo I2C:
+Indirizzo I2C di default: `0x40`.
 
-- default 0x40 (CJMCU-219 standard).
+#### Tastierino 4×2
 
-### Tastierino frontale 4x2 (8 tasti)
-  Fisicamente: TARE, ENTER, ZERO, UP, UNIT, SET, CALI, MODE
+Tasti fisici: `TARE`, `ENTER`, `ZERO`, `UP`, `UNIT`, `SET`, `CALI`, `MODE`.
 
-  Collegamento fili -> GPIO:
+Collegamento fili → GPIO:
 
-  - Filo 1 (R1) = GPIO4
-  - Filo 2 (R2) = GPIO5
-  - Filo 3 (R3) = GPIO13
-  - Filo 4 (R4) = GPIO14
-  - Filo 5 (C1) = GPIO19
-  - Filo 6 (C2) = GPIO21
+- Filo 1 (R1) → GPIO17 (tx2)
+- Filo 2 (R2) → GPIO5
+- Filo 3 (R3) → GPIO13
+- Filo 4 (R4) → GPIO14
+- Filo 5 (C1) → GPIO19
+- Filo 6 (C2) → GPIO21
 
-  Mappa tasti (R = riga, C = colonna):
+Mappa tasti (R = riga, C = colonna):
 
-    R1-C1 (filo1+filo5) -> TARE
-    R1-C2 (filo1+filo6) -> ENTER
-    R2-C1 (filo2+filo5) -> ZERO
-    R2-C2 (filo2+filo6) -> UP
-    R3-C1 (filo3+filo5) -> UNIT
-    R3-C2 (filo3+filo6) -> SET
-    R4-C1 (filo4+filo5) -> CALI
-    R4-C2 (filo4+filo6) -> MODE
+- R1-C1 → TARE
+- R1-C2 → ENTER
+- R2-C1 → ZERO
+- R2-C2 → UP
+- R3-C1 → UNIT
+- R3-C2 → SET
+- R4-C1 → CALI
+- R4-C2 → MODE
 
-Comportamento attuale dei tasti:
-- TARE:
-    Esegue la tara, usando la stessa logica del comando seriale "t".
-- MODE:
-    Alterna tra:
-      * modalità WORK / normal (setMode("work"))
-      * modalità FINE / live (setMode("live"))
-    mantenendo allineati MA, deadband e stato ST (ST on in WORK, ST off in LIVE).
+Comportamento **attuale**:
 
-- ENTER, ZERO, UP, UNIT, SET, CALI:
-    Già mappati e letti dal firmware, ma al momento non eseguono azioni:
-    sono lasciati liberi per menu, calibrazioni o altre funzioni future.
+- `TARE`: esegue una tara completa, come il comando seriale `t`.
+- `MODE`: alterna fra:
+  - modalità WORK / normal (`setMode("work")`)
+  - modalità FINE / live (`setMode("live")`)
+- gli altri tasti sono letti ma non assegnati: pronti per menù e calibrazione.
 
+#### Buzzer
+
+- `+` buzzer → GPIO22
+- `−` buzzer → GND comune
+
+Pilotaggio:
+
+- buzzer passivo pilotato a 3,3 V tramite GPIO e periferica LEDC
+- nessun componente in serie; eventuali condensatori sono solo sulle rail 3V3/5V.
+
+È normale un leggero fruscio di fondo dovuto al rumore di alimentazione; soluzioni con R+C direttamente sul buzzer lo riducono ma attenuano troppo il volume. Un miglioramento futuro valuta driver a transistor o buzzer attivo.
 
 ---
 
-## 4. Monitor batteria (INA219)
+## 2. Firmware · concetti chiave
 
-Il monitor batteria è implementato in due file dedicati:
+### 2.1 Counts, offset e scala
 
-- `firmware/.../battery_monitor.h`
-- `firmware/.../battery_monitor.cpp`
+- Il NAU7802 fornisce un valore grezzo `raw` proporzionale alla forza sulla cella.
+- Dopo una TARE, il valore medio a vuoto viene salvato come `OFFSET_RAW`.
+- La scala in **counts per grammo** è `SCALE_CPG`:
 
-Si appoggia alla libreria **Adafruit INA219**.
+```txt
+SCALE_CPG = (raw_con_peso - OFFSET_RAW) / peso_grammi
+```
 
-### API e struttura dati
+- La conversione in grammi (dopo i filtri) usa:
+
+```txt
+gLive = (rawAvg - (OFFSET_RAW + zero_track_counts)) / SCALE_CPG
+```
+
+### 2.2 Stati STABLE / UNSTABLE / LIVE
+
+Modalità con **ST attivo**:
+
+- `STABLE`:
+  - il peso è “fermo”
+  - il display mostra un valore agganciato `gLatch`
+- `UNSTABLE`:
+  - il carico si sta muovendo
+  - il display segue `gLive` con una deadband per non tremare
+
+Transizioni principali:
+
+- UNSTABLE → STABLE quando il range in una finestra (~1,2 s) scende sotto `ST_ENTER_RANGE_G`
+- STABLE → UNSTABLE quando `|gLive − gLatch| ≥ ST_LEAVE_DELTA_G`
+
+Modalità con **ST disattivato**:
+
+- stato unico `LIVE`: il display segue la misura filtrata senza latch.
+
+### 2.3 Zero-tracking (ZT)
+
+- Attivo solo vicino a zero, in una finestra `±ZT_WINDOW_G` (tipicamente 1–1,5 g).
+- Controlla che la bilancia sia “silenziosa”:
+  - range dei campioni basso
+  - pendenza (slope) molto piccola
+- Ogni `ZT_PERIOD_MS` corregge lentamente `zero_track_counts` per riportare la lettura verso 0 (passi tipici ~0,02 g).
+- La correzione totale è limitata a `±ZT_MAX_G` (tipicamente ~3 g) per non spostare la calibrazione.
+
+### 2.4 Snap-to-zero allo scarico
+
+- Rileva che stai **scaricando rapidamente** la bilancia:
+  - pendenza negativa sotto una soglia (`UNLOAD_SLOPE_GPS_NEG`)
+  - |g| entro una finestra attorno a zero (`UNLOAD_CROSS_WIN_G`)
+- In questo caso forza uno “snap” veloce a zero, regolando `zero_track_counts` fino ad un massimo `UNLOAD_SNAP_MAX_G`.
+
+### 2.5 Deadband display
+
+- In `UNSTABLE` / `LIVE` il numero a display viene aggiornato solo se la differenza supera `deadbandUnstable`.
+- Tipici:
+  - 0,10–0,20 g in modalità normale
+  - 0,05 g in modalità fine/micro.
+
+---
+
+## 3. Monitor batteria (INA219)
+
+Il monitor batteria vive in due file dedicati:
+
+- `battery_monitor.h`
+- `battery_monitor.cpp`
+
+Strutture principali:
 
 ```cpp
 enum BatteryLevel {
@@ -271,28 +337,23 @@ enum BatteryLevel {
 };
 
 struct BatteryStatus {
-  float voltage_V;     // Tensione batteria filtrata (V)
-  float current_mA;    // Corrente filtrata (mA): >0 = scarica, <0 = carica
-  BatteryLevel level;  // 4 livelli batteria
-  bool charging;       // true = batteria in carica
+  float        voltage_V;   // V batteria filtrati
+  float        current_mA;  // mA filtrati: >0 = scarica, <0 = carica
+  BatteryLevel level;       // 4 livelli batteria
+  bool         charging;    // true = in carica
 };
-
-// Inizializzazione (dopo Wire.begin)
-void battery_init();
-
-// Da chiamare nel loop principale con now = millis()
-void battery_update(uint32_t nowMs);
-
-// Restituisce l'ultimo stato calcolato
-BatteryStatus battery_get_status();
-
-// Stampa su Serial una riga di debug leggibile
-void battery_debug_print(const BatteryStatus &st);
 ```
 
-### Integrazione nel firmware
+API:
 
-Nel file principale:
+```cpp
+void          battery_init();                  // da chiamare in setup()
+void          battery_update(uint32_t nowMs);  // da chiamare nel loop
+BatteryStatus battery_get_status();            // ultimo stato calcolato
+void          battery_debug_print(const BatteryStatus &st); // stampa su Serial
+```
+
+Integrazione tipica:
 
 ```cpp
 #include "battery_monitor.h"
@@ -305,7 +366,7 @@ void setup() {
 
   // init NAU, OLED, ecc...
 
-  battery_init();  // inizializza INA219 (addr 0x40, calib 32V/2A)
+  battery_init();
 }
 
 void loop() {
@@ -313,266 +374,229 @@ void loop() {
 
   battery_update(now);
 
-  // ... resto della logica bilancia ...
+  // resto logica bilancia...
 }
 ```
 
-Debug opzionale ogni X secondi:
+### 3.1 Livelli batteria (4 step)
 
-```cpp
-static uint32_t lastBattDebug = 0;
+Le soglie usano la tensione della batteria filtrata:
 
-void loop() {
-  uint32_t now = millis();
+- `FULL`     se V ≥ 6,40 V
+- `GOOD`     se 6,20 V ≤ V < 6,40 V
+- `LOW`      se 6,00 V ≤ V < 6,20 V
+- `CRITICAL` se V < 6,00 V
 
-  battery_update(now);
+Sono soglie conservative per una 6 V piombo, per evitare scariche profonde.
 
-  if (now - lastBattDebug > 3000) {
-    lastBattDebug = now;
-    BatteryStatus st = battery_get_status();
-    battery_debug_print(st);
-  }
+### 3.2 Rilevamento carica / scarica
 
-  // ...
-}
-```
-
-### Logica di livello batteria (4 step)
-
-Soglie basate sulla **tensione filtrata** della batteria:
-
-- `BATT_LEVEL_FULL`    se `V ≥ 6.40 V`
-- `BATT_LEVEL_GOOD`    se `6.20 V ≤ V < 6.40 V`
-- `BATT_LEVEL_LOW`     se `6.00 V ≤ V < 6.20 V`
-- `BATT_LEVEL_CRITICAL` se `V < 6.00 V`
-
-Queste soglie sono conservative per una 6 V piombo: non spremono la batteria in scarica profonda.
-
-### Rilevamento stato di carica
-
-Il segno della corrente è dato dall’INA219:
+Si usa il segno della corrente misurata dall’INA219:
 
 - **Scarica**: la bilancia consuma dalla batteria → `current_mA > 0`
 - **Carica**: il CTK3S spinge corrente nella batteria → `current_mA < 0`
 
-La logica in `battery_monitor.cpp` usa una soglia:
+Logica con isteresi:
 
-- `charging = true` se `current_mA < -30 mA` (corrente verso la batteria, sopra rumore)
-- `charging = false` quando la corrente risale sopra ~`-15 mA` (isteresi per evitare lampeggi)
+- `charging = true` se `current_mA < -30 mA`
+- `charging = false` quando la corrente risale sopra circa `-15 mA`
 
-In debug vedrai, ad esempio:
+In debug tipicamente si vedono righe del tipo:
 
-- in scarica:
-  - `[BATT] V=6.335 V  I=76 mA  lvl=GOOD  charging=NO`
-- in carica:
-  - `[BATT] V=6.845 V  I=-187 mA  lvl=FULL  charging=YES`
+- Scarica: `[BATT] V=6.33 V I=76 mA lvl=GOOD charging=NO`
+- Carica:  `[BATT] V=6.84 V I=-187 mA lvl=FULL charging=YES`
 
 ---
 
-## 5. Parametri principali (nel codice)
+## 4. UI su OLED
 
-I parametri di tuning sono tutti all’inizio dello sketch principale e nei file dedicati:
+UI attuale (minimal):
 
-- **Default calibrazione NAU**
-  - `DEFAULT_REF_RAW`, `DEFAULT_ZERO_RAW`, `DEFAULT_REF_G`, `DEFAULT_CPG`
-  - solo valori seed: dopo CAL + SAVE userai quelli salvati in NVS.
-
-- **Auto-TARE all’avvio**
-  - `AUTO_TARE_ON_BOOT`: `true` per fare una tara semplice al boot.
-  - `AUTO_TARE_SAMPLES`: quanti campioni medi per la tara iniziale.
-  - `AUTO_TARE_SETTLE_MS`: attesa prima di iniziare la tara.
-
-- **Limite visibile**
-  - `MAX_DISPLAY_G = 16000.0f` → clamp a ±16 kg anche se la cella è da 30 kg.
-
-- **Filtri display**
-  - `MA_DEFAULT` / `MA_FINE` (normal vs fine/live)
-  - `DB_UNSTABLE_N`, `DB_UNSTABLE_F` (deadband in g).
-
-- **Stati STABLE/UNSTABLE**
-  - `ST_LEAVE_DELTA_G`: soglia per uscire da STABLE
-  - `ST_ENTER_RANGE_G`: range massimo per rientrare STABLE
-  - `ST_TO_STABLE_MS`: finestra temporale per valutare il rientro.
-
-- **Zero-tracking (ZT)**
-  - `ZT_WINDOW_G`, `ZT_QUIET_MS`, `ZT_QUIET_RANGE_G`, `ZT_QUIET_SLOPE_GPS`
-  - `ZT_PERIOD_MS`, `ZT_STEP_G`, `ZT_MAX_G`
-
-- **Snap allo scarico**
-  - parametri `UNLOAD_*` (range, pendenza, cooldown, snap massimo)
-
----
-
-## 6. UI attuale su OLED
-
-UI minimal, pensata per pesate rapide:
-
-- Peso in grande al centro (intero, senza unità)
-- Piccola scritta in alto a sinistra con lo stato:
+- peso in grande al centro (solo numero, senza unità)
+- indicatore di stato in alto a sinistra:
   - `STABLE`
   - `UNSTABLE`
   - `LIVE` (se ST disattivato)
 
 Aggiornamento:
 
-- OLED aggiornato ogni ~`OLED_UPDATE_MS` (tipicamente 120 ms)
-- Il valore mostrato è `gDisp` (filtrato + deadband + eventuale latch STABLE)
+- refresh ogni `OLED_UPDATE_MS` (tipico ~120 ms)
+- valore mostrato: `gDisp` (filtrato + deadband + eventuale latch STABLE).
 
-Integrazione prevista con il monitor batteria:
+Integrazione prevista con monitor batteria:
 
-- icona batteria a 4 tacche basata su `BatteryStatus.level`
-- simbolo “fulmine” se `BatteryStatus.charging == true`
+- icona a 4 tacche in base a `BatteryStatus.level`
+- simbolo “fulmine” in caso di `BatteryStatus.charging == true`.
 
 ---
 
-## 7. Procedura di avvio e calibrazione
+## 5. Avvio e calibrazione
+
+Procedura consigliata:
 
 1. **Avvio a vuoto**
+   - piattaforma completamente scarica
+   - accendi; se `AUTO_TARE_ON_BOOT = true` viene eseguita una tara iniziale dopo `AUTO_TARE_SETTLE_MS`.
 
-   - Bilancia scarica, piattaforma senza peso
-   - Accendi: se `AUTO_TARE_ON_BOOT=true` fa una tara semplice al boot dopo `AUTO_TARE_SETTLE_MS`.
+2. **Verifica zero**
+   - tramite Serial Monitor, controlla che `gDisp` sia vicino a 0 g
+   - se non lo è, invia `t` per una TARE manuale.
 
-2. **Verifica a zero**
+3. **Calibrazione con peso noto**
+   - con bilancia a zero, metti un peso noto (es. 2000 g)
+   - su Serial Monitor (115200 baud) invia:
 
-   - Controlla su Serial Monitor che `gDisp` sia vicino a 0 g
-   - Se non lo è, puoi fare una `TARE` manuale (`t`).
-
-3. **Calibrazione con peso noto (es. 2000 g)**
-
-   - Bilancia a zero, `t` se necessario
-   - Metti il peso noto (es. 2 kg) sulla piattaforma
-   - Su Serial Monitor (115200 baud) invia:
-
-     ```text
+     ```txt
      c 2000
      ```
 
-   - Lo sketch fa 15 letture medie e ricalcola `SCALE_CPG`
-   - Il log ti mostra qualcosa tipo:
-
-     ```text
-     [CAL] Riferimento: 2000 g (fai TARE, metti il peso noto, poi c)
-     [CAL] SCALE_CPG=xxx.xxxxxx
-     ```
+   - lo sketch esegue una serie di letture e ricalcola `SCALE_CPG`.
 
 4. **Salvataggio in NVS**
+   - quando OFFSET e SCALE sono stabili, invia:
 
-   - Quando sei soddisfatto di OFFSET e SCALE, esegui:
-
-     ```text
+     ```txt
      s
      ```
 
-   - Lo sketch salva OFFSET/SCALE/REF in NVS.
+   - i parametri di calibrazione vengono salvati in NVS.
 
 5. **Test**
-
-   - Togli e rimetti il peso:
+   - togli e rimetti il peso:
      - a vuoto: ~0 g
-     - con il peso: ~valore nominale (es. ~2000 g)
+     - con peso: valore vicino al nominale (es. ~2000 g)
 
 ---
 
-## 8. Comandi seriali supportati (versione light)
+## 6. Comandi seriali principali
+
+Baud rate tipico: **115200 8N1**.
 
 - `t`  
-  Tare: acquisisce il raw a vuoto, aggiorna `OFFSET_RAW` e azzera `zero_track_counts`.
+  Esegue la **TARE**: salva il raw medio a vuoto come `OFFSET_RAW` e azzera `zero_track_counts`.
 
 - `c <g>`  
   Calibrazione con peso noto.  
   Esempio: `c 2000` per un peso da 2000 g.  
-  Procedura: TARE → metti il peso → `c 2000`.
+  Procedura: TARE → posiziona il peso → `c 2000`.
 
 - `p`  
   Stampa stato e parametri principali:
-
-  - `OFFSET_RAW`, `SCALE_CPG`, `REF_G`,
-  - `MA`, `DB_UNSTABLE`, ST on/off, ZT on/off, `zero_track_counts` in counts e in g.
+  - `OFFSET_RAW`, `SCALE_CPG`, `REF_G`
+  - `MA`, `DB_UNSTABLE`, stato ST on/off, ZT on/off
+  - `zero_track_counts` in counts e grammi.
 
 - `s`  
-  Salva in NVS: `offset`, `scale`, `ref_g`.
+  Salva in NVS `offset`, `scale`, `ref_g`.
 
 - `m work` / `m normal`  
   Preset “normale”:
-
-  - `MA=6`, `deadband=0,10 g`
-  - `ST=on`, `ZT=on`
+  - `MA = 6`, `deadband ≈ 0,10 g`
+  - `ST = on`, `ZT = on`.
 
 - `m fine` / `m live`  
   Preset “fine/micro”:
+  - `MA = 4`, `deadband ≈ 0,05 g`
+  - `ST = off` (stato LIVE), `ZT = on`.
 
-  - `MA=4`, `deadband=0,05 g`
-  - `ST=off` (stato LIVE), `ZT=on`
+- `st on` / `st off` / `st ?`  
+  Abilita/disabilita la macchina STABLE/UNSTABLE e ne mostra lo stato.
 
-- `st on` / `st off` / `st ?`
-
-  - Abilita/disabilita la macchina STABLE/UNSTABLE
-  - `st off` → modalità LIVE (nessun latch)
-
-- `zt on` / `zt off` / `zt reset` / `zt ?`
-
-  - Attiva/disattiva zero-tracking + snap allo scarico
+- `zt on` / `zt off` / `zt reset` / `zt ?`  
+  Gestione zero-tracking + snap allo scarico:
   - `zt reset` azzera `zero_track_counts`
-  - `zt ?` mostra stato e valore di ZT in counts e in g
+  - `zt ?` mostra stato e valore di ZT (counts e grammi).
 
-*(in futuro si può aggiungere un comando dedicato per il debug batteria, ma al momento il logging usa solo `battery_debug_print()` richiamata dal loop.)*
+In futuro può essere aggiunto un comando dedicato al debug batteria; per ora si usa `battery_debug_print()` richiamato dal loop.
 
 ---
 
-## 9. Tuning pratico
+## 7. Tuning pratico
 
-Alcune linee guida, da combinare con i parametri nel codice:
+Linee guida di massima:
 
 - **Micro dosi / ingredienti piccoli**
-  - `m fine` (MA=4, deadband 0,05)
-  - `ST off` se vuoi un comportamento più “live”
+  - preset `m fine`
+  - deadband 0,05 g
+  - `ST off` se vuoi una risposta più “live”.
 
 - **Lavoro normale in laboratorio**
-  - `m work` o `m normal`
-  - ST on, ZT on, deadband 0,10–0,20 g
+  - preset `m work` / `m normal`
+  - `ST on`, `ZT on`
+  - deadband fra 0,10 e 0,20 g.
 
 - **Monitor batteria**
-  - Considera `LOW` come “inizia a pensare alla ricarica”
-  - Considera `CRITICAL` come “finisci la pesata e ricarica”
-  - Usa `charging=YES` per capire al volo, dalla UI, se sei in carica o stai lavorando solo a batteria.
+  - `LOW`: inizia a programmare una ricarica
+  - `CRITICAL`: finisci la pesata e ricarica
+  - flag `charging` per capire se stai lavorando in carica o solo a batteria.
 
-  
-## 10. Buzzer di sistema (boot + suoni UI)
+---
 
-### 10.1 Hardware
+## 8. Buzzer di sistema
 
-- Tipo: **buzzer passivo 2 pin** (non attivo), marcato “SPEAKER”.
-- Collegamento attuale:
-  - `+` buzzer → **GPIO22** (pin di uscita dell’ESP32)
-  - `−` buzzer → **GND comune**
-- Pilotaggio:
-  - pilotato a **3,3 V** tramite il GPIO dell’ESP32
-  - nessuna resistenza o condensatore **in serie / parallelo** al buzzer nella configurazione attuale
-  - eventuali condensatori di disaccoppiamento (0,1 µF + elettrolitico) sono solo sulla **rail 3V3** vicino all’ESP32, NON direttamente ai capi del buzzer per non ridurre troppo il volume.
+### 8.1 Hardware
 
-Nota: è normale percepire un **leggero fruscio di fondo** dovuto al rumore presente su 3V3/GND con il buzzer collegato direttamente al GPIO. Sono già state valutate soluzioni con R+C in parallelo al buzzer: riducono il fruscio ma attenuano troppo il volume. Un eventuale miglioramento futuro prevede l’uso di un **driver a transistor + rail dedicata** o il passaggio a un **buzzer attivo**.
+- Buzzer passivo 2 pin, marcato “SPEAKER”.
+- Collegato direttamente al GPIO22 dell’ESP32.
+- Pilotato tramite periferica LEDC (PWM) a 3,3 V.
 
-### 10.2 Firmware e API (buzzer.h / buzzer.cpp)
+### 8.2 Firmware
 
-Il buzzer è gestito da un modulo dedicato:
+Modulo dedicato:
 
 - `buzzer.h`
 - `buzzer.cpp`
 
-Pin e impostazioni principali:
+Elementi principali:
 
-- `BUZZER_PIN = 22`
-- risoluzione LEDC: `RES_BITS = 10`
-- uso della nuova API ESP32:
+- definizione di `BUZZER_PIN`
+- uso delle API LEDC:
   - `ledcAttach(pin, freq, resolutionBits)`
   - `ledcWrite(pin, duty)`
   - `ledcWriteTone(pin, freq)`
   - `ledcDetach(pin)`
+- sequenze di note modellate con struttura:
 
-Struttura dati interna:
+  ```cpp
+  struct Note {
+    uint16_t freqHz; // 0 = pausa
+    uint16_t durMs;  // durata in millisecondi
+  };
+  ```
 
-```cpp
-struct Note {
-  uint16_t freqHz;   // 0 = pausa
-  uint16_t durMs;    // durata in millisecondi
-};
+Pattern tipici:
+
+- suono di boot
+- click conferma
+- errore / avviso.
+
+---
+
+## 9. Build del firmware
+
+> Nota: questa sezione è generica; verificare sempre i nomi delle cartelle e degli sketch nel repository.
+
+1. Apri la cartella `firmware` nel tuo IDE (Arduino IDE oppure PlatformIO).
+2. Se usi Arduino IDE:
+   - seleziona scheda **ESP32 Dev Module** (pacchetto Espressif per Arduino).
+   - imposta la porta seriale corretta.
+3. Installa le librerie richieste (controlla gli `#include` nello sketch principale), tipicamente:
+   - `U8g2` per il display SSD1322
+   - libreria per `INA219` (es. Adafruit INA219)
+   - libreria per `NAU7802` (es. SparkFun NAU7802)  
+   - eventuale libreria per il tastierino (se non gestito “a mano”).
+4. Compila e carica il firmware.
+5. Apri Serial Monitor a **115200 baud** per seguire:
+   - messaggi di boot
+   - debug calibrazione
+   - logging del monitor batteria (se abilitato).
+
+---
+
+## 10. Note finali
+
+- Questo README descrive la **configurazione di riferimento** del prototipo 6 V con CTK3S e INA219.
+- Se cambi DevKit, cella di carico o moduli, aggiorna **pinout** e **parametri di calibrazione** di conseguenza.
+- La parte elettrica (fusibili, dimensionamento cavi, isolamento meccanico della cella, ecc.) va sempre verificata rispetto all’hardware reale.
+
+Per qualsiasi modifica importante della struttura (nuovi moduli, nuove rail, seconda cella di carico, ecc.) conviene aggiornare questo README e aggiungere schemi nella cartella `docs/`.

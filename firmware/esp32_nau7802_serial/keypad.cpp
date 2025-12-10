@@ -6,7 +6,7 @@ static const int rowPins[4] = {
   4,   // R1 = filo 1
   5,   // R2 = filo 2
   13,  // R3 = filo 3
-  14   // R4 = filo 4
+  17   // R4 = filo 4
 };
 
 // Colonne (filo 5..6)
