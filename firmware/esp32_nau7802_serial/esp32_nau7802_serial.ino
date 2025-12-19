@@ -20,6 +20,7 @@
 #include <math.h>
 #include "battery_monitor.h"
 #include "buzzer.h"
+#include "net_ota_cloud.h"
 Preferences prefs; 
 NAU7802 myScale;
 
@@ -518,6 +519,15 @@ void setup(){
 
   printHelp();
 
+#if ENABLE_WIFI_OTA
+  Net::wifiSetup();
+  Net::otaSetup("minu-bench-scale");
+#endif
+
+#if ENABLE_ARDUINO_CLOUD
+  Net::cloudSetup();
+#endif
+
   // I2C per NAU
   Wire.begin(I2C_SDA, I2C_SCL);
   Wire.setClock(400000);
@@ -543,6 +553,10 @@ void setup(){
 static uint32_t lastBattDebug = 0;
 // ========================= LOOP =========================
 void loop(){
+#if ENABLE_WIFI_OTA || ENABLE_ARDUINO_CLOUD
+  Net::update();
+#endif
+
   // --- Comandi seriale ---
   if (Serial.available()){
     String cmd = Serial.readStringUntil('\n');
