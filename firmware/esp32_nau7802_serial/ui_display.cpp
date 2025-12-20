@@ -249,9 +249,7 @@ static bool uiIsBatteryCharging() {
 void ui_init() {
   // SPI per OLED
   SPI.begin(18, -1, 23, OLED_CS); // SCK=18, MISO unused, MOSI=23, SS=OLED_CS
-  oled.begin();
-  u8g2.setFlipMode(1); 
-  
+  oled.begin();  
 }
 
 // -----------------------------------------------------------------------------

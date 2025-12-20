@@ -1,15 +1,14 @@
 #include "keypad.h"
 
-// FILI tastierino -> GPIO ESP32
-// Righe (filo 1..4)
+// Righe (filo 1..4) - come da README
 static const int rowPins[4] = {
-  4,   // R1 = filo 1
+  17,  // R1 = filo 1
   5,   // R2 = filo 2
   13,  // R3 = filo 3
-  17   // R4 = filo 4
+  14   // R4 = filo 4
 };
 
-// Colonne (filo 5..6)
+// Colonne (filo 5..6) - come da README
 static const int colPins[2] = {
   19,  // C1 = filo 5
   21   // C2 = filo 6
