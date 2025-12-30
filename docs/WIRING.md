@@ -1,6 +1,6 @@
-# Wiring (serial only, in attesa OLED)
+# Wiring (HX711 + OLED + INA219)
 
-**Moduli**: ESP32 DevKit, HX711, cella 4 fili.
+**Moduli**: ESP32 DevKit, HX711 (alimentato a 5 V), cella 4 fili.
 
 - Cella → HX711
   - Rosso → E+
@@ -8,10 +8,14 @@
   - Verde → A+
   - Bianco→ A-
 
-- HX711 → ESP32
-  - VCC → 3V3
-  - GND → GND
-  - DT  → GPIO25
-  - SCK → GPIO5
+- HX711 → ESP32 (logica)
+  - VCC → 5V (rail buck)
+  - GND → GND comune
+  - SCK → GPIO16 (diretto)
+  - DT/DOUT → GPIO35 **solo dopo level shift/partitore** (mai 5 V diretto su GPIO)
 
-> Alimenta HX711 a 3.3 V. GND comune.
+Level shifting consigliato:
+
+- Modulo bidirezionale 3.3V↔5V: HV=5V, LV=3V3, GND comune
+- DOUT lato HV ↔ GPIO35 lato LV
+- (opzionale) SCK GPIO16 lato LV ↔ SCK lato HV

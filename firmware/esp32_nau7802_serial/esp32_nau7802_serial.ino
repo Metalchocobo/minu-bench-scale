@@ -24,6 +24,9 @@
 Preferences prefs; 
 NAU7802 myScale;
 
+// Stato boot (per gestire errori "hard" vs "ack")
+static bool g_nauBeginOk = false;
+
 // ========================= CONFIG =========================
 
 // [0] Calibrazione seed (valori indicativi, sovrascritti da NVS + CAL)
@@ -442,32 +445,49 @@ void handleKeyEvent(KeyCode key){
 
 
 // ========================= AUTO-TARE ALL’AVVIO =========================
-void autoTareOnBoot(){
+bool autoTareOnBoot(uint16_t samples){
   if (!AUTO_TARE_ON_BOOT){
     Serial.println(F("[BOOT] Auto-TARE disattivata."));
-    return;
+    return true;
   }
 
   Serial.println(F("[BOOT] Auto-TARE semplice..."));
   delay(AUTO_TARE_SETTLE_MS);
 
-  long rawZero = readRawNAUAvg(AUTO_TARE_SAMPLES);
+  if (samples < 1) samples = 1;
+
+  long s = 0;
+  for (uint16_t i = 0; i < samples; i++) {
+    long r = readRawNAUOnceBlocking();
+    if (r == 0) {
+      Serial.println(F("[BOOT] Auto-TARE FAIL (timeout lettura NAU)"));
+      return false;
+    }
+    s += r;
+  }
+
+  long rawZero = s / (long)samples;
   OFFSET_RAW = rawZero;
   zero_track_counts = 0;
   resetFiltersAndState();
 
   Serial.print(F("[BOOT] Auto-TARE OK. OFFSET_RAW="));
   Serial.println(OFFSET_RAW);
+  return true;
 }
 
 // ========================= INIT NAU7802 =========================
 bool initNAU7802(){
   Serial.println(F("[NAU] Init NAU7802..."));
 
+  g_nauBeginOk = false;
+
   if (!myScale.begin(Wire)){
     Serial.println(F("[NAU] begin() FAIL – modulo non trovato"));
     return false;
   }
+
+  g_nauBeginOk = true;
 
   bool ok = true;
 
@@ -508,16 +528,62 @@ bool initNAU7802(){
   return ok;
 }
 
+// ------------------------- BOOT UX helpers -------------------------
+static void bootPump(uint32_t ms) {
+  uint32_t start = millis();
+  while (millis() - start < ms) {
+#if ENABLE_WIFI_OTA || ENABLE_ARDUINO_CLOUD
+    Net::update();
+#endif
+    // Manteniamo viva la lettura tastiera anche durante boot (utile se qualcosa si blocca)
+    uint32_t now = millis();
+    keypad_update(now);
+    (void)keypad_get_event();
+    delay(10);
+  }
+}
+
+static void bootShow(const char* line1, const char* line2, uint16_t holdMs = 350) {
+  ui_showBoot(line1, line2);
+  bootPump(holdMs);
+}
+
+static void bootWaitTare() {
+  while (true) {
+    uint32_t now = millis();
+    keypad_update(now);
+    KeyCode k = keypad_get_event();
+    if (k == KEY_TARE) {
+      buzzerKeyClick();
+      return;
+    }
+#if ENABLE_WIFI_OTA || ENABLE_ARDUINO_CLOUD
+    Net::update();
+#endif
+    delay(10);
+  }
+}
+
 
 // ========================= SETUP =========================
 void setup(){
   Serial.begin(115200);
-  delay(200);
+  delay(50);
+
+  // DISPLAY SUBITO (per mostrare che la bilancia sta avviando)
+  ui_init();
+  ui_showBoot("Accensione...", "");
+
+  // Suono subito dopo che il display è acceso
   buzzerInit();
+  buzzerBootMelody();
   
   Serial.println(F("\n=== ESP32 + NAU7802 — versione light (5 V) + OLED SSD1322 ==="));
 
   printHelp();
+
+  // Tastierino (non mostriamo la fase, ma ci serve già da boot per gestire ACK errori)
+  keypad_init();
 
 #if ENABLE_WIFI_OTA
   Net::wifiSetup();
@@ -528,24 +594,63 @@ void setup(){
   Net::cloudSetup();
 #endif
 
-  // I2C per NAU
+
+  // ------------------------ Sequenza boot "leggibile" ------------------------
+  bootShow("I2C", "Avvio bus...");
   Wire.begin(I2C_SDA, I2C_SCL);
   Wire.setClock(400000);
+  bootShow("I2C", "OK");
 
-  // Inizializza il core della bilancia (NAU + preset + auto-tare)
-  scale_init();
+  // NAU7802
+  bootShow("Sensore peso", "Init NAU7802...");
+  bool nauOk = initNAU7802();
 
-  // UI / OLED
-  ui_init();
-  
-  ui_showBoot();
-  buzzerBootMelody();
-  //delay(3000);
+  // Se il modulo non è trovato, è un errore duro: ritenta su TARE
+  while (!g_nauBeginOk) {
+    ui_showError("NAU7802", "Modulo non trovato", "Premi TARA per ritentare");
+    bootWaitTare();
+    bootShow("Sensore peso", "Ritentativo...");
+    nauOk = initNAU7802();
+  }
+
+  // Config/AFE fallite: mostriamo errore, ma dopo ACK si procede (può comunque funzionare)
+  if (!nauOk) {
+    ui_showError("NAU7802", "Init/AFE: FAIL", "Premi TARA per continuare");
+    bootWaitTare();
+  }
+  bootShow("Sensore peso", "OK");
+
+  // NVS
+  bootShow("Parametri", "Carico NVS...");
+  loadFromNVS();
+  bootShow("Parametri", "OK");
+
+  // Preset iniziale
+  bootShow("Preset", "WORK");
+  // Preset WORK = modalità "work/normal" (MA default, ST on, ZT on)
+  setMode("work");
+
+  // Auto-TARE
+  if (AUTO_TARE_ON_BOOT) {
+    bootShow("Auto-TARE", "In corso...");
+    bool tareOk = autoTareOnBoot(AUTO_TARE_SAMPLES);
+    if (!tareOk) {
+      ui_showError("Auto-TARE", "Timeout/FAIL", "Premi TARA per continuare");
+      bootWaitTare();
+    }
+  }
+
+  // Batteria
+  bootShow("Batteria", "Init INA219...");
+  battery_init();
+  if (!battery_is_available()) {
+    ui_showError("Batteria", "INA219 non trovato", "Premi TARA per continuare");
+    bootWaitTare();
+  }
+
+  bootShow("Avvio", "Completato");
 
   lastOledMs = millis();
-  
-  battery_init();
-  keypad_init();
 
 }
 

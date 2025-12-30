@@ -2,7 +2,6 @@
 
 #include <SPI.h>
 #include <U8g2lib.h>
-#include <WiFi.h>
 
 #include "battery_monitor.h"
 
@@ -22,7 +21,7 @@ static const int OLED_RST = 27;
 // U8g2: SSD1322 256x64, 4-wire SPI hardware, full buffer
 // Assicurarsi che in u8g2 sia attivo U8G2_16BIT per 256x64.
 static U8G2_SSD1322_NHD_256X64_F_4W_HW_SPI oled(
-  U8G2_R2,
+  U8G2_R0,
   /* cs=*/ OLED_CS,
   /* dc=*/ OLED_DC,
   /* reset=*/ OLED_RST
@@ -97,14 +96,6 @@ static void drawCenteredTextUTF8(const char *str, int16_t y) {
 static void drawBatteryIcon(int x, int y, uint8_t level, bool charging) {
   const int w = 19;   // larghezza corpo batteria
   const int h = 8;
-
-  // Stato "vuota" aggiuntivo: 0 tacche e icona lampeggiante
-  if (!charging && level == 0) {
-    bool visible = ((millis() / 400) % 2) == 0;
-    if (!visible) {
-      return; // niente icona in questa fase
-    }
-  }
 
   // cornice batteria
   oled.drawFrame(x, y, w, h);
@@ -242,8 +233,7 @@ static uint8_t uiGetBatteryLevel4Step() {
     case BATT_LEVEL_FULL:     return 4;
     case BATT_LEVEL_GOOD:     return 3;
     case BATT_LEVEL_LOW:      return 2;
-    case BATT_LEVEL_CRITICAL: return 1;
-    case BATT_LEVEL_EMPTY:    return 0;
+    case BATT_LEVEL_CRITICAL:
     default:                  return 1;
   }
 }
@@ -265,7 +255,7 @@ void ui_init() {
 // -----------------------------------------------------------------------------
 // LAYOUT BOOT (logo Minù + "Ronin 00")
 // -----------------------------------------------------------------------------
-void ui_showBoot(const char* line1, const char* line2) {
+void ui_showBoot() {
   oled.clearBuffer();
 
   // ----- Gruppo logo + scritta "Ronin 00" -----
@@ -292,35 +282,12 @@ void ui_showBoot(const char* line1, const char* line2) {
   int16_t textBaselineY = centerY + (TEXT_H / 2) - 1;
   oled.drawStr(textX, textBaselineY, roninText);
 
-  // ----- Stato boot in basso (2 righe) -----
-  if (!line1) line1 = "";
-  if (!line2) line2 = "";
-
+  // ----- Riga di stato in basso -----
   oled.setFont(u8g2_font_6x12_tr);
-  drawCenteredTextUTF8(line1, 52);
-  drawCenteredTextUTF8(line2, 62);
+  drawCenteredText("Boot inizializzato...", 62);
 
   oled.sendBuffer();
  
-}
-
-// -----------------------------------------------------------------------------
-// SCHERMATA ERRORE (bloccante durante boot)
-// -----------------------------------------------------------------------------
-void ui_showError(const char* title, const char* detail, const char* hint) {
-  if (!title) title = "";
-  if (!detail) detail = "";
-  if (!hint) hint = "";
-
-  oled.clearBuffer();
-  oled.setFont(u8g2_font_6x12_tr);
-
-  drawCenteredTextUTF8("ERRORE", 12);
-  drawCenteredTextUTF8(title, 28);
-  drawCenteredTextUTF8(detail, 44);
-  drawCenteredTextUTF8(hint, 62);
-
-  oled.sendBuffer();
 }
 
 // -----------------------------------------------------------------------------
@@ -337,7 +304,7 @@ void ui_renderWeight(long gDisp, const char* stateLabel) {
   // ------- Riga alta: batteria + wifi -------
   uint8_t batteryLevel = uiGetBatteryLevel4Step();  // 0..4
   bool    isCharging   = uiIsBatteryCharging();
-  bool    netConnected = WiFi.isConnected();
+  bool    netConnected = false;                     // placeholder NET reale
 
   drawBatteryIcon(2, 2, batteryLevel, isCharging);
   drawNetIcon(30, 3, netConnected);
