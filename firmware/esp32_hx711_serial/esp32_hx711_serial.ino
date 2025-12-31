@@ -120,9 +120,12 @@ const uint32_t OLED_UPDATE_MS = 60;
 
 // ========================= PIN & OGGETTI =========================
 
-// HX711: I2C spostato su D27 (SDA) e D26 (SCL) per averli vicini
-const int I2C_SDA = 32;  // etichetta scheda: D27 (GPIO27)
-const int I2C_SCL = 33;  // etichetta scheda: D26 (GPIO26)
+// HX711: I2C spostato su D33 (SDA) e D31 (SCL) per averli vicini
+const int I2C_SDA = 33;  // etichetta scheda: D33 (GPIO33)
+const int I2C_SCL = 32;  // etichetta scheda: D31 (GPIO32)
+// Se  per errore hai invertito i cavi SDA/SCL, metti true e fai una prova.
+const bool I2C_SWAP = true;
+
 
 
 
@@ -632,7 +635,7 @@ void setup(){
 
   // ------------------------ Sequenza boot "leggibile" ------------------------
   bootShow("I2C", "Avvio bus...");
-  Wire.begin(I2C_SDA, I2C_SCL);
+  Wire.begin(I2C_SWAP ? I2C_SCL : I2C_SDA, I2C_SWAP ? I2C_SDA : I2C_SCL);
   Wire.setClock(400000);
   bootShow("I2C", "OK");
 
