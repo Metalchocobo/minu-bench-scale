@@ -1,28 +1,59 @@
 
 // =======================================================
-// ESP32 DevKit + HX711 (5 V) + OLED SSD1322 256x64 + INA219
+// ESP32 DevKit + HX711 + OLED SSD1322 256x64
 // Versione "light" con stati STABLE/UNSTABLE + ZT + OLED
-//  • HX711 alimentato a 5 V (eccitazione cella a 5 V)
-//  • DOUT (5 V) verso ESP32 SOLO tramite level shifter / partitore
-//  • INA219 su I2C (bus separato dal HX)
+//  • HX711: DOUT=GPIO35, SCK=GPIO16 (RX2)
+//    NOTE: il rate 10 Hz / 80 Hz è HARDWARE (pin RATE del modulo)
+//  • INA219 su I2C (monitor batteria)
 //  • OLED SSD1322 su SPI hardware (CLK=18, MOSI=23)
+//    CS=D21, DC=D22, RST=D19
 // =======================================================
 
 #include <Arduino.h>
 #include <Wire.h>
-#include <Preferences.h>
-#include <math.h>
-
-#include "hx711_driver.h"
+#include <SPI.h>
+#include <U8g2lib.h>
 #include "battery_monitor.h"
+#include "hx711_driver.h"
 #include "ui_display.h"
 #include "keypad.h"
 #include "scale_core.h"
+#include <Preferences.h>
+#include <math.h>
 #include "buzzer.h"
 #include "net_ota_cloud.h"
+Preferences prefs; 
+// Stato boot (per gestire errori "hard" vs "ack")
+static bool g_hxBeginOk = false;
 
-Preferences prefs;
+// ========================= HX711 (driver separato) =========================
+// Pins richiesti dall'utente: SCK su RX2 (GPIO16), DOUT su GPIO35
+static const int HX711_SCK_PIN  = 16;
+static const int HX711_DOUT_PIN = 35;
 
+// Gain: A=128 (1 impulso extra dopo i 24 bit)
+static const HX711Gain HX711_GAIN = HX711_GAIN_128_A;
+
+// Timing: micro-delay per stabilizzare lettura (valori piccoli, ma non a 0)
+static const uint8_t HX711_PULSE_US = 1;
+
+// Se DOUT non va mai LOW, consideriamo "sensore non trovato"
+static const uint32_t HX711_INIT_TIMEOUT_MS = 1200;
+
+static long readRawHXOnceBlocking(uint32_t timeoutMs){
+  return hx711_read_blocking(timeoutMs);
+}
+
+static long readRawHXAvg(int n){
+  if (n <= 1) return readRawHXOnceBlocking(200);
+  long s = 0;
+  for(int i=0;i<n;i++){
+    long r = readRawHXOnceBlocking(200);
+    if (r == 0) return 0;
+    s += r;
+  }
+  return s / n;
+}
 
 // ========================= CONFIG =========================
 
@@ -31,12 +62,16 @@ const long  DEFAULT_REF_RAW  = 265290;   // raw medio con 2000 g
 const long  DEFAULT_ZERO_RAW = 51471;    // raw medio a vuoto
 const long  DEFAULT_REF_G    = 2000;     // grammi di riferimento
 const float DEFAULT_CPG      = float(DEFAULT_REF_RAW - DEFAULT_ZERO_RAW) / float(DEFAULT_REF_G);
-// ≈ 106.91 counts/grammo
+// seed: 500 counts/grammo (HX711)
+// NOTE: se arrivi da firmware NAU, la scala salvata in NVS NON è valida: fai CAL.
 
 // [1] Auto-TARE all’avvio (semplice, niente logiche complicate)
 const bool     AUTO_TARE_ON_BOOT   = true;
 const uint16_t AUTO_TARE_SAMPLES   = 25;
 const uint16_t AUTO_TARE_SETTLE_MS = 800;
+const uint16_t AUTO_TARE_MIN_SAMPLES = 10;    // minimo campioni richiesti
+const float    AUTO_TARE_RANGE_G    = 0.40f;  // finestra di quiete (range) per fermarsi prima
+const uint32_t AUTO_TARE_QUIET_MS    = 400;    // deve restare in range per questo tempo
 
 // [2] Limite operativo visuale (±16 kg)
 const float MAX_DISPLAY_G = 16000.0f;
@@ -77,23 +112,17 @@ uint32_t    UNLOAD_STABLE_MS     = 300;     // ms di quiete
 uint32_t    UNLOAD_COOLDOWN_MS   = 2000;    // minimo tra due snap
 float       UNLOAD_SNAP_MAX_G    = 5.0f;    // correzione max snap (g)
 
-// [6] Campionamento logica (separato dal rate interno del HX711)
-// Nota: HX711 tipicamente 10 SPS o 80 SPS (dipende dal pin RATE sul breakout).
-const uint32_t SAMPLE_MS = 60; // ~16 Hz logica + UI
+// [6] Campionamento logica (non il sample rate del sensore)
+const uint32_t SAMPLE_MS = 60; // ~16 Hz logica (HX711 10 Hz o 80 Hz, hardware)
 
 // [OLED] Cadenzamento refresh
 const uint32_t OLED_UPDATE_MS = 60;
 
 // ========================= PIN & OGGETTI =========================
 
-// I2C (solo INA219). Manteniamo gli stessi pin usati finora.
-const int I2C_SDA = 32;
-const int I2C_SCL = 33;
-
-// HX711 (5 V): scegliamo pin "sicuri" per il boot.
-// DOUT su GPIO 34/35/36/39 (input-only) evita i pin di strap.
-static const int HX_SCK  = 16;
-static const int HX_DOUT = 35;
+// HX711: I2C spostato su D27 (SDA) e D26 (SCL) per averli vicini
+const int I2C_SDA = 32;  // etichetta scheda: D27 (GPIO27)
+const int I2C_SCL = 33;  // etichetta scheda: D26 (GPIO26)
 
 
 
@@ -247,6 +276,8 @@ void printHelp(){
 }
 
 void loadFromNVS(){
+  // Comportamento "come prima" (firmware NAU): nessuna firma sensore.
+  // Se in NVS ci sono valori vecchi/non compatibili, vedrai pesi sballati -> fai CAL e poi salva.
   prefs.begin("minu_scale", true);
   long  off = prefs.getLong ("offset", 0);
   float sc  = prefs.getFloat("scale",  NAN);
@@ -260,26 +291,13 @@ void loadFromNVS(){
 
 void saveToNVS(){
   prefs.begin("minu_scale", false);
-  prefs.putLong ("offset", OFFSET_RAW);
-  prefs.putFloat("scale",  SCALE_CPG);
-  prefs.putLong ("ref_g",  REF_G);
+  prefs.putLong("offset", OFFSET_RAW);
+  prefs.putFloat("scale", SCALE_CPG);
+  prefs.putLong("ref_g",  REF_G);
   prefs.end();
   Serial.println(F("[SAVE] Parametri salvati in NVS."));
 }
 
-// ========================= LETTURA HX711 (blocking per TARE/CAL) =========================
-long readRawHXOnceBlocking(){
-  return hx711_read_blocking(200);
-}
-
-long readRawHXAvg(int n){
-  if (n <= 1) return readRawHXOnceBlocking();
-  long s=0;
-  for(int i=0;i<n;i++){
-    s += readRawHXOnceBlocking();
-  }
-  return s / n;
-}
 
 // ========================= ZERO-TRACKING CORE =========================
 bool isQuietForZT(){
@@ -441,53 +459,166 @@ void handleKeyEvent(KeyCode key){
 
 
 // ========================= AUTO-TARE ALL’AVVIO =========================
-void autoTareOnBoot(){
+bool autoTareOnBoot(uint16_t maxSamples){
   if (!AUTO_TARE_ON_BOOT){
     Serial.println(F("[BOOT] Auto-TARE disattivata."));
-    return;
+    return true;
   }
 
-  Serial.println(F("[BOOT] Auto-TARE semplice..."));
+  // Auto-tare "smart":
+  // - minimo AUTO_TARE_MIN_SAMPLES
+  // - continua finché la finestra (range) rientra sotto soglia per AUTO_TARE_QUIET_MS
+  // - massimo maxSamples (di default AUTO_TARE_SAMPLES = 25)
+  Serial.println(F("[BOOT] Auto-TARE smart..."));
   delay(AUTO_TARE_SETTLE_MS);
 
-  long rawZero = readRawHXAvg(AUTO_TARE_SAMPLES);
+  const uint16_t minSamples = AUTO_TARE_MIN_SAMPLES;
+  if (maxSamples < minSamples) maxSamples = minSamples;
+  if (maxSamples > 25) maxSamples = 25; // safety: buffer fisso
+
+  long buf[25];
+  uint16_t n = 0;
+  uint32_t quietStart = 0;
+
+  while (n < maxSamples){
+    long r = readRawHXOnceBlocking(200);
+    if (r == 0) {
+      Serial.println(F("[BOOT] Auto-TARE FAIL (timeout lettura HX711)"));
+      return false;
+    }
+
+    buf[n++] = r;
+
+    if (n >= minSamples){
+      // Range sull'ultima finestra minSamples
+      long mn = buf[n - minSamples];
+      long mx = mn;
+      for (uint16_t i = n - minSamples; i < n; i++){
+        long v = buf[i];
+        if (v < mn) mn = v;
+        if (v > mx) mx = v;
+      }
+
+      float rangeG = 999999.0f;
+      if (SCALE_CPG > 0.01f){
+        rangeG = float(mx - mn) / SCALE_CPG;
+      }
+
+      if (rangeG <= AUTO_TARE_RANGE_G){
+        if (quietStart == 0) quietStart = millis();
+        if (millis() - quietStart >= AUTO_TARE_QUIET_MS){
+          break; // stabile abbastanza
+        }
+      } else {
+        quietStart = 0;
+      }
+    }
+  }
+
+  // Media sugli ultimi minSamples (se disponibili), così ignoriamo eventuali transienti iniziali
+  uint16_t useN = (n >= minSamples) ? minSamples : n;
+  long s = 0;
+  for (uint16_t i = n - useN; i < n; i++){
+    s += buf[i];
+  }
+  long rawZero = s / (long)useN;
+
   OFFSET_RAW = rawZero;
   zero_track_counts = 0;
   resetFiltersAndState();
 
   Serial.print(F("[BOOT] Auto-TARE OK. OFFSET_RAW="));
-  Serial.println(OFFSET_RAW);
+  Serial.print(OFFSET_RAW);
+  Serial.print(F("  n=")); Serial.print(n);
+  Serial.print(F("  useN=")); Serial.println(useN);
+
+  if (n >= minSamples && quietStart == 0){
+    Serial.println(F("[BOOT] Auto-TARE: non ha trovato una finestra 'quiet' entro il max, ma ha impostato comunque l'offset. Se serve: premi TARA."));
+  }
+
+  return true;
 }
 
 // ========================= INIT HX711 =========================
 bool initHX711(){
   Serial.println(F("[HX711] Init HX711..."));
 
-  hx711_begin(HX_DOUT, HX_SCK);
-  hx711_set_gain(HX711_GAIN_128_A);
+  g_hxBeginOk = false;
 
-  // Attendo che DOUT vada LOW (dato pronto) per verificare cablaggio.
-  if (!hx711_wait_ready(800)){
-    Serial.println(F("[HX711] FAIL: nessun dato (DOUT non va LOW). Controlla cablaggio/level-shifter."));
-    return false;
+  hx711_begin(HX711_DOUT_PIN, HX711_SCK_PIN, HX711_GAIN, HX711_PULSE_US);
+
+  uint32_t t0 = millis();
+  while (millis() - t0 < HX711_INIT_TIMEOUT_MS) {
+    if (hx711_is_ready()) {
+      // prima lettura di stabilizzazione (scarta)
+      (void)hx711_read();
+      g_hxBeginOk = true;
+      Serial.println(F("[HX711] OK (DOUT ready)"));
+      return true;
+    }
+    delay(10);
   }
 
-  long first = hx711_read();
-  Serial.print(F("[HX711] OK. first_raw="));
-  Serial.println(first);
-  return true;
+  Serial.println(F("[HX711] FAIL - DOUT non pronto (cablaggio/alimentazione/livello logico?)"));
+  return false;
+}
+
+// ------------------------- BOOT UX helpers -------------------------
+static void bootPump(uint32_t ms) {
+  uint32_t start = millis();
+  while (millis() - start < ms) {
+#if ENABLE_WIFI_OTA || ENABLE_ARDUINO_CLOUD
+    Net::update();
+#endif
+    // Manteniamo viva la lettura tastiera anche durante boot (utile se qualcosa si blocca)
+    uint32_t now = millis();
+    keypad_update(now);
+    (void)keypad_get_event();
+    delay(10);
+  }
+}
+
+static void bootShow(const char* line1, const char* line2, uint16_t holdMs = 350) {
+  ui_showBoot(line1, line2);
+  bootPump(holdMs);
+}
+
+static void bootWaitTare() {
+  while (true) {
+    uint32_t now = millis();
+    keypad_update(now);
+    KeyCode k = keypad_get_event();
+    if (k == KEY_TARE) {
+      buzzerKeyClick();
+      return;
+    }
+#if ENABLE_WIFI_OTA || ENABLE_ARDUINO_CLOUD
+    Net::update();
+#endif
+    delay(10);
+  }
 }
 
 
 // ========================= SETUP =========================
 void setup(){
   Serial.begin(115200);
-  delay(200);
+  delay(50);
+
+  // DISPLAY SUBITO (per mostrare che la bilancia sta avviando)
+  ui_init();
+  ui_showBoot("Accensione...", "");
+
+  // Suono subito dopo che il display è acceso
   buzzerInit();
+  buzzerBootMelody();
   
-  Serial.println(F("\n=== ESP32 + HX711 — versione light (5 V) + OLED SSD1322 ==="));
+  Serial.println(F("\n=== ESP32 + HX711 — versione light + OLED SSD1322 ==="));
 
   printHelp();
+
+  // Tastierino (non mostriamo la fase, ma ci serve già da boot per gestire ACK errori)
+  keypad_init();
 
 #if ENABLE_WIFI_OTA
   Net::wifiSetup();
@@ -498,24 +629,63 @@ void setup(){
   Net::cloudSetup();
 #endif
 
-  // I2C per INA219
+
+  // ------------------------ Sequenza boot "leggibile" ------------------------
+  bootShow("I2C", "Avvio bus...");
   Wire.begin(I2C_SDA, I2C_SCL);
   Wire.setClock(400000);
+  bootShow("I2C", "OK");
 
-  // Inizializza il core della bilancia (HX711 + preset + auto-tare)
-  scale_init();
+  // HX711
+  bootShow("Sensore peso", "Init HX711...");
+  bool hxOk = initHX711();
 
-  // UI / OLED
-  ui_init();
-  
-  ui_showBoot();
-  buzzerBootMelody();
-  //delay(3000);
+  // Se il modulo non è trovato, è un errore duro: ritenta su TARE
+  while (!g_hxBeginOk) {
+    ui_showError("HX711", "Modulo non trovato", "Premi TARA per ritentare");
+    bootWaitTare();
+    bootShow("Sensore peso", "Ritentativo...");
+    hxOk = initHX711();
+  }
+
+  // Config/AFE fallite: mostriamo errore, ma dopo ACK si procede (può comunque funzionare)
+  if (!hxOk) {
+    ui_showError("HX711", "Init: FAIL", "Premi TARA per continuare");
+    bootWaitTare();
+  }
+  bootShow("Sensore peso", "OK");
+
+  // NVS
+  bootShow("Parametri", "Carico NVS...");
+  loadFromNVS();
+  bootShow("Parametri", "OK");
+
+  // Preset iniziale
+  bootShow("Preset", "WORK");
+  // Preset WORK = modalità "work/normal" (MA default, ST on, ZT on)
+  setMode("work");
+
+  // Auto-TARE
+  if (AUTO_TARE_ON_BOOT) {
+    bootShow("Auto-TARE", "In corso...");
+    bool tareOk = autoTareOnBoot(AUTO_TARE_SAMPLES);
+    if (!tareOk) {
+      ui_showError("Auto-TARE", "Timeout/FAIL", "Premi TARA per continuare");
+      bootWaitTare();
+    }
+  }
+
+  // Batteria
+  bootShow("Batteria", "Init INA219...");
+  battery_init();
+  if (!battery_is_available()) {
+    ui_showError("Batteria", "INA219 non trovato", "Premi TARA per continuare");
+    bootWaitTare();
+  }
+
+  bootShow("Avvio", "Completato");
 
   lastOledMs = millis();
-  
-  battery_init();
-  keypad_init();
 
 }
 
@@ -622,14 +792,13 @@ void loop(){
     }
     return;
   }
-
   // Attendo che l'HX711 abbia un nuovo dato pronto. Importante: non avanzare il "timebase"
-  // se il dato non è pronto, altrimenti le finestre temporali (range/slope/stability) si sballano.
-  if (!hx711_is_ready()){
-    return;
-  }
+// se il dato non è pronto, altrimenti le finestre temporali (range/slope/stability) si sballano.
+if (!hx711_is_ready()){
+  return; // nessun nuovo dato dal HX711
+}
 
-  lastSampleMs = now;
+lastSampleMs = now;
 
   
   //aggiorno stato batteria

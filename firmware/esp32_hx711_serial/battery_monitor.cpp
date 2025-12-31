@@ -25,7 +25,8 @@ static const float I_CHARGE_THRESHOLD_MA = 30.0f;
 static const float V_FULL_MIN      = 6.40f;
 static const float V_GOOD_MIN      = 6.20f;
 static const float V_LOW_MIN       = 6.00f;
-// Sotto V_LOW_MIN => LEVEL_CRITICAL
+static const float V_EMPTY_MIN     = 5.80f;
+// Sotto V_EMPTY_MIN => LEVEL_EMPTY
 
 // -----------------------------------------------------------------------------
 // STATO INTERNO
@@ -58,8 +59,10 @@ static BatteryLevel levelFromVoltage(float v) {
     return BATT_LEVEL_GOOD;
   } else if (v >= V_LOW_MIN) {
     return BATT_LEVEL_LOW;
-  } else {
+  } else if (v >= V_EMPTY_MIN) {
     return BATT_LEVEL_CRITICAL;
+  } else {
+    return BATT_LEVEL_EMPTY;
   }
 }
 
@@ -72,6 +75,10 @@ void battery_init() {
   if (!g_ina219.begin()) {
     // Se fallisce l'init, lasciamo g_inited = false; la update non farà nulla.
     Serial.println(F("[BATT] ERRORE: INA219 non trovato su I2C"));
+    g_status.voltage_V = 0.0f;
+    g_status.current_mA = 0.0f;
+    g_status.level = BATT_LEVEL_EMPTY;
+    g_status.charging = false;
     g_inited = false;
     return;
   }
@@ -81,7 +88,7 @@ void battery_init() {
 
   g_status.voltage_V = 0.0f;
   g_status.current_mA = 0.0f;
-  g_status.level = BATT_LEVEL_CRITICAL;
+  g_status.level = BATT_LEVEL_EMPTY;
   g_status.charging = false;
 
   g_haveSample = false;
@@ -89,6 +96,10 @@ void battery_init() {
   g_inited = true;
 
   Serial.println(F("[BATT] INA219 inizializzato (32V / 2A, addr 0x40)"));
+}
+
+bool battery_is_available() {
+  return g_inited;
 }
 
 void battery_update(uint32_t nowMs) {
@@ -148,6 +159,7 @@ void battery_debug_print(const BatteryStatus &st) {
     case BATT_LEVEL_GOOD:     Serial.print(F("GOOD")); break;
     case BATT_LEVEL_LOW:      Serial.print(F("LOW")); break;
     case BATT_LEVEL_CRITICAL: Serial.print(F("CRITICAL")); break;
+    case BATT_LEVEL_EMPTY:    Serial.print(F("EMPTY")); break;
   }
 
   Serial.print(F("  charging="));

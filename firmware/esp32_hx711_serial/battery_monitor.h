@@ -6,7 +6,8 @@ enum BatteryLevel {
   BATT_LEVEL_FULL = 0,
   BATT_LEVEL_GOOD,
   BATT_LEVEL_LOW,
-  BATT_LEVEL_CRITICAL
+  BATT_LEVEL_CRITICAL,
+  BATT_LEVEL_EMPTY
 };
 
 struct BatteryStatus {
@@ -18,6 +19,9 @@ struct BatteryStatus {
 
 // Da chiamare dopo che il bus I2C è stato inizializzato (Wire.begin(...))
 void battery_init();
+
+// true se l'INA219 è stato trovato e inizializzato correttamente
+bool battery_is_available();
 
 // Da chiamare nel loop principale, passando millis()
 void battery_update(uint32_t nowMs);

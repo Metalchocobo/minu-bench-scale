@@ -30,49 +30,46 @@ namespace Net {
   // Gestore multi-SSID
   static WiFiMulti wifiMulti;
 
+  // Stato interno (WiFi non bloccante)
+  static bool     wifiConfigured = false;
+  static uint32_t wifiLastRunMs  = 0;
+  static bool     wifiWasConnected = false;
+
+  // OTA non bloccante: config (handler) e begin quando WiFi è connesso
+  static bool     otaConfigured  = false;
+  static bool     otaBegun       = false;
+  static const char* otaHostname = "minu-bench-scale";
+
   // Due reti fittizie da sostituire con i tuoi dati reali
   static const char* WIFI_SSID_1 = "Shadowfiend";
   static const char* WIFI_PASS_1 = "questa dannata rete";
   static const char* WIFI_SSID_2 = "Laboratorio di Minu'";
   static const char* WIFI_PASS_2 = "questa dannata rete";
 
-  // Inizializza WiFi STA e tenta connessione alle reti configurate
+  // Inizializza WiFi STA (NON BLOCCANTE): la connessione avviene in background dentro Net::update()
   inline void wifiSetup() {
     WiFi.mode(WIFI_STA);
+    WiFi.setAutoReconnect(true);
+    WiFi.persistent(false);
 
     // Aggiungi qui le reti disponibili (puoi aggiungerne altre se vuoi)
     wifiMulti.addAP(WIFI_SSID_1, WIFI_PASS_1);
     wifiMulti.addAP(WIFI_SSID_2, WIFI_PASS_2);
 
-    Serial.println(F("[NET] Connessione WiFi..."));
-    int retries = 0;
-
-    while (wifiMulti.run() != WL_CONNECTED) {
-      delay(500);
-      Serial.print('.');
-      retries++;
-      if (retries > 60) {  // ~30 secondi
-        Serial.println(F("\n[NET] WiFi non disponibile, proseguo offline."));
-        break;
-      }
-    }
-
-    if (WiFi.isConnected()) {
-      Serial.print(F("\n[NET] Connesso a: "));
-      Serial.println(WiFi.SSID());
-      Serial.print(F("[NET] IP: "));
-      Serial.println(WiFi.localIP());
-    }
+    wifiConfigured = true;
+    wifiLastRunMs  = 0;
+    wifiWasConnected = false;
+    Serial.println(F("[NET] WiFi avviato (background)."));
   }
 
   // Configura OTA via Arduino IDE (porta di rete)
+  // NON BLOCCANTE: registra gli handler e fa begin() appena il WiFi risulta connesso.
   inline void otaSetup(const char* hostname = "minu-bench-scale") {
-    if (!WiFi.isConnected()) {
-      Serial.println(F("[OTA] WiFi non connesso, OTA disabilitato."));
-      return;
-    }
+    otaHostname  = hostname;
+    otaConfigured = true;
+    otaBegun      = false;
 
-    ArduinoOTA.setHostname(hostname);
+    ArduinoOTA.setHostname(otaHostname);
 
     ArduinoOTA.onStart([]() {
       Serial.println(F("[OTA] Update iniziato"));
@@ -92,8 +89,7 @@ namespace Net {
       Serial.printf("[OTA] Errore[%u]\n", error);
     });
 
-    ArduinoOTA.begin();
-    Serial.println(F("[OTA] Pronto. In Arduino IDE seleziona la porta di rete dell'ESP32."));
+    Serial.println(F("[OTA] Configurato. Si attiva quando il WiFi si connette."));
   }
 #endif // ENABLE_WIFI_OTA
 
@@ -114,7 +110,39 @@ namespace Net {
   // Da chiamare nel loop principale
   inline void update() {
   #if ENABLE_WIFI_OTA
-    ArduinoOTA.handle();
+    // Tick WiFi (ogni ~1s) per tentare/ri-tentare la connessione
+    if (wifiConfigured) {
+      uint32_t now = millis();
+      if (now - wifiLastRunMs >= 1000) {
+        wifiLastRunMs = now;
+        wifiMulti.run();
+
+        // Log transizioni
+        bool connectedNow = WiFi.isConnected();
+        if (connectedNow && !wifiWasConnected) {
+          wifiWasConnected = true;
+          Serial.print(F("[NET] Connesso a: "));
+          Serial.println(WiFi.SSID());
+          Serial.print(F("[NET] IP: "));
+          Serial.println(WiFi.localIP());
+        } else if (!connectedNow && wifiWasConnected) {
+          wifiWasConnected = false;
+          Serial.println(F("[NET] WiFi disconnesso."));
+        }
+
+        // Avvia OTA appena siamo connessi
+        if (otaConfigured && !otaBegun && WiFi.isConnected()) {
+          ArduinoOTA.begin();
+          otaBegun = true;
+          Serial.println(F("[OTA] Pronto (WiFi connesso). In Arduino IDE seleziona la porta di rete dell'ESP32."));
+        }
+      }
+    }
+
+    // Gestione OTA solo se attivato
+    if (otaBegun) {
+      ArduinoOTA.handle();
+    }
   #endif
 
   #if ENABLE_ARDUINO_CLOUD

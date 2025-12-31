@@ -5,7 +5,7 @@
 
 // Dichiarazioni "extern" verso esp32_hx711_serial.ino
 bool initHX711();
-void autoTareOnBoot();
+bool autoTareOnBoot(uint16_t samples);
 void loadFromNVS();
 void setMA(int n);
 void resetFiltersAndState();
@@ -37,7 +37,7 @@ void scale_init() {
   resetFiltersAndState();
 
   // Auto-tare semplice all'avvio (se abilitata)
-  autoTareOnBoot();
+  (void)autoTareOnBoot(25);
 
   Serial.println(F("[SCALE] Init core completato."));
 }
