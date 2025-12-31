@@ -324,6 +324,32 @@ void ui_showError(const char* title, const char* detail, const char* hint) {
 }
 
 // -----------------------------------------------------------------------------
+// AVVISO BATTERIA SCARICA + SPEGNIMENTO
+// -----------------------------------------------------------------------------
+void ui_showBatteryShutdown(float voltage_V) {
+  oled.clearBuffer();
+  oled.setFont(u8g2_font_6x12_tr);
+
+  // Titolo
+  drawCenteredTextUTF8("BATTERIA SCARICA", 14);
+
+  // Riga tensione
+  char vline[24];
+  snprintf(vline, sizeof(vline), "V=%.2f", voltage_V);
+  drawCenteredTextUTF8(vline, 32);
+
+  // Messaggio
+  drawCenteredTextUTF8("COLLEGA ALIMENTATORE", 52);
+
+  oled.sendBuffer();
+}
+
+void ui_powerSave(bool enable) {
+  // U8G2: 1 = power save ON (display off), 0 = ON
+  oled.setPowerSave(enable ? 1 : 0);
+}
+
+// -----------------------------------------------------------------------------
 // LAYOUT PRINCIPALE PESO
 // -----------------------------------------------------------------------------
 void ui_renderWeight(long gDisp, const char* stateLabel) {

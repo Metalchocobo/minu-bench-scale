@@ -17,16 +17,28 @@ static const uint32_t READ_INTERVAL_MS = 500;
 static const float ALPHA_VOLTAGE = 0.2f;
 static const float ALPHA_CURRENT = 0.3f;
 
-// Soglia per considerare la batteria "in carica" (mA)
-// Corrente < -I_CHARGE_THRESHOLD_MA => sta entrando corrente in batteria
-static const float I_CHARGE_THRESHOLD_MA = 30.0f;
+// Soglie e debounce per considerare la batteria "in carica" (mA)
+// Nota: con VIN+ lato sorgente (batteria/charger) e VIN- lato carico, corrente < 0 = carica
+static const float I_CHARGE_START_MA = 80.0f;  // entra in carica se I < -80 mA
+static const float I_CHARGE_STOP_MA  = 30.0f;  // esce da carica se I > -30 mA
 
-// Soglie di tensione (V) per i 4 livelli batteria, sul valore filtrato
-static const float V_FULL_MIN      = 6.40f;
+// Debounce temporale (ms) per evitare start/stop continui con caricatori a impulsi o rumore
+static const uint32_t CHARGE_DEBOUNCE_IN_MS  = 1500;  // 3 letture @500ms
+static const uint32_t CHARGE_DEBOUNCE_OUT_MS = 3000;  // 6 letture @500ms
+
+// Soglie di tensione (V) per batteria SLA 6V (3 celle) sul valore filtrato.
+// Nota: la tensione dipende molto dal carico e dalla fase di carica; queste soglie sono
+// una mappa "pratica" per UI (tacche) e non una misura precisa di SoC.
+//
+// FULL: tipicamente ~6.35-6.40 V a riposo; in carica può salire oltre.
+static const float V_FULL_MIN      = 6.35f;
+// GOOD: batteria ancora "comoda" sotto carico leggero.
 static const float V_GOOD_MIN      = 6.20f;
-static const float V_LOW_MIN       = 6.00f;
-static const float V_EMPTY_MIN     = 5.80f;
-// Sotto V_EMPTY_MIN => LEVEL_EMPTY
+// LOW: zona medio-bassa.
+static const float V_LOW_MIN       = 6.05f;
+// CRITICAL: vicino a scarica (sotto carico può oscillare).
+static const float V_CRITICAL_MIN  = 5.90f;
+// Sotto V_CRITICAL_MIN => LEVEL_EMPTY
 
 // -----------------------------------------------------------------------------
 // STATO INTERNO
@@ -42,6 +54,10 @@ static float g_vFilt = 0.0f;
 static float g_iFilt = 0.0f;
 
 static uint32_t g_lastReadMs = 0;
+
+// Debounce per stato carica
+static uint32_t g_chargeCandidateSinceMs = 0;     // quando I indica "carica" (entry)
+static uint32_t g_dischargeCandidateSinceMs = 0;  // quando I indica "non carica" (exit)
 
 // -----------------------------------------------------------------------------
 // FUNZIONI INTERNE
@@ -59,7 +75,7 @@ static BatteryLevel levelFromVoltage(float v) {
     return BATT_LEVEL_GOOD;
   } else if (v >= V_LOW_MIN) {
     return BATT_LEVEL_LOW;
-  } else if (v >= V_EMPTY_MIN) {
+  } else if (v >= V_CRITICAL_MIN) {
     return BATT_LEVEL_CRITICAL;
   } else {
     return BATT_LEVEL_EMPTY;
@@ -128,19 +144,36 @@ void battery_update(uint32_t nowMs) {
   g_status.level = levelFromVoltage(g_vFilt);
 
   // Logica "in carica": corrente verso la batteria (segno negativo) sopra soglia
-  bool chargingNow = (g_iFilt < -I_CHARGE_THRESHOLD_MA);
+  // Stato "in carica" calcolato dalla corrente filtrata, con isteresi + debounce
+  const bool wantsCharge   = (g_iFilt < -I_CHARGE_START_MA);
+  const bool wantsNoCharge = (g_iFilt > -I_CHARGE_STOP_MA);
 
-  // Facile isteresi per evitare lampeggi:
-  // - se già in carica, usciamo solo quando la corrente sale sopra (-I_CHARGE_THRESHOLD_MA / 2)
   if (g_status.charging) {
-    if (g_iFilt > -(I_CHARGE_THRESHOLD_MA * 0.5f)) {
-      g_status.charging = false;
+    // Siamo in carica: usciamo solo se per un po' la corrente non indica più carica
+    if (wantsNoCharge) {
+      if (g_dischargeCandidateSinceMs == 0) g_dischargeCandidateSinceMs = nowMs;
+      if (nowMs - g_dischargeCandidateSinceMs >= CHARGE_DEBOUNCE_OUT_MS) {
+        g_status.charging = false;
+        g_dischargeCandidateSinceMs = 0;
+      }
+    } else {
+      g_dischargeCandidateSinceMs = 0;
     }
+    g_chargeCandidateSinceMs = 0;
   } else {
-    if (chargingNow) {
-      g_status.charging = true;
+    // Non siamo in carica: entriamo solo se per un po' la corrente indica carica
+    if (wantsCharge) {
+      if (g_chargeCandidateSinceMs == 0) g_chargeCandidateSinceMs = nowMs;
+      if (nowMs - g_chargeCandidateSinceMs >= CHARGE_DEBOUNCE_IN_MS) {
+        g_status.charging = true;
+        g_chargeCandidateSinceMs = 0;
+      }
+    } else {
+      g_chargeCandidateSinceMs = 0;
     }
+    g_dischargeCandidateSinceMs = 0;
   }
+
 }
 
 BatteryStatus battery_get_status() {

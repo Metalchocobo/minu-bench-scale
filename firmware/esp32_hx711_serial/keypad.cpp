@@ -97,3 +97,10 @@ KeyCode keypad_get_event() {
   pendingEvent = KEY_NONE;
   return ev;
 }
+
+void keypad_get_pins(const int** rows, int* nRows, const int** cols, int* nCols) {
+  if (rows)  *rows  = rowPins;
+  if (nRows) *nRows = 4;
+  if (cols)  *cols  = colPins;
+  if (nCols) *nCols = 2;
+}

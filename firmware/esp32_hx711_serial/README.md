@@ -38,6 +38,36 @@ Dipende dal pin/ponte **RATE** del breakout:
 - di solito **default = 10 SPS**
 - per **80 SPS**: modificare la connessione “RATE” sul retro del modulo (taglio pista / saldatura ponticello, dipende dal modello)
 
+## Batteria SLA 6V (INA219)
+Questo firmware usa **INA219** su I2C per:
+- icona batteria (tacche)
+- rilevare stato **in carica** (corrente negativa)
+
+**Gestione batteria SLA 6V (safety ESP):**
+- **0 tacche (EMPTY):** beep di avviso ogni **60s** (UI peso normale).
+- **Fase di stacco (V ≤ 5.80 V per ≥ 5s):** mostra solo avviso + beep ogni **10s** per **60s**, poi entra in **LIGHT-SLEEP**.
+- **Wake:** solo da tastiera (qualsiasi tasto). Nessun wake automatico.
+- **Isteresi:** annulla countdown se V ≥ 5.90 V o se `charging=true`.
+
+Pin I2C usati:
+- **SDA = GPIO32**
+- **SCL = GPIO33**
+
+### Soglie tacche (SLA 6V)
+Sono soglie “pratiche” (dipendono da carico/temperatura):
+- **4 tacche (FULL):** ≥ **6.35 V**
+- **3 tacche (GOOD):** ≥ **6.20 V**
+- **2 tacche (LOW):**  ≥ **6.05 V**
+- **1 tacca (CRITICAL):** ≥ **5.90 V**
+- **0 tacche (EMPTY):** < **5.90 V**
+
+### Spegnimento di sicurezza (protezione ESP)
+Se **non** è in carica e la tensione filtrata scende sotto:
+- **5.80 V per almeno 5 s**
+
+Il display mostra **“BATTERIA SCARICA”** e l’ESP32 entra in **deep-sleep**.
+Wake-up automatico: ogni **30 s** (per verificare se la tensione è tornata ok / se hai collegato il caricatore).
+
 ## Cosa è stato cambiato rispetto a v2 “pura”
 - Driver HX711 **separato** in `hx711_driver.cpp/.h` (stessa lettura 24 bit, stesso gain).
 - Cadenzamento campionamento: se HX711 **non è pronto**, il firmware **non avanza** il timebase (range/slope/stability restano coerenti).

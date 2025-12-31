@@ -22,3 +22,6 @@ void keypad_update(uint32_t nowMs);
 // Ritorna l'ULTIMO tasto "nuovo" premuto.
 // Se non ci sono eventi nuovi, ritorna KEY_NONE.
 KeyCode keypad_get_event();
+
+// Utility: espone i pin usati (righe/colonne) per setup wakeup in sleep.
+void keypad_get_pins(const int** rows, int* nRows, const int** cols, int* nCols);

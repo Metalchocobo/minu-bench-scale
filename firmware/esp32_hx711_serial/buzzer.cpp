@@ -109,3 +109,8 @@ void buzzerError() {
     delay(80);
   }
 }
+
+// Avviso: singolo beep 
+void buzzerWarn() {
+  playToneHz(1800, 110);
+}

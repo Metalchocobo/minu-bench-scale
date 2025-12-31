@@ -22,6 +22,8 @@
 #include <math.h>
 #include "buzzer.h"
 #include "net_ota_cloud.h"
+#include <esp_sleep.h>
+#include <driver/gpio.h>
 Preferences prefs; 
 // Stato boot (per gestire errori "hard" vs "ack")
 static bool g_hxBeginOk = false;
@@ -120,12 +122,9 @@ const uint32_t OLED_UPDATE_MS = 60;
 
 // ========================= PIN & OGGETTI =========================
 
-// HX711: I2C spostato su D33 (SDA) e D31 (SCL) per averli vicini
-const int I2C_SDA = 33;  // etichetta scheda: D33 (GPIO33)
-const int I2C_SCL = 32;  // etichetta scheda: D31 (GPIO32)
-// Se  per errore hai invertito i cavi SDA/SCL, metti true e fai una prova.
-const bool I2C_SWAP = true;
-
+// HX711: I2C spostato su D27 (SDA) e D26 (SCL) per averli vicini
+const int I2C_SDA = 32;  // etichetta scheda: D27 (GPIO27)
+const int I2C_SCL = 33;  // etichetta scheda: D26 (GPIO26)
 
 
 
@@ -635,7 +634,7 @@ void setup(){
 
   // ------------------------ Sequenza boot "leggibile" ------------------------
   bootShow("I2C", "Avvio bus...");
-  Wire.begin(I2C_SWAP ? I2C_SCL : I2C_SDA, I2C_SWAP ? I2C_SDA : I2C_SCL);
+  Wire.begin(I2C_SDA, I2C_SCL);
   Wire.setClock(400000);
   bootShow("I2C", "OK");
 
@@ -694,6 +693,145 @@ void setup(){
 
 //debug batteria
 static uint32_t lastBattDebug = 0;
+
+// ========================= BATTERIA SLA 6V: sicurezza ESP =========================
+// Sotto certe tensioni (filtrate) il buck a 5V può perdere margine -> latenze/reset.
+// Strategia:
+//  - 0 tacche (EMPTY): beep di avviso ogni 60s (ma UI normale)
+//  - "fase di stacco" (<= V_SAFE_SHUTDOWN_MIN_V): mostra solo avviso + beep ogni 10s per 60s, poi LIGHT-SLEEP
+//  - Wake SOLO da tastiera (qualsiasi tasto). Niente wake automatico.
+
+static const float    V_SAFE_SHUTDOWN_MIN_V     = 5.80f;   // inizia countdown per sleep (V)
+static const float    V_SAFE_SHUTDOWN_CLEAR_V   = 5.90f;   // isteresi: annulla countdown se risali sopra
+static const float    V_HARD_SLEEP_MIN_V        = 5.70f;   // troppo bassa: vai a sleep subito
+static const uint32_t SAFE_SHUTDOWN_DEBOUNCE_MS = 5000;    // deve restare sotto soglia per 5s
+
+static const uint32_t PRE_SLEEP_COUNTDOWN_MS    = 60000;   // 60s avviso prima dello sleep
+static const uint32_t BEEP_EMPTY_MS             = 60000;   // beep ogni 60s (0 tacche)
+static const uint32_t BEEP_COUNTDOWN_MS         = 10000;   // beep ogni 10s durante countdown
+
+static uint32_t g_lowBattSinceMs      = 0;
+static uint32_t g_preSleepStartMs     = 0;
+static uint32_t g_lastEmptyBeepMs     = 0;
+static uint32_t g_lastCountdownBeepMs = 0;
+
+static void enterLowBatteryLightSleep() {
+  // Ultima schermata: avviso e richiesta alimentatore, poi sleep.
+  if (battery_is_available()) {
+    BatteryStatus st = battery_get_status();
+    ui_showBatteryShutdown(st.voltage_V);
+  } else {
+    ui_showError("BATTERIA", "INA219 non trovato", "");
+  }
+
+  // Un piccolo margine per far vedere la schermata
+  delay(80);
+
+  // Riduci consumi
+#if ENABLE_WIFI_OTA || ENABLE_ARDUINO_CLOUD
+  WiFi.disconnect(true);
+  WiFi.mode(WIFI_OFF);
+#endif
+
+  // Prepara wake da tastiera:
+  // - Righe a LOW fisso
+  // - Colonne INPUT_PULLUP
+  // Premendo un tasto, una colonna viene tirata LOW -> wake.
+  const int* rows = nullptr; int nRows = 0;
+  const int* cols = nullptr; int nCols = 0;
+  keypad_get_pins(&rows, &nRows, &cols, &nCols);
+
+  for (int i = 0; i < nRows; i++) {
+    pinMode(rows[i], OUTPUT);
+    digitalWrite(rows[i], LOW);
+  }
+  for (int i = 0; i < nCols; i++) {
+    pinMode(cols[i], INPUT_PULLUP);
+    // abilita wake su livello LOW (solo in light-sleep)
+    gpio_wakeup_enable((gpio_num_t)cols[i], GPIO_INTR_LOW_LEVEL);
+  }
+
+  // Spegni display (riduce consumi). Rimane spento finché non riparti.
+  ui_powerSave(true);
+
+  // Abilita wake GPIO (light-sleep) e vai in sleep.
+  // Niente timer wake: resta lì finché non premi un tasto.
+  esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_TIMER);
+  esp_sleep_enable_gpio_wakeup();
+
+  delay(20);
+  esp_light_sleep_start();
+
+  // Dopo wake: riparti pulito (re-init periferiche).
+  ESP.restart();
+}
+
+static bool maybeEnterSafeShutdown(uint32_t nowMs) {
+  if (!battery_is_available()) return false;
+  BatteryStatus st = battery_get_status();
+
+  // Se è in carica o risalito sopra clear: azzera tutto
+  if (st.charging || st.voltage_V >= V_SAFE_SHUTDOWN_CLEAR_V) {
+    g_lowBattSinceMs = 0;
+    g_preSleepStartMs = 0;
+    g_lastEmptyBeepMs = 0;
+    g_lastCountdownBeepMs = 0;
+    return false;
+  }
+
+  // Stato "0 tacche": beep ogni minuto, UI normale
+  if (st.level == BATT_LEVEL_EMPTY && st.voltage_V > V_SAFE_SHUTDOWN_MIN_V) {
+    if (g_lastEmptyBeepMs == 0 || (nowMs - g_lastEmptyBeepMs) >= BEEP_EMPTY_MS) {
+      buzzerWarn();
+      g_lastEmptyBeepMs = nowMs;
+    }
+    return false; // non oscurare la pesata
+  }
+
+  // Sotto hard-min: sleep immediato (dopo una schermata)
+  if (st.voltage_V <= V_HARD_SLEEP_MIN_V) {
+    buzzerWarn();
+    enterLowBatteryLightSleep(); // non ritorna
+    return true;
+  }
+
+  // Sotto soglia: debounce + countdown prima di andare a sleep
+  if (st.voltage_V <= V_SAFE_SHUTDOWN_MIN_V) {
+    if (g_lowBattSinceMs == 0) g_lowBattSinceMs = nowMs;
+
+    // Debounce prima di entrare nella fase "stacco"
+    if ((nowMs - g_lowBattSinceMs) < SAFE_SHUTDOWN_DEBOUNCE_MS) {
+      return false; // ancora nessun avviso bloccante
+    }
+
+    // Avvio countdown
+    if (g_preSleepStartMs == 0) {
+      g_preSleepStartMs = nowMs;
+      g_lastCountdownBeepMs = 0;
+    }
+
+    // Durante countdown: mostra SOLO avviso
+    ui_showBatteryShutdown(st.voltage_V);
+
+    if (g_lastCountdownBeepMs == 0 || (nowMs - g_lastCountdownBeepMs) >= BEEP_COUNTDOWN_MS) {
+      buzzerWarn();
+      g_lastCountdownBeepMs = nowMs;
+    }
+
+    if ((nowMs - g_preSleepStartMs) >= PRE_SLEEP_COUNTDOWN_MS) {
+      enterLowBatteryLightSleep(); // non ritorna
+    }
+
+    return true; // oscuriamo la pesata mentre siamo in countdown
+  }
+
+  // Qualsiasi altra condizione: reset dei timer "low"
+  g_lowBattSinceMs = 0;
+  g_preSleepStartMs = 0;
+  g_lastCountdownBeepMs = 0;
+  return false;
+}
+
 // ========================= LOOP =========================
 void loop(){
 #if ENABLE_WIFI_OTA || ENABLE_ARDUINO_CLOUD
@@ -787,6 +925,17 @@ void loop(){
     handleKeyEvent(key);
   }
 
+  // Stato batteria + safety shutdown (indipendente dal sensore peso)
+  battery_update(now);
+  if (maybeEnterSafeShutdown(now)) { return; }
+
+  // Ogni 3 secondi stampa lo stato batteria
+  if (now - lastBattDebug > 3000) {
+    lastBattDebug = now;
+    BatteryStatus st = battery_get_status();
+    battery_debug_print(st);
+  }
+
   if (now - lastSampleMs < SAMPLE_MS) {
     // comunque aggiorno OLED se è ora
     if (now - lastOledMs >= OLED_UPDATE_MS) {
@@ -802,17 +951,6 @@ if (!hx711_is_ready()){
 }
 
 lastSampleMs = now;
-
-  
-  //aggiorno stato batteria
-  battery_update(now);
-
-   // ogni 3 secondi stampa lo stato batteria
-    if (now - lastBattDebug > 3000) {
-        lastBattDebug = now;
-        BatteryStatus st = battery_get_status();
-        battery_debug_print(st);
-    }
 
   // 1) Lettura grezza HX711
   long raw = hx711_read();
