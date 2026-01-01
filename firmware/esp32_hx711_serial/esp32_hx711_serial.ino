@@ -248,6 +248,31 @@ unsigned long lastZTtickMs  = 0;
 unsigned long lastSnapMs    = 0;
 unsigned long lastOledMs    = 0;
 
+
+// --- Decimazione HX711 quando lavori a 80 SPS ---
+// Obiettivo: ridurre rumore senza perdere reattività.
+// WORK: usato per logiche STABLE/UNSTABLE, ZT, ecc.  (N più alto)
+// LIVE: usato SOLO per visualizzazione in modalità LIVE (stEnable=false) (N più basso)
+static const uint8_t DECIM_WORK_N = 5;       // ~16 Hz se HX=80 SPS
+static const uint8_t DECIM_LIVE_N = 2;       // ~40 Hz se HX=80 SPS
+static const uint8_t LIVE_DEBOUNCE_HITS = 3; // 3 aggiornamenti consecutivi uguali
+
+// Ultimi valori "pubblici" per il display
+static long gDispWorkLast = 0;
+static const char* gStateLabelWorkLast = "----";
+static long gDispLiveLast = 0;
+
+// Accumulatori per decimazione
+static long gLiveSum = 0;
+static uint8_t gLiveCnt = 0;
+static long gWorkSum = 0;
+static uint8_t gWorkCnt = 0;
+
+// Debounce display LIVE
+static long gLiveCand = 0;
+static uint8_t gLiveHits = 0;
+
+
 // ========================= UTILITY =========================
 inline long effectiveOffsetCounts(){
   return OFFSET_RAW + zero_track_counts;
@@ -936,30 +961,64 @@ void loop(){
     battery_debug_print(st);
   }
 
-  if (now - lastSampleMs < SAMPLE_MS) {
-    // comunque aggiorno OLED se è ora
-    if (now - lastOledMs >= OLED_UPDATE_MS) {
-      // niente nuovo dato, ma puoi tenerlo aggiornato con l'ultimo gDisp
-      // (non faccio nulla qui: gDisp verrà aggiornato nel ramo principale)
+  
+// ====================== HX711 @ 80 SPS (o 10 SPS) + decimazione ======================
+// Leggiamo ogni volta che HX711 ha un dato pronto.
+// - WORK (N=5): alimenta stabilità/zero-tracking e quindi "qualità" della pesata.
+// - LIVE (N=2): SOLO per display in modalità LIVE (stEnable=false), con debounce.
+bool haveNewWork = false;
+long rawAvg = 0; // per log/debug (WORK)
+long raw = 0;
+
+if (hx711_is_ready()) {
+  raw = hx711_read();
+
+  // Mediana veloce su stream raw (aiuta contro spike)
+  long rawMed = pushMedian3(raw);
+
+  // Accumulo per LIVE e WORK
+  gLiveSum += rawMed;
+  gLiveCnt++;
+  gWorkSum += rawMed;
+  gWorkCnt++;
+
+  // ---- LIVE: N=2 (solo display quando stEnable=false) ----
+  if (gLiveCnt >= DECIM_LIVE_N) {
+    long rawLive = gLiveSum / (long)DECIM_LIVE_N;
+    gLiveSum = 0;
+    gLiveCnt = 0;
+
+    long offEff = effectiveOffsetCounts();
+    float gFast = (SCALE_CPG > 0.01f) ? ((float)(rawLive - offEff) / SCALE_CPG) : 0.0f;
+    long cand = lroundf(gFast);
+
+    // debounce: accetto solo se uguale per N hit consecutivi
+    if (cand == gLiveCand) {
+      if (gLiveHits < 255) gLiveHits++;
+    } else {
+      gLiveCand = cand;
+      gLiveHits = 1;
     }
-    return;
+    if (gLiveHits >= LIVE_DEBOUNCE_HITS) {
+      gDispLiveLast = gLiveCand;
+      gLiveHits = LIVE_DEBOUNCE_HITS;
+    }
   }
-  // Attendo che l'HX711 abbia un nuovo dato pronto. Importante: non avanzare il "timebase"
-// se il dato non è pronto, altrimenti le finestre temporali (range/slope/stability) si sballano.
-if (!hx711_is_ready()){
-  return; // nessun nuovo dato dal HX711
+
+  // ---- WORK: N=5 (logiche stabilità) ----
+  if (gWorkCnt >= DECIM_WORK_N) {
+    long rawWork = gWorkSum / (long)DECIM_WORK_N;
+    gWorkSum = 0;
+    gWorkCnt = 0;
+
+    lastSampleMs = now;
+    rawAvg = pushMA(rawWork); // MA applicata sul flusso WORK
+    haveNewWork = true;
+  }
 }
 
-lastSampleMs = now;
-
-  // 1) Lettura grezza HX711
-  long raw = hx711_read();
-
-  // 2) Filtri (mediana + MA)
-  long rawMed = pushMedian3(raw);
-  long rawAvg = pushMA(rawMed);
-
-  // 3) Conversione in grammi
+if (haveNewWork) {
+// 3) Conversione in grammi
   long  offEff = effectiveOffsetCounts();
   gLive = (SCALE_CPG > 0.01f) ? (float)(rawAvg - offEff) / SCALE_CPG : 0.0f;
 
@@ -1061,10 +1120,22 @@ lastSampleMs = now;
   Serial.print(F("  off="));    Serial.print(OFFSET_RAW);
   Serial.print(F("  sc="));     Serial.println(SCALE_CPG,4);
 
-  // 9) OLED update cadenzato
-  if (now - lastOledMs >= OLED_UPDATE_MS){
-    lastOledMs = now;
-    ui_renderWeight(gDisp, modeLabel);
+    // Pubblico i valori WORK per OLED (modalità WORK)
+    gDispWorkLast = gDisp;
+    gStateLabelWorkLast = modeLabel;
+}
+
+// ====================== OLED update cadenzato (sempre) ======================
+if (now - lastOledMs >= OLED_UPDATE_MS) {
+  lastOledMs = now;
+
+  if (!stEnable) {
+    // LIVE: usa flusso veloce (N=2) + debounce
+    ui_renderWeight(gDispLiveLast, "LIVE");
+  } else {
+    ui_renderWeight(gDispWorkLast, gStateLabelWorkLast);
   }
+}
+
 
 }

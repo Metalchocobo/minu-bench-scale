@@ -82,3 +82,9 @@ Wake-up automatico: ogni **30 s** (per verificare se la tensione è tornata ok /
 ## Note importanti
 - Se vedi letture “0 fisse” o DOUT che non scende: è quasi sempre un problema di **pull-up/level shifter** o SCK che resta HIGH.
 - Con cella scollegata è normale vedere valori instabili/oscillanti.
+
+## HX711 a 80 SPS: filtro e reattività
+
+Se il tuo HX711 è impostato a **80 SPS**, il firmware legge ogni campione ma decima:
+- WORK: media di 5 campioni (≈16 Hz) per stabilità/zero-tracking.
+- LIVE: media di 2 campioni (≈40 Hz) solo in modalità LIVE, con debounce.
