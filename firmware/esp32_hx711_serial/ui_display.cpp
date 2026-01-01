@@ -427,3 +427,58 @@ void ui_renderWeight(long gDisp, const char* stateLabel) {
   oled.sendBuffer();
 }
 
+
+void ui_renderTareProgress(uint8_t progressPct) {
+  if (progressPct > 100) progressPct = 100;
+
+  oled.clearBuffer();
+
+  // ------- Riga alta: batteria + wifi -------
+  uint8_t batteryLevel = uiGetBatteryLevel4Step();  // 0..4
+  bool    isCharging   = uiIsBatteryCharging();
+  bool    netConnected = WiFi.isConnected();
+
+  drawBatteryIcon(2, 2, batteryLevel, isCharging);
+  drawNetIcon(30, 3, netConnected);
+
+  
+
+  // ------- Colonna sinistra: Mode / State (manteniamo la UI come prima) -------
+  const char* modeValue  = uiGetModeLabel();   // es: WORK / LIVE
+  const char* stateValue = "TARE";            // durante barra tara
+
+  const int16_t LABEL_X = 2;
+  const int16_t VALUE_X = 44;
+
+  oled.setFont(u8g2_font_6x12_tr);
+
+  // Riga 1: Mode
+  oled.drawStr(LABEL_X, 24, "Mode:");
+  oled.drawStr(VALUE_X, 24, modeValue);
+
+  // Riga 2: State
+  oled.drawStr(LABEL_X, 36, "State:");
+  oled.drawStr(VALUE_X, 36, stateValue);
+
+// ------- Barra di stabilizzazione (10px più corta, allineata a destra) -------
+  const int16_t BAR_RIGHT = 250;
+  const int16_t BAR_W = 170;     // prima 180
+  const int16_t BAR_H = 8;
+  const int16_t BAR_X = BAR_RIGHT - BAR_W;
+  const int16_t BAR_Y = 54;
+
+  // ------- Testo "- TARA -" centrato orizzontalmente sopra la barra -------
+  oled.setFont(u8g2_font_logisoso24_tf);
+  const char* txt = "- TARA -";
+  int16_t wTxt = oled.getStrWidth(txt);
+  int16_t xTxt = BAR_X + (BAR_W - wTxt) / 2;
+  oled.drawStr(xTxt, 40, txt);
+
+  oled.drawFrame(BAR_X, BAR_Y, BAR_W, BAR_H);
+  int16_t fillW = (int16_t)((BAR_W - 2) * (int32_t)progressPct / 100);
+  if (fillW < 0) fillW = 0;
+  if (fillW > (BAR_W - 2)) fillW = BAR_W - 2;
+  if (fillW > 0) oled.drawBox(BAR_X + 1, BAR_Y + 1, fillW, BAR_H - 2);
+
+  oled.sendBuffer();
+}

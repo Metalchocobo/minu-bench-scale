@@ -120,6 +120,7 @@ const uint32_t SAMPLE_MS = 60; // ~16 Hz logica (HX711 10 Hz o 80 Hz, hardware)
 // [OLED] Cadenzamento refresh
 const uint32_t OLED_UPDATE_MS = 60;
 
+
 // ========================= PIN & OGGETTI =========================
 
 // HX711: I2C spostato su D27 (SDA) e D26 (SCL) per averli vicini
@@ -137,6 +138,71 @@ long  REF_G      = DEFAULT_REF_G;
 // Zero-Tracking accumulatore (solo software)
 long  zero_track_counts = 0;
 bool  ztEnable = ZT_ENABLE_DEFAULT;
+// ====================== TARE UI clamp + robust tare (80 SPS) ======================
+// Dopo la pressione TARA:
+//  - oscura il peso e mostra "- TARA -" + barra di stabilizzazione per 1.5s
+//  - ignora un breve "settling" iniziale (pressione tasto / vibrazioni)
+//  - raccoglie campioni raw fino a fine barra e applica l'OFFSET_RAW SOLO alla fine
+static bool     gTareUiActive = false;
+static bool     gTareOffsetApplied = false;
+static uint32_t gTareUiStartMs = 0;
+static uint32_t gTareUiEndMs   = 0;
+static uint32_t gTareCollectStartMs = 0;
+static uint32_t gTareCollectEndMs   = 0;
+static int64_t  gTareSum = 0;
+static uint32_t gTareCnt = 0;
+
+static const uint32_t TARE_UI_CLAMP_MS  = 1500;
+static const uint32_t TARE_SETTLE_MS   = 250;  // ignora vibrazioni iniziali
+static const uint32_t TARE_MIN_SAMPLES = 40;   // ~0.5s @ 80 SPS (dopo settling)
+
+static void tareStart(uint32_t nowMs){
+  gTareUiActive = true;
+  gTareOffsetApplied = false;
+  gTareUiStartMs = nowMs;
+  gTareUiEndMs   = nowMs + TARE_UI_CLAMP_MS;
+
+  gTareCollectStartMs = nowMs + TARE_SETTLE_MS;
+  gTareCollectEndMs   = gTareUiEndMs;   // raccogli fino a fine barra
+
+  gTareSum = 0;
+  gTareCnt = 0;
+}
+
+static void tareAccumSample(long rawSample){
+  if (!gTareUiActive) return;
+  if (gTareOffsetApplied) return;
+
+  uint32_t nowMs = millis();
+  if (nowMs < gTareCollectStartMs) return;
+  if (nowMs > gTareCollectEndMs) return;
+
+  gTareSum += (int64_t)rawSample;
+  gTareCnt++;
+}
+
+static void tareMaybeApply(uint32_t nowMs){
+  if (!gTareUiActive) return;
+  if (gTareOffsetApplied) return;
+  if (nowMs < gTareUiEndMs) return; // applica offset solo a fine barra
+
+  long rawZero = 0;
+  if (gTareCnt >= TARE_MIN_SAMPLES) {
+    rawZero = (long)(gTareSum / (int64_t)gTareCnt);
+  } else {
+    // fallback robusto (blocking) se non sono arrivati abbastanza campioni
+    rawZero = readRawHXAvg(40); // ~0.5s @ 80 SPS
+  }
+
+  OFFSET_RAW = rawZero;
+  zero_track_counts = 0;
+  resetFiltersAndState();
+  Serial.print(F("[TARE] OFFSET_RAW="));
+  Serial.println(OFFSET_RAW);
+
+  gTareOffsetApplied = true;
+}
+
 
 
 // ========================= FILTRI =========================
@@ -285,6 +351,18 @@ void resetFiltersAndState(){
   hCount = 0;
   state = UNSTABLE;
   dispInit = false;
+
+  // Reset decimazione / debounce (evita residui pre-tara)
+  gLiveSum = 0;
+  gLiveCnt = 0;
+  gWorkSum = 0;
+  gWorkCnt = 0;
+  gLiveCand = 0;
+  gLiveHits = 0;
+
+  gDispWorkLast = 0;
+  gDispLiveLast = 0;
+  gStateLabelWorkLast = "----";
 }
 
 // ========================= NVS / HELP =========================
@@ -382,14 +460,10 @@ bool trySnapOnUnload(float gNow, float slope_now, bool quietNow){
 
 // ========================= TARE / CAL / MODALITÀ =========================
 void doTare(){
-  long rawZero = readRawHXAvg(15);
-  OFFSET_RAW = rawZero;
-  zero_track_counts = 0;
-  resetFiltersAndState();
-  Serial.print(F("[TARE] OFFSET_RAW="));
-  Serial.println(OFFSET_RAW);
+  // Avvia la tara non bloccante: UI clamp 1.5s + raccolta campioni per OFFSET_RAW
+  if (gTareUiActive) return;
+  tareStart(millis());
 }
-
 void doCal(long ref_g){
   long rawRef = readRawHXAvg(15);
   long delta  = rawRef - OFFSET_RAW;
@@ -976,6 +1050,8 @@ if (hx711_is_ready()) {
   // Mediana veloce su stream raw (aiuta contro spike)
   long rawMed = pushMedian3(raw);
 
+  tareAccumSample(rawMed);
+
   // Accumulo per LIVE e WORK
   gLiveSum += rawMed;
   gLiveCnt++;
@@ -1125,15 +1201,36 @@ if (haveNewWork) {
     gStateLabelWorkLast = modeLabel;
 }
 
+
+// Applica OFFSET_RAW della tara appena terminata la raccolta campioni
+  tareMaybeApply(now);
+
 // ====================== OLED update cadenzato (sempre) ======================
 if (now - lastOledMs >= OLED_UPDATE_MS) {
   lastOledMs = now;
 
-  if (!stEnable) {
-    // LIVE: usa flusso veloce (N=2) + debounce
-    ui_renderWeight(gDispLiveLast, "LIVE");
-  } else {
-    ui_renderWeight(gDispWorkLast, gStateLabelWorkLast);
+  bool drewTare = false;
+
+  // TARA: oscura il peso e mostra "- TARA -" + barra per 1.5s
+  if (gTareUiActive) {
+    uint32_t elapsed = now - gTareUiStartMs;
+    uint8_t pct = (elapsed >= TARE_UI_CLAMP_MS) ? 100 : (uint8_t)((elapsed * 100UL) / TARE_UI_CLAMP_MS);
+    ui_renderTareProgress(pct);
+    drewTare = true;
+
+    // chiudi la UI solo dopo aver disegnato l'ultimo frame (pct=100)
+    if (now >= gTareUiEndMs) {
+      gTareUiActive = false;
+    }
+  }
+
+  if (!drewTare) {
+    if (!stEnable) {
+      // LIVE: usa flusso veloce (N=2) + debounce
+      ui_renderWeight(gDispLiveLast, "LIVE");
+    } else {
+      ui_renderWeight(gDispWorkLast, gStateLabelWorkLast);
+    }
   }
 }
 
