@@ -320,8 +320,10 @@ unsigned long lastOledMs    = 0;
 // WORK: usato per logiche STABLE/UNSTABLE, ZT, ecc.  (N più alto)
 // LIVE: usato SOLO per visualizzazione in modalità LIVE (stEnable=false) (N più basso)
 static const uint8_t DECIM_WORK_N = 5;       // ~16 Hz se HX=80 SPS
-static const uint8_t DECIM_LIVE_N = 2;       // ~40 Hz se HX=80 SPS
-static const uint8_t LIVE_DEBOUNCE_HITS = 3; // 3 aggiornamenti consecutivi uguali
+static const uint8_t DECIM_LIVE_N = 6;       // ~40 Hz se HX=80 SPS
+// LIVE display: rounding con isteresi (anti-flicker) in grammi.
+// Nota: riguarda solo la visualizzazione in modalità LIVE (stEnable=false).
+static const float LIVE_HYST_G = 0.25f;
 
 // Ultimi valori "pubblici" per il display
 static long gDispWorkLast = 0;
@@ -334,9 +336,8 @@ static uint8_t gLiveCnt = 0;
 static long gWorkSum = 0;
 static uint8_t gWorkCnt = 0;
 
-// Debounce display LIVE
-static long gLiveCand = 0;
-static uint8_t gLiveHits = 0;
+// Stato display LIVE (isteresi)
+static bool gLiveStickyInit = false;
 
 
 // ========================= UTILITY =========================
@@ -357,8 +358,7 @@ void resetFiltersAndState(){
   gLiveCnt = 0;
   gWorkSum = 0;
   gWorkCnt = 0;
-  gLiveCand = 0;
-  gLiveHits = 0;
+  gLiveStickyInit = false;
 
   gDispWorkLast = 0;
   gDispLiveLast = 0;
@@ -1066,18 +1066,21 @@ if (hx711_is_ready()) {
 
     long offEff = effectiveOffsetCounts();
     float gFast = (SCALE_CPG > 0.01f) ? ((float)(rawLive - offEff) / SCALE_CPG) : 0.0f;
-    long cand = lroundf(gFast);
 
-    // debounce: accetto solo se uguale per N hit consecutivi
-    if (cand == gLiveCand) {
-      if (gLiveHits < 255) gLiveHits++;
+    // LIVE: rounding con isteresi (anti-flicker)
+    // - Inizializza al primo valore disponibile.
+    // - Aggiorna solo quando esce dalla finestra di isteresi attorno al valore attuale.
+    //   (solo display: non influenza le logiche WORK)
+    long rounded = lroundf(gFast);
+    if (!gLiveStickyInit) {
+      gDispLiveLast = rounded;
+      gLiveStickyInit = true;
     } else {
-      gLiveCand = cand;
-      gLiveHits = 1;
-    }
-    if (gLiveHits >= LIVE_DEBOUNCE_HITS) {
-      gDispLiveLast = gLiveCand;
-      gLiveHits = LIVE_DEBOUNCE_HITS;
+      const float upTh = (float)gDispLiveLast + 0.5f + LIVE_HYST_G;
+      const float dnTh = (float)gDispLiveLast - 0.5f - LIVE_HYST_G;
+      if (gFast >= upTh || gFast <= dnTh) {
+        gDispLiveLast = rounded;
+      }
     }
   }
 
