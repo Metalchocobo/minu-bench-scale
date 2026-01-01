@@ -20,11 +20,15 @@ static const float ALPHA_CURRENT = 0.3f;
 // Soglie e debounce per considerare la batteria "in carica" (mA)
 // Nota: con VIN+ lato sorgente (batteria/charger) e VIN- lato carico, corrente < 0 = carica
 static const float I_CHARGE_START_MA = 80.0f;  // entra in carica se I < -80 mA
-static const float I_CHARGE_STOP_MA  = 30.0f;  // esce da carica se I > -30 mA
+static const float I_CHARGE_STOP_MA  = 20.0f;  // esce da carica se I > -20 mA
 
 // Debounce temporale (ms) per evitare start/stop continui con caricatori a impulsi o rumore
 static const uint32_t CHARGE_DEBOUNCE_IN_MS  = 1500;  // 3 letture @500ms
-static const uint32_t CHARGE_DEBOUNCE_OUT_MS = 3000;  // 6 letture @500ms
+static const uint32_t CHARGE_DEBOUNCE_OUT_MS = 10000; // 10s
+
+// Min-on time: una volta entrato in carica, resta "charging" almeno per questo tempo
+// per evitare flicker quando il caricatore/PWM interrompe a impulsi.
+static const uint32_t CHARGE_MIN_ON_MS = 20000; // 20s
 
 // Soglie di tensione (V) per batteria SLA 6V (3 celle) sul valore filtrato.
 // Nota: la tensione dipende molto dal carico e dalla fase di carica; queste soglie sono
@@ -58,6 +62,9 @@ static uint32_t g_lastReadMs = 0;
 // Debounce per stato carica
 static uint32_t g_chargeCandidateSinceMs = 0;     // quando I indica "carica" (entry)
 static uint32_t g_dischargeCandidateSinceMs = 0;  // quando I indica "non carica" (exit)
+
+// Timestamp di ingresso in carica (per min-on time)
+static uint32_t g_chargingSinceMs = 0;
 
 // -----------------------------------------------------------------------------
 // FUNZIONI INTERNE
@@ -149,12 +156,17 @@ void battery_update(uint32_t nowMs) {
   const bool wantsNoCharge = (g_iFilt > -I_CHARGE_STOP_MA);
 
   if (g_status.charging) {
+    if (g_chargingSinceMs == 0) g_chargingSinceMs = nowMs;
+
+    const bool minOnSatisfied = (nowMs - g_chargingSinceMs >= CHARGE_MIN_ON_MS);
+
     // Siamo in carica: usciamo solo se per un po' la corrente non indica più carica
-    if (wantsNoCharge) {
+    if (wantsNoCharge && minOnSatisfied) {
       if (g_dischargeCandidateSinceMs == 0) g_dischargeCandidateSinceMs = nowMs;
       if (nowMs - g_dischargeCandidateSinceMs >= CHARGE_DEBOUNCE_OUT_MS) {
         g_status.charging = false;
         g_dischargeCandidateSinceMs = 0;
+        g_chargingSinceMs = 0;
       }
     } else {
       g_dischargeCandidateSinceMs = 0;
@@ -167,11 +179,13 @@ void battery_update(uint32_t nowMs) {
       if (nowMs - g_chargeCandidateSinceMs >= CHARGE_DEBOUNCE_IN_MS) {
         g_status.charging = true;
         g_chargeCandidateSinceMs = 0;
+        g_chargingSinceMs = nowMs;
       }
     } else {
       g_chargeCandidateSinceMs = 0;
     }
     g_dischargeCandidateSinceMs = 0;
+    g_chargingSinceMs = 0;
   }
 
 }
