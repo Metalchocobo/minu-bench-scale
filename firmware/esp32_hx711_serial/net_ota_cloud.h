@@ -32,12 +32,14 @@ namespace Net {
 
   // Stato interno (WiFi non bloccante)
   static bool     wifiConfigured = false;
+  static bool     wifiPaused     = false;
   static uint32_t wifiLastRunMs  = 0;
   static bool     wifiWasConnected = false;
 
   // OTA non bloccante: config (handler) e begin quando WiFi è connesso
   static bool     otaConfigured  = false;
   static bool     otaBegun       = false;
+  static bool     otaInProgress  = false;
   static const char* otaHostname = "minu-bench-scale";
 
   // Due reti fittizie da sostituire con i tuoi dati reali
@@ -57,10 +59,36 @@ namespace Net {
     wifiMulti.addAP(WIFI_SSID_2, WIFI_PASS_2);
 
     wifiConfigured = true;
+    wifiPaused     = false;
     wifiLastRunMs  = 0;
     wifiWasConnected = false;
     Serial.println(F("[NET] WiFi avviato (background)."));
   }
+
+  // Sospende WiFi/OTA (utile prima di andare in light-sleep)
+  inline void wifiSuspend() {
+    if (!wifiConfigured) return;
+    wifiPaused = true;
+    otaBegun = false;
+    otaInProgress = false;
+    wifiWasConnected = false;
+    WiFi.disconnect(true);
+    WiFi.mode(WIFI_OFF);
+  }
+
+  // Ripristina WiFi (senza ri-aggiungere le reti)
+  inline void wifiResume() {
+    if (!wifiConfigured) return;
+    wifiPaused = false;
+    WiFi.mode(WIFI_STA);
+    WiFi.setAutoReconnect(true);
+    WiFi.persistent(false);
+    wifiLastRunMs = 0;
+    wifiWasConnected = false;
+    // OTA verrà ri-abilitato automaticamente quando torni connesso (dentro update())
+  }
+
+  inline bool isOtaInProgress() { return otaInProgress; }
 
   // Configura OTA via Arduino IDE (porta di rete)
   // NON BLOCCANTE: registra gli handler e fa begin() appena il WiFi risulta connesso.
@@ -73,11 +101,13 @@ namespace Net {
 
     ArduinoOTA.onStart([]() {
       Serial.println(F("[OTA] Update iniziato"));
+      otaInProgress = true;
       // Se serve, qui puoi sospendere logica della bilancia
     });
 
     ArduinoOTA.onEnd([]() {
       Serial.println(F("\n[OTA] Update finito"));
+      otaInProgress = false;
     });
 
     ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
@@ -87,6 +117,7 @@ namespace Net {
 
     ArduinoOTA.onError([](ota_error_t error) {
       Serial.printf("[OTA] Errore[%u]\n", error);
+      otaInProgress = false;
     });
 
     Serial.println(F("[OTA] Configurato. Si attiva quando il WiFi si connette."));
@@ -111,7 +142,7 @@ namespace Net {
   inline void update() {
   #if ENABLE_WIFI_OTA
     // Tick WiFi (ogni ~1s) per tentare/ri-tentare la connessione
-    if (wifiConfigured) {
+    if (wifiConfigured && !wifiPaused) {
       uint32_t now = millis();
       if (now - wifiLastRunMs >= 1000) {
         wifiLastRunMs = now;

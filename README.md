@@ -1,204 +1,244 @@
-# Bilancia ESP32 + HX711 + OLED SSD1322 + INA219 · Prototipo 6 V (v2025-12-28)
+# Minù Bench Scale — ESP32 + HX711 + OLED SSD1322 + INA219 (SLA 6 V) · v2026-01-01
 
-Prototipo di **bilancia da banco** per laboratorio (gelato / pasticceria) basata su:
+Bilancia da banco per uso interno in laboratorio (gelato/pasticceria), pensata per guidare e rendere affidabili le pesate ingredienti (non “pesatura legale”).
 
-- ESP32 DevKit
-- ADC 24 bit **HX711** per la cella di carico (eccitazione ponte a 5 V)
-- Display **OLED SSD1322** 256×64 (3,12", SPI)
-- Alimentazione a **batteria piombo 6 V** con modulo CTK3S
-- Monitor batteria con **INA219** (CJMCU-219, lato alto)
+Hardware di riferimento:
+- **ESP32 DevKit**
+- **HX711** (ADC 24 bit) per cella di carico con eccitazione a **5 V**
+- **OLED SSD1322** 256×64 (3,12", SPI)
+- **Batteria piombo SLA 6 V** con modulo caricatore/protezione **CTK3S**
+- **INA219** (CJMCU-219) per tensione/corrente batteria (high-side)
+- **Tastierino 4×2** + **buzzer**
 
-> Progetto pensato per uso interno in laboratorio, non per pesate legali a fini commerciali.
+---
 
-## 0. Scopo e stato del progetto
+## 0) Stato e obiettivo
 
-- Portata target: **20 kg**
-- Risoluzione visibile: **1 g** (clamp a ±16 kg per sicurezza)
-- Uso tipico: pesate ingredienti in laboratorio, con focus su stabilità e lettura “ferma”.
+Target:
+- Portata: **20 kg**
+- Lettura visualizzata: **1 g** (clamp display a ±16 kg per sicurezza)
 
-Stato attuale:
+Funzioni principali (firmware HX711):
+- Lettura HX711 con filtri + stati **STABLE / UNSTABLE / LIVE**
+- **Zero-tracking** vicino allo zero + **snap-to-zero** allo scarico
+- **TARA** con UI dedicata (testo + barra), blocco pesata durante l’operazione
+- Monitor batteria con **tacche** + stato **charging** (stabilizzato)
+- Protezione “batteria scarica” con **avviso + beep + light-sleep**
 
-- ✅ Lettura tramite **HX711** con filtri (mediana + media mobile)
-- ✅ Macchina di stati **STABLE / UNSTABLE / LIVE**
-- ✅ **Zero-tracking** vicino a zero + **snap-to-zero** allo scarico
-- ✅ Auto-tare opzionale all’avvio
-- ✅ UI base su OLED (peso grande + indicatore di stato)
-- ✅ Tastierino frontale 4×2: **TARE** e **MODE** operativi
-- ✅ Monitor batteria con INA219: 4 livelli (FULL / GOOD / LOW / CRITICAL) + flag charging
-- ✅ Buzzer di sistema (boot + click/ok)
+---
 
-## 1. Perché HX711 (e cosa è successo con il NAU7802)
+## 1) Perché HX711 (e perché non NAU7802)
 
-Per questa bilancia è emerso un vincolo pratico: la cella di carico (ponte estensimetrico) rende bene solo se **eccitata a 5 V**.
+Vincolo emerso sul campo: la cella di carico è stabile/precisa solo se eccitata a **~5 V**.  
+Con NAU7802 si è provato a lavorare a 5 V, ma in un setup reale si è verificato **backfeed verso GPIO ESP32** (tensione logica troppo alta) con danni hardware.
 
-Con il NAU7802 si è provato a lavorare a 5 V, ma in un setup reale si è verificato backfeed/tensione troppo alta verso l’ESP32 sui pin logici, con danni hardware.
+Scelta attuale:
+- HX711 alimentato a **5 V**
+- ESP32 resta a **3,3 V sui GPIO**
+- La linea **DOUT va resa 3,3 V safe** (vedi cablaggio)
 
-Quindi:
+Firmware disponibili nel repo:
+- ✅ `firmware/esp32_hx711_serial/` → corrente
+- ⚠️ `firmware/esp32_nau7802_serial/` → storico (non consigliato)
+- 🧱 eventuali cartelle “legacy” → archivio, non usare per nuove modifiche
 
-- Il firmware “attuale” è su HX711, alimentato a 5 V.
-- L’ESP32 resta **sempre a 3,3 V** sui GPIO.
-- Se HX711 è alimentato a 5 V, la linea **DOUT non deve mai andare diretta a un GPIO**.
+---
 
-Firmware disponibili:
-
-- ✅ `firmware/esp32_hx711_serial/` (corrente)
-- ⚠️ `firmware/esp32_nau7802_serial/` (storico, non consigliato)
-- 🧱 `firmware/esp32_hx711_serial_legacy_nau/` (file vecchio che in realtà era NAU, tenuto solo come archivio)
-
-## 2. Hardware
-
-### 2.1 Architettura di alimentazione
+## 2) Alimentazione (architettura)
 
 Schema logico:
+1. Alimentatore → ingresso PV CTK3S  
+2. CTK3S BAT → batteria SLA 6 V  
+3. CTK3S LOAD → **buck 5 V**  
+4. Rail 5 V dal buck alimenta: **ESP32 (VIN/5V)**, **HX711**, **OLED** (se il tuo modulo accetta 5 V)
 
-1. Alimentatore 12 V → ingresso PV CTK3S.
-2. BAT+ / BAT− CTK3S → batteria piombo 6 V.
-3. LOAD+ / LOAD− CTK3S → ingresso buck step-down 5 V.
-4. Uscita 5 V del buck → rail 5 V che alimenta:
-   - VIN/5V dell’ESP32
-   - VCC dell’OLED SSD1322
-   - VCC dell’HX711
-   - Eccitazione cella (tramite HX711)
-5. INA219 montato dal lato batteria (alto lato) per misurare tensione/corrente.
+Motivo: il CTK3S protegge la batteria staccando **LOAD** in undervoltage.
 
-Motivo uso LOAD (e non BAT): il CTK3S stacca solo LOAD in undervoltage (LVD), proteggendo la batteria.
+Condensatori consigliati (stabilità rail 5 V):
+- Ingresso buck: **220 µF** + **100 nF**
+- Uscita buck (rail 5 V): **470 µF** + **100 nF**
+- Vicino ESP32 (VIN↔GND): **10–47 µF** + **100 nF**
 
-Condensatori consigliati:
+---
 
-- Ingresso buck (da LOAD CTK3S): 220 µF elettrolitico (≥ 16 V) + 100 nF ceramico
-- Uscita buck (rail 5 V): 470 µF elettrolitico (≥ 10–16 V) + 100 nF ceramico
-- Vicino all’ESP32 (VIN/5V ↔ GND): 10–47 µF elettrolitico + 100 nF ceramico
-
-### 2.2 Pinout ESP32 (riassunto, firmware HX711)
+## 3) Pinout (firmware HX711)
 
 | Funzione | Modulo | GPIO ESP32 | Note |
 |---|---|---:|---|
-| I2C SDA | INA219 | 32 | bus I2C batteria |
+| I2C SDA | INA219 | 32 | attenzione a non invertire con SCL |
 | I2C SCL | INA219 | 33 | |
-| HX711 SCK | HX711 | 16 | uscita ESP32 3,3 V |
-| HX711 DOUT | HX711 | 35 | ingresso ESP32 3,3 V (input-only) (vedi level shifting sotto) |
+| HX711 SCK | HX711 | 16 | spesso serigrafato **RX2** |
+| HX711 DOUT | HX711 | 35 | input-only, scelto per evitare strap pin |
 | SPI SCK | OLED SSD1322 | 18 | VSPI |
 | SPI MOSI | OLED SSD1322 | 23 | |
 | SPI CS | OLED SSD1322 | 25 | |
 | SPI DC | OLED SSD1322 | 26 | |
 | SPI RST | OLED SSD1322 | 27 | |
-| Tastiera R1 | Keypad 4×2 | 17 | fila 1 |
-| Tastiera R2 | Keypad 4×2 | 5 | fila 2 |
-| Tastiera R3 | Keypad 4×2 | 13 | fila 3 |
-| Tastiera R4 | Keypad 4×2 | 14 | fila 4 |
-| Tastiera C1 | Keypad 4×2 | 19 | colonna 1 |
-| Tastiera C2 | Keypad 4×2 | 21 | colonna 2 |
-| Buzzer | buzzer passivo | 22 | pilotato con LEDC |
+| Tastiera R1 | Keypad | 17 | |
+| Tastiera R2 | Keypad | 5 | |
+| Tastiera R3 | Keypad | 13 | |
+| Tastiera R4 | Keypad | 14 | |
+| Tastiera C1 | Keypad | 19 | |
+| Tastiera C2 | Keypad | 21 | |
+| Buzzer | buzzer passivo | 22 | LEDC |
 
-Nota: abbiamo messo **DOUT su GPIO35** (input-only) proprio per evitare i **pin di strap** e ridurre i rischi di boot.
+---
 
-## 3. Cablaggio dettagliato
+## 4) Cablaggio HX711 (importante)
 
-### 3.1 Cella di carico ↔ HX711
+### 4.1 Cella di carico → HX711
+Collega i 4 fili della cella su **E+, E-, A+, A-** (colori variabili: verifica lo schema della tua cella).
 
-Colori tipici (verifica sempre il tuo cavo):
+### 4.2 HX711 → ESP32 (logica)
 
-- E+ / EXC+ (eccitazione +) → rosso
-- E− / EXC− (eccitazione −) → nero
-- A+ / SIG+ (segnale +) → verde
-- A− / SIG− (segnale −) → bianco
+**Alimentazioni**
+- HX711 **VCC → 5 V**
+- HX711 **GND → GND comune**
 
-### 3.2 HX711 ↔ ESP32 (logica)
+**SCK (clock)**
+- ESP32 GPIO16 → HX711 SCK **diretto (3,3 V va bene)**  
+- Consigli pratici:
+  - **220 Ω in serie** sul filo SCK vicino all’ESP32 (anti-ringing/spike)
+  - **100 kΩ pulldown** tra SCK e GND vicino al modulo HX711 (tiene SCK LOW durante boot/reset)
 
-Alimentazione HX711:
+> Non usare i classici level shifter bidirezionali “I2C-style” (BSS138) su **SCK**: possono tenere la linea alta e mandare HX711 in **power-down**.
 
-- VCC → 5 V (rail buck)
-- GND → GND comune
+**DOUT (data)**
+Se HX711 è a 5 V, **DOUT può andare a 5 V**: va reso “3,3 V safe”.
 
-Segnali:
+Soluzione consigliata: **partitore resistivo**
+- DOUT (HX711) → **10 kΩ** → GPIO35 (ESP32)
+- GPIO35 (ESP32) → **20 kΩ** → GND
 
-- SCK (clock) → GPIO16 (diretto, 3,3 V è ok)
-- DOUT (data) → GPIO35 **solo dopo conversione a 3,3 V**
+(Altri valori equivalenti vanno bene, l’obiettivo è restare ~≤3,3 V sul pin ESP32).
 
-#### Opzione consigliata: level shifter (quello che hai già)
+Nota pratica:
+- Se colleghi DOUT diretto, prima **misura** con multimetro: se HIGH >3,6 V, è rischioso (nel tempo può rovinare l’ESP32).
 
-Hai i moduli: **Logic Level Converter Bi-Directional 4 canali (3,3 V ↔ 5 V)**.
+---
 
-Collega così:
+## 5) HX711: 10 SPS vs 80 SPS
 
-- HV → 5 V
-- LV → 3V3
-- GND → GND comune
-- DOUT HX711 sul lato HV (canale 1) → corrispondente LV → GPIO35
-- (opzionale ma ok) SCK ESP32 GPIO16 lato LV → corrispondente HV → SCK HX711
+La velocità **non** si imposta da software sull’HX711: dipende dal pin/ponte **RATE** del breakout.
 
-Pro: è la soluzione più “a prova di errore”.
+- Tipico default: **10 SPS**
+- Per passare a **80 SPS**: modifica la pista/ponticello “RATE” sul retro del modulo (dipende dal modello)
 
-#### Opzione alternativa: partitore resistivo (solo su DOUT)
+---
 
-Se vuoi evitare il level shifter:
+## 6) Firmware: comportamento “80 Hz senza rumore a display”
 
-- Metti un partitore su DOUT (5 V → 3,3 V). Valori tipici:
-  - R alto 20 kΩ (DOUT→GPIO)
-  - R basso 10 kΩ (GPIO→GND)
+Con HX711 a **80 SPS**:
+- il firmware legge tutti i campioni,
+- ma **decima/filtra** diversamente per WORK vs LIVE.
 
-SCK può restare diretto (3,3 V verso HX711 è ok).
+Concetto:
+- **WORK**: più stabile (decisioni di stato, zero-tracking, ecc.)
+- **LIVE**: più reattivo a display, con anti-flicker
 
-Contro: più facile sbagliare cablaggio; meno robusto.
+I parametri (N di media, isteresi, ecc.) sono nel firmware e sono pensati per essere ritoccati in base al tuo rumore reale.
 
-### 3.3 INA219 ↔ batteria + ESP32
+---
 
-Lato potenza (alto lato):
+## 7) TARA (UI e logica)
 
-- BAT+ → fusibile → VIN+ INA219
-- VIN− INA219 → B+ CTK3S
-- BAT− → B− CTK3S → GND comune
+Tasto **TARE**:
+- avvia tara e mostra “**- TARA -**” + barra di stabilizzazione
+- durante la tara la pesata è “bloccata” a display (l’utente non deve pesare)
+- al termine torna alla UI normale
 
-Lato logica:
+Obiettivo: evitare tara che finisce a **±1 g** a causa di rumore/assestamento.
 
-- VCC → 3V3 ESP32
-- GND → GND comune
+---
+
+## 8) Batteria SLA 6 V (INA219)
+
+### 8.1 Collegamenti INA219
+- VCC → **3V3**
+- GND → GND
 - SDA → GPIO32
 - SCL → GPIO33
+- VIN+/VIN−: high-side sulla linea batteria (vedi schema del tuo cablaggio)
 
-Indirizzo I2C di default: `0x40`.
+Se INA non viene trovato:
+- prima cosa: controlla **SDA/SCL non invertiti**.
 
-### 3.4 OLED SSD1322 ↔ ESP32 (SPI)
+### 8.2 Soglie tacche (default firmware, tensione filtrata)
+Soglie “pratiche” (dipendono da carico/temperatura):
+- **4 tacche (FULL)**: ≥ **6.35 V**
+- **3 tacche (GOOD)**: ≥ **6.20 V**
+- **2 tacche (LOW)**:  ≥ **6.05 V**
+- **1 tacca (CRITICAL)**: ≥ **5.90 V**
+- **0 tacche (EMPTY)**: < **5.90 V**
 
-Bus VSPI:
+### 8.3 Rilevamento “in carica” (stabilizzato)
+L’icona charging è basata sulla **corrente** (negativa = entra in batteria) con:
+- isteresi (start/stop),
+- debounce temporale,
+- **min-on time** (per evitare flicker quando il caricatore/PWM stacca a impulsi).
 
-- SCK → GPIO18
-- MOSI → GPIO23
+Default firmware:
+- entra in carica se **I < −80 mA**
+- esce da carica se **I > −20 mA**
+- debounce ingresso **1,5 s**, uscita **10 s**
+- min-on **20 s**
 
-Controlli:
+---
 
-- CS  → GPIO25
-- DC  → GPIO26
-- RST → GPIO27
+## 9) Batteria scarica: avviso + light-sleep (protezione ESP)
 
-Alimentazione display:
+La protezione qui è pensata per l’ESP32 (evitare latenze/reset quando il buck 5V perde margine).
 
-- VCC → 5 V
-- GND → GND
+Comportamento:
+- **0 tacche (EMPTY)**: beep di avviso ogni **60 s**, UI normale
+- Se V scende sotto **5,80 V** per ≥ **5 s**:
+  - schermo “batteria scarica, collega alimentatore”
+  - beep ogni **10 s** per **60 s**
+  - poi entra in **LIGHT-SLEEP**
+- Wake: premendo un tasto (la tastiera risveglia, poi l’ESP32 riparte con reboot pulito)
 
-### 3.5 Tastierino 4×2
+---
 
-Collegamento fili → GPIO (coerente col firmware):
 
-- Filo 1 (R1) → GPIO17
-- Filo 2 (R2) → GPIO5
-- Filo 3 (R3) → GPIO13
-- Filo 4 (R4) → GPIO14
-- Filo 5 (C1) → GPIO19
-- Filo 6 (C2) → GPIO21
+---
 
-Comportamento attuale:
+## 12) WiFi + OTA (opzionale)
 
-- `TARE`: tara completa
-- `MODE`: alterna WORK/normal ↔ LIVE/fine
+Il firmware HX711 supporta:
+- WiFi **non bloccante** (background)
+- OTA via Arduino IDE (porta di rete)
 
-## 4. Firmware
+Dove si configura:
+- `firmware/esp32_hx711_serial/net_ota_cloud.h`
+
+Note pratiche:
+- di default è attivo **ENABLE_WIFI_OTA = 1**
+- devi sostituire SSID/PASS con quelli reali
+- l’icona WiFi sul display segue lo stato di connessione (se WiFi è abilitato a compile-time)
+
+Se non ti serve OTA/WiFi:
+- imposta `#define ENABLE_WIFI_OTA 0` per ridurre consumi e complessità
+
+---
+
+## 13) Troubleshooting rapido (i classici)
+
+**DOUT sempre HIGH / letture 0 fisse**
+- spesso SCK resta HIGH → HX711 in power-down
+- verifica pulldown 100 kΩ su SCK e che non ci sia un level shifter “I2C” su SCK
+
+**INA219 “non trovato”**
+- SDA/SCL invertiti (errore più comune)
+- indirizzo diverso da 0x40 (raro, ma possibile)
+
+**Rumore alto a 80 SPS**
+- normale: si gestisce con decimazione/filtri e con layout/cavi puliti (cella, massa, schermature se serve)
+
+---
+
+## 11) Dove sta il firmware
 
 Firmware corrente:
+- `firmware/esp32_hx711_serial/`
 
-- `firmware/esp32_hx711_serial/esp32_hx711_serial.ino`
-
-Note:
-
-- La logica di STABLE/UNSTABLE/LIVE e ZT è stata mantenuta identica rispetto al ramo NAU.
-- L’unica sostituzione è il driver di lettura (HX711 al posto del NAU).
+Dentro trovi anche un README “di cartella” con dettagli firmware (driver HX711, note di tuning, ecc.).

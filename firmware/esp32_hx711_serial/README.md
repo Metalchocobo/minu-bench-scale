@@ -65,8 +65,45 @@ Sono soglie “pratiche” (dipendono da carico/temperatura):
 Se **non** è in carica e la tensione filtrata scende sotto:
 - **5.80 V per almeno 5 s**
 
-Il display mostra **“BATTERIA SCARICA”** e l’ESP32 entra in **deep-sleep**.
-Wake-up automatico: ogni **30 s** (per verificare se la tensione è tornata ok / se hai collegato il caricatore).
+Il display mostra **“BATTERIA SCARICA”** e l’ESP32 entra in **LIGHT-SLEEP**.
+Wake: **solo** da tastiera (qualsiasi tasto). Dopo il wake fa **restart** per re-inizializzare le periferiche.
+
+## Risparmio energetico per inattività (5 minuti)
+Se per **5 minuti** non viene premuto alcun tasto, la bilancia entra in **LIGHT-SLEEP**.
+
+Caratteristiche:
+- Wake: **qualsiasi tasto**.
+- **Nessun reset** dello stato/pesata: riprende esattamente dove era.
+- WiFi/OTA vengono sospesi prima dello sleep e riattivati dopo il wake.
+
+### Indicatore esterno sleep (LED)
+Quando il display è spento, per capire che la bilancia è in sleep, usa un LED su:
+- **GPIO4** → **resistenza 330–2.2kΩ** → **anodo LED** → catodo a **GND** (HIGH = LED acceso).
+
+
+## DFPlayer Mini (audio eventi) + spegnimento completo
+Il firmware può suonare file MP3 (es. avviso sleep) e poi spegnere il modulo per non consumare batteria.
+
+### Collegamenti minimi
+- **ESP32 GPIO4 (TX1)** → **1kΩ in serie** → **DFPlayer RX**
+- **DFPlayer TX** → **ESP32 GPIO34 (RX1)** (opzionale, ma consigliato)
+- **DFPlayer BUSY** → **ESP32 GPIO39** (**serve PULLDOWN esterno**, es. 100kΩ a GND)
+- **Altoparlante**: usa **SPK1/SPK2** (8Ω ok)
+
+### Power-gating (high-side) consigliato
+- **ESP32 GPIO2** comanda l'alimentazione DFPlayer (HIGH=ON) tramite **NPN + P-MOSFET high-side**.
+
+### Bypass per test (senza MOSFET)
+Per provare oggi:
+- collega **DFPlayer VCC direttamente a +5V** e **GND a GND**
+- lascia GPIO2 non connesso (o connesso ma senza circuito), il firmware funziona lo stesso
+
+### Comandi seriale
+- `mp3 1` (suona `/MP3/0001.mp3`)
+- `mp3 1 5` (cap a 5s, solo come paracadute)
+- `stop` (stop + spegne DFPlayer)
+- `vol 20`
+- `mp3 status`
 
 ## Cosa è stato cambiato rispetto a v2 “pura”
 - Driver HX711 **separato** in `hx711_driver.cpp/.h` (stessa lettura 24 bit, stesso gain).

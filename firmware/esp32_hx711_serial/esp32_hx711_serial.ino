@@ -22,8 +22,324 @@
 #include <math.h>
 #include "buzzer.h"
 #include "net_ota_cloud.h"
+#include "dfplayer_driver.h"
 #include <esp_sleep.h>
 #include <driver/gpio.h>
+
+// ========================= POWER SAVE (inattività) =========================
+// Dopo N ms senza tasti, entra in light-sleep; wake su qualunque tasto.
+// Requisiti: nessun reset di stato/pesata.
+static const uint32_t INACTIVITY_SLEEP_MS = 5UL * 60UL * 1000UL; // 5 minuti
+
+// LED esterno per indicare chiaramente lo sleep (display spento)
+static const int  SLEEP_LED_PIN = 4;           // GPIO4
+static const bool SLEEP_LED_ACTIVE_HIGH = true; // HIGH = acceso (GPIO -> R -> anodo, catodo a GND)
+
+// DFPlayer Mini (UART)
+// Nota: riusiamo GPIO4 come TX quando siamo "awake". In sleep, quel pin torna ad essere LED.
+static const DFPlayer::Pins DFPLAYER_PINS = { .tx = 4, .rx = 34 }; // RX su GPIO34 (input-only), TX su GPIO4
+static const uint8_t DFPLAYER_DEFAULT_VOL = 20; // 0..30
+
+// Power-cut DFPlayer (high-side)
+static const int  DFPLAYER_EN_PIN   = 2;   // GPIO2 -> NPN base (via 10k). HIGH = DFPlayer ON
+static const int  DFPLAYER_BUSY_PIN = 39;  // GPIO39 <- DFPlayer BUSY (serve PULLDOWN esterno: GPIO39 non ha pull interni)
+
+static uint8_t g_dfplayerVol = DFPLAYER_DEFAULT_VOL;
+
+static uint32_t g_lastKeyPressMs = 0;
+static bool     g_inactivitySleepArmed = true;
+
+// forward decl: lastOledMs viene definito più sotto (serve per forzare refresh post-wake)
+extern unsigned long lastOledMs;
+
+static inline void sleepLedSet(bool on) {
+  if (SLEEP_LED_ACTIVE_HIGH) {
+    digitalWrite(SLEEP_LED_PIN, on ? HIGH : LOW);
+  } else {
+    digitalWrite(SLEEP_LED_PIN, on ? LOW : HIGH);
+  }
+}
+
+static void sleepPrepareWakeFromKeypad() {
+  // Prepara wake da tastiera:
+  // - Righe a LOW fisso
+  // - Colonne INPUT_PULLUP
+  // Premendo un tasto, una colonna viene tirata LOW -> wake.
+  const int* rows = nullptr; int nRows = 0;
+  const int* cols = nullptr; int nCols = 0;
+  keypad_get_pins(&rows, &nRows, &cols, &nCols);
+
+  for (int i = 0; i < nRows; i++) {
+    pinMode(rows[i], OUTPUT);
+    digitalWrite(rows[i], LOW);
+  }
+  for (int i = 0; i < nCols; i++) {
+    pinMode(cols[i], INPUT_PULLUP);
+    gpio_wakeup_enable((gpio_num_t)cols[i], GPIO_INTR_LOW_LEVEL);
+  }
+}
+
+
+
+// ========================= DFPLAYER AUDIO (power-gated, auto-off) =========================
+// Obiettivo:
+// - poter suonare un MP3 (es: /MP3/0001.mp3) su evento
+// - spegnere davvero il DFPlayer (o metterlo in sleep) quando non serve
+// - usare BUSY per capire quando il brano è finito, senza conoscere la durata
+//
+// NOTE HW IMPORTANTI:
+// - GPIO39 NON ha pull-up/down interni: se colleghi BUSY, metti un pulldown esterno (es: 100k a GND)
+// - GPIO4 è condiviso: TX DFPlayer (quando suona) e LED sleep (quando dorme)
+
+enum AudioState : uint8_t { AUDIO_IDLE = 0, AUDIO_POWERING, AUDIO_STARTING, AUDIO_PLAYING, AUDIO_TAILING };
+static AudioState g_audioState = AUDIO_IDLE;
+static uint16_t   g_audioTrack = 0;
+static uint32_t   g_audioStateMs = 0;
+static uint32_t   g_audioStartMs = 0;
+static uint32_t   g_audioTimeoutMs = 0;
+static int        g_busyIdle = -1;
+static int        g_busyPlaying = -1;
+static bool       g_busyPolarityKnown = false;
+static uint32_t   g_busyIdleSinceMs = 0;
+
+static const uint32_t DFP_POWERUP_MS      = 250;   // tempo minimo dopo power-on
+static const uint32_t DFP_BUSY_DETECT_MS  = 800;   // finestra per auto-detect polarità BUSY
+static const uint32_t DFP_END_STABLE_MS   = 250;   // quanto deve restare "idle" per considerare finito
+static const uint32_t DFP_TAIL_OFF_MS     = 150;   // evita click tagliando subito dopo stop
+static const uint32_t DFP_PLAY_TIMEOUT_MS = 30000; // paracadute: se BUSY non funziona
+
+static inline void dfpPowerSet(bool on) {
+  digitalWrite(DFPLAYER_EN_PIN, on ? HIGH : LOW);
+}
+
+static int dfpBusyReadStable() {
+  // Lettura "stabile" senza bloccare troppo (≈16 ms)
+  int ones = 0;
+  for (int i = 0; i < 8; i++) {
+    ones += (digitalRead(DFPLAYER_BUSY_PIN) != 0) ? 1 : 0;
+    delay(2);
+  }
+  return (ones >= 5) ? 1 : 0;
+}
+
+static void audio_stopNow();
+
+static void audio_begin() {
+  pinMode(DFPLAYER_EN_PIN, OUTPUT);
+  dfpPowerSet(false);
+
+  pinMode(DFPLAYER_BUSY_PIN, INPUT);
+
+  // In idle teniamo TX (GPIO4) come LED-pin spento (LOW).
+  pinMode(DFPLAYER_PINS.tx, OUTPUT);
+  digitalWrite(DFPLAYER_PINS.tx, LOW);
+
+  if (DFPLAYER_PINS.rx >= 0) {
+    pinMode(DFPLAYER_PINS.rx, INPUT);
+  }
+
+  DFPlayer::end();
+  g_audioState = AUDIO_IDLE;
+}
+
+static bool audio_isActive() {
+  return g_audioState != AUDIO_IDLE;
+}
+
+static void audio_requestPlayMp3(uint16_t track, uint32_t capSeconds = 0) {
+  if (track < 1) track = 1;
+
+  // Se stava già suonando, tronca e riparti.
+  if (audio_isActive()) {
+    audio_stopNow();
+  }
+
+  g_audioTrack = track;
+  g_audioTimeoutMs = (capSeconds > 0) ? (capSeconds * 1000UL) : DFP_PLAY_TIMEOUT_MS;
+  if (g_audioTimeoutMs < 3000) g_audioTimeoutMs = 3000;
+
+  g_audioState = AUDIO_POWERING;
+  g_audioStateMs = millis();
+  g_audioStartMs = 0;
+  g_busyPolarityKnown = false;
+  g_busyIdleSinceMs = 0;
+
+  // Accendi DFPlayer (se domani metti MOSFET high-side, qui taglia davvero la corrente)
+  dfpPowerSet(true);
+
+  // Mantieni TX basso durante il boot del DFPlayer
+  pinMode(DFPLAYER_PINS.tx, OUTPUT);
+  digitalWrite(DFPLAYER_PINS.tx, LOW);
+
+  Serial.print(F("[MP3] richiesto /MP3/"));
+  if (track < 10) Serial.print('0');
+  if (track < 100) Serial.print('0');
+  if (track < 1000) Serial.print('0');
+  Serial.print(track);
+  Serial.println(F(".mp3"));
+}
+
+static void audio_setVolume(uint8_t vol) {
+  if (vol > 30) vol = 30;
+  g_dfplayerVol = vol;
+  if (audio_isActive()) {
+    DFPlayer::setVolume(vol);
+  }
+}
+
+static void audio_stopNow() {
+  // Porta DFPlayer in sleep e spegni alimentazione (se presente MOSFET)
+  DFPlayer::prepareForEspLightSleep();
+  dfpPowerSet(false);
+
+  // Hi-Z sui pin UART (evita back-powering e rumore). GPIO4 poi torna LED.
+  pinMode(DFPLAYER_PINS.tx, INPUT);
+  if (DFPLAYER_PINS.rx >= 0) pinMode(DFPLAYER_PINS.rx, INPUT);
+
+  // LED off (se GPIO4 poi verrà usato come LED)
+  pinMode(SLEEP_LED_PIN, OUTPUT);
+  sleepLedSet(false);
+
+  g_audioState = AUDIO_IDLE;
+  g_busyIdle = -1;
+  g_busyPlaying = -1;
+  g_busyPolarityKnown = false;
+  g_busyIdleSinceMs = 0;
+}
+
+static void audio_task(uint32_t now) {
+  switch (g_audioState) {
+    case AUDIO_IDLE:
+      return;
+
+    case AUDIO_POWERING:
+      if ((now - g_audioStateMs) < DFP_POWERUP_MS) return;
+
+      // Attiva UART solo quando serve suonare
+      DFPlayer::restoreAfterEspWake(DFPLAYER_PINS, g_dfplayerVol);
+      delay(20);
+
+      // Idle BUSY prima del play
+      g_busyIdle = dfpBusyReadStable();
+
+      // Avvia play da cartella /MP3/0001.mp3 ...
+      DFPlayer::playMp3(g_audioTrack);
+      g_audioStartMs = now;
+
+      g_audioState = AUDIO_STARTING;
+      g_audioStateMs = now;
+      return;
+
+    case AUDIO_STARTING: {
+      int b = dfpBusyReadStable();
+
+      if (b != g_busyIdle) {
+        g_busyPlaying = b;
+        g_busyPolarityKnown = true;
+        g_audioState = AUDIO_PLAYING;
+        g_audioStateMs = now;
+        return;
+      }
+
+      if ((now - g_audioStateMs) >= DFP_BUSY_DETECT_MS) {
+        // Non abbiamo visto transizione: assumiamo "playing = !idle" (molto spesso BUSY è LOW mentre suona)
+        g_busyPlaying = (g_busyIdle == 0) ? 1 : 0;
+        g_busyPolarityKnown = false;
+        g_audioState = AUDIO_PLAYING;
+        g_audioStateMs = now;
+        return;
+      }
+      return;
+    }
+
+    case AUDIO_PLAYING: {
+      // Paracadute se BUSY non è affidabile
+      if (g_audioStartMs != 0 && (now - g_audioStartMs) >= g_audioTimeoutMs) {
+        Serial.println(F("[MP3] timeout (BUSY non affidabile?) -> stop"));
+        DFPlayer::stop();
+        g_audioState = AUDIO_TAILING;
+        g_audioStateMs = now;
+        return;
+      }
+
+      int b = dfpBusyReadStable();
+
+      // Se BUSY è tornato al livello "idle" in modo stabile, consideriamo finito.
+      if (b == g_busyIdle) {
+        if (g_busyIdleSinceMs == 0) g_busyIdleSinceMs = now;
+        if ((now - g_busyIdleSinceMs) >= DFP_END_STABLE_MS) {
+          Serial.println(F("[MP3] fine"));
+          DFPlayer::stop();
+          g_audioState = AUDIO_TAILING;
+          g_audioStateMs = now;
+        }
+      } else {
+        g_busyIdleSinceMs = 0;
+      }
+      return;
+    }
+
+    case AUDIO_TAILING:
+      if ((now - g_audioStateMs) < DFP_TAIL_OFF_MS) return;
+      audio_stopNow();
+      return;
+  }
+}
+
+static void audio_debugStatus() {
+  Serial.print(F("[MP3] state=")); Serial.print((int)g_audioState);
+  Serial.print(F(" track=")); Serial.print(g_audioTrack);
+  Serial.print(F(" vol=")); Serial.print(g_dfplayerVol);
+  Serial.print(F(" BUSY=")); Serial.print(digitalRead(DFPLAYER_BUSY_PIN));
+  Serial.print(F(" idle=")); Serial.print(g_busyIdle);
+  Serial.print(F(" playLvl=")); Serial.print(g_busyPlaying);
+  Serial.print(F(" polKnown=")); Serial.println(g_busyPolarityKnown ? "yes" : "no");
+}
+
+static void enterInactivityLightSleep() {
+  Serial.println(F("[SLEEP] Inattività: entro in light-sleep (wake da tastiera)"));
+
+  // Se stava suonando, tronca e spegni DFPlayer (così GPIO4 può diventare LED)
+  audio_stopNow();
+
+#if ENABLE_WIFI_OTA
+  Net::wifiSuspend();
+#elif ENABLE_ARDUINO_CLOUD
+  WiFi.disconnect(true);
+  WiFi.mode(WIFI_OFF);
+#endif
+
+  // LED sleep ON + display OFF
+  pinMode(SLEEP_LED_PIN, OUTPUT);
+  sleepLedSet(true);
+  ui_powerSave(true);
+
+  // Wake da tastiera
+  sleepPrepareWakeFromKeypad();
+
+  // Abilita wake GPIO (light-sleep) e vai in sleep (niente timer)
+  esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_TIMER);
+  esp_sleep_enable_gpio_wakeup();
+  delay(20);
+  esp_light_sleep_start();
+
+  // --- Wake ---
+  Serial.println(F("[SLEEP] Wake da tastiera"));
+
+  sleepLedSet(false);
+  ui_powerSave(false);
+
+  // Ripristina configurazione tastiera (righe HIGH inattive, input pull-up)
+  keypad_init();
+
+#if ENABLE_WIFI_OTA
+  Net::wifiResume();
+#endif
+
+  // Evita rientro immediato in sleep
+  g_lastKeyPressMs = millis();
+  lastOledMs = 0; // forza refresh veloce dopo wake
+}
 Preferences prefs; 
 // Stato boot (per gestire errori "hard" vs "ack")
 static bool g_hxBeginOk = false;
@@ -378,6 +694,11 @@ void printHelp(){
   Serial.println(F("  m live         -> alias di m fine"));
   Serial.println(F("  st on/off/?    -> abilita/disabilita stati STABLE/UNSTABLE"));
   Serial.println(F("  zt on/off/reset/? -> zero-tracking (near-zero + snap)"));
+  Serial.println(F("  mp3 <n> [capSec] -> suona /MP3/000n.mp3 (capSec opzionale, paracadute)"));
+  Serial.println(F("  mp3 ? / mp3 status -> stato DFPlayer/BUSY"));
+  Serial.println(F("  stop             -> stop + spegne DFPlayer"));
+  Serial.println(F("  vol <0..30>       -> volume DFPlayer"));
+
 }
 
 void loadFromNVS(){
@@ -706,6 +1027,11 @@ void setup(){
   Serial.begin(115200);
   delay(50);
 
+  // LED esterno: indicatore sleep (OFF all'avvio)
+  pinMode(SLEEP_LED_PIN, OUTPUT);
+  sleepLedSet(false);
+  g_lastKeyPressMs = millis();
+
   // DISPLAY SUBITO (per mostrare che la bilancia sta avviando)
   ui_init();
   ui_showBoot("Accensione...", "");
@@ -720,6 +1046,9 @@ void setup(){
 
   // Tastierino (non mostriamo la fase, ma ci serve già da boot per gestire ACK errori)
   keypad_init();
+
+  // Audio DFPlayer: init pin e driver (resta SPENTO finché non lo chiedi da seriale o da evento)
+  audio_begin();
 
 #if ENABLE_WIFI_OTA
   Net::wifiSetup();
@@ -937,12 +1266,24 @@ void loop(){
   Net::update();
 #endif
 
+
   // --- Comandi seriale ---
   if (Serial.available()){
     String cmd = Serial.readStringUntil('\n');
     cmd.trim();
 
-    if (cmd.equalsIgnoreCase("t")) {
+    auto isDigitsOnly = [](const String& s) -> bool {
+      if (s.length() == 0) return false;
+      for (size_t i = 0; i < s.length(); i++) {
+        if (!isDigit((unsigned char)s[i])) return false;
+      }
+      return true;
+    };
+
+    if (cmd.length() == 0) {
+      // no-op
+    }
+    else if (cmd.equalsIgnoreCase("t")) {
       doTare();
     }
     else if (cmd.startsWith("c") || cmd.startsWith("C")){
@@ -978,6 +1319,51 @@ void loop(){
       m.trim();
       setMode(m);
     }
+    else if (cmd.equalsIgnoreCase("stop") || cmd.equalsIgnoreCase("mp3 stop")) {
+      Serial.println(F("[MP3] stop"));
+      audio_stopNow();
+    }
+    else if (cmd.equalsIgnoreCase("mp3 ?") || cmd.equalsIgnoreCase("mp3 status") || cmd.equalsIgnoreCase("audio ?")) {
+      audio_debugStatus();
+    }
+    else if (cmd.startsWith("vol")) {
+      // "vol <0..30>" set volume
+      int sp = cmd.indexOf(' ');
+      if (sp > 0) {
+        int v = cmd.substring(sp + 1).toInt();
+        if (v < 0) v = 0;
+        if (v > 30) v = 30;
+        audio_setVolume((uint8_t)v);
+        Serial.print(F("[MP3] volume=")); Serial.println(v);
+      } else {
+        Serial.println(F("[MP3] uso: vol <0..30>"));
+      }
+    }
+    else if (cmd.startsWith("mp3")) {
+      // "mp3 <n> [capSec]" -> suona /MP3/000n.mp3
+      int sp = cmd.indexOf(' ');
+      if (sp > 0) {
+        String rest = cmd.substring(sp + 1);
+        rest.trim();
+        int sp2 = rest.indexOf(' ');
+        String sTrack = (sp2 > 0) ? rest.substring(0, sp2) : rest;
+        String sCap   = (sp2 > 0) ? rest.substring(sp2 + 1) : String();
+        sTrack.trim();
+        sCap.trim();
+
+        long n = sTrack.toInt();
+        uint16_t track = (n <= 0) ? 1 : (uint16_t)n;
+        uint32_t capSec = 0;
+        if (sCap.length() > 0) {
+          long cap = sCap.toInt();
+          if (cap > 0) capSec = (uint32_t)cap;
+        }
+
+        audio_requestPlayMp3(track, capSec);
+      } else {
+        Serial.println(F("[MP3] uso: mp3 <n> [capSec]   (es: mp3 1, mp3 1 8)"));
+      }
+    }
     else if (cmd.equalsIgnoreCase("st on")){
       stEnable = true;
       resetFiltersAndState();
@@ -1009,6 +1395,11 @@ void loop(){
       Serial.print(F("  accum=")); Serial.print(zero_track_counts);
       Serial.print(F(" counts (≈")); Serial.print(zt_g,2); Serial.println(F(" g)"));
     }
+    else if (isDigitsOnly(cmd)) {
+      uint16_t t = (uint16_t)cmd.toInt();
+      if (t == 0) t = 1;
+      audio_requestPlayMp3(t);
+    }
     else {
       printHelp();
     }
@@ -1017,16 +1408,31 @@ void loop(){
   // --- Cadenzamento letture + tastiera ---
   unsigned long now = millis();
 
+  // Audio DFPlayer state-machine (non blocca la pesata)
+  audio_task(now);
+
   // Tastiera frontale
   keypad_update(now);
   KeyCode key = keypad_get_event();
   if (key != KEY_NONE){
+    g_lastKeyPressMs = now;
     handleKeyEvent(key);
   }
 
   // Stato batteria + safety shutdown (indipendente dal sensore peso)
   battery_update(now);
   if (maybeEnterSafeShutdown(now)) { return; }
+
+  // Sleep per inattività (5 min senza tasti). Evita di dormire durante OTA.
+  bool allowInactivitySleep = g_inactivitySleepArmed;
+  if (audio_isActive()) allowInactivitySleep = false; // evita sleep mentre suona
+#if ENABLE_WIFI_OTA
+  if (Net::isOtaInProgress()) allowInactivitySleep = false;
+#endif
+  if (allowInactivitySleep && (now - g_lastKeyPressMs) >= INACTIVITY_SLEEP_MS) {
+    enterInactivityLightSleep();
+    return; // riparti dal loop() dopo il wake
+  }
 
   // Ogni 3 secondi stampa lo stato batteria
   if (now - lastBattDebug > 3000) {
