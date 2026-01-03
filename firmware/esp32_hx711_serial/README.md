@@ -78,7 +78,7 @@ Caratteristiche:
 
 ### Indicatore esterno sleep (LED)
 Quando il display è spento, per capire che la bilancia è in sleep, usa un LED su:
-- **GPIO4** → **resistenza 330–2.2kΩ** → **anodo LED** → catodo a **GND** (HIGH = LED acceso).
+- **GPIO15** → **resistenza 330–2.2kΩ** → **anodo LED** → catodo a **GND** (HIGH = LED acceso).
 
 
 ## DFPlayer Mini (audio eventi) + spegnimento completo

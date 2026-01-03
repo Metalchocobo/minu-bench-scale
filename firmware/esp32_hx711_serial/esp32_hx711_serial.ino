@@ -32,17 +32,17 @@
 static const uint32_t INACTIVITY_SLEEP_MS = 5UL * 60UL * 1000UL; // 5 minuti
 
 // LED esterno per indicare chiaramente lo sleep (display spento)
-static const int  SLEEP_LED_PIN = 4;           // GPIO4
+static const int  SLEEP_LED_PIN = 15;          // GPIO15
 static const bool SLEEP_LED_ACTIVE_HIGH = true; // HIGH = acceso (GPIO -> R -> anodo, catodo a GND)
 
 // DFPlayer Mini (UART)
-// Nota: riusiamo GPIO4 come TX quando siamo "awake". In sleep, quel pin torna ad essere LED.
+// TX DFPlayer dedicato: GPIO4. LED sleep dedicato: GPIO15.
 static const DFPlayer::Pins DFPLAYER_PINS = { .tx = 4, .rx = 34 }; // RX su GPIO34 (input-only), TX su GPIO4
 static const uint8_t DFPLAYER_DEFAULT_VOL = 20; // 0..30
 
 // Power-cut DFPlayer (high-side)
 static const int  DFPLAYER_EN_PIN   = 2;   // GPIO2 -> NPN base (via 10k). HIGH = DFPlayer ON
-static const int  DFPLAYER_BUSY_PIN = 39;  // GPIO39 <- DFPlayer BUSY (serve PULLDOWN esterno: GPIO39 non ha pull interni)
+static const int  DFPLAYER_BUSY_PIN = 39;  // GPIO39 <- DFPlayer BUSY (GPIO39 non ha pull interni; se BUSY è instabile aggiungi pull-up esterno a 3V3)
 
 static uint8_t g_dfplayerVol = DFPLAYER_DEFAULT_VOL;
 
@@ -66,9 +66,10 @@ static inline void sleepLedSet(bool on) {
   }
 }
 
-// LED OFF "safe": lascia il pin in alta impedenza (evita di tenere basso RX del DFPlayer quando condividi GPIO4).
-static inline void sleepLedOffHiZ() {
-  pinMode(SLEEP_LED_PIN, INPUT);
+// LED OFF
+static inline void sleepLedOff() {
+  pinMode(SLEEP_LED_PIN, OUTPUT);
+  sleepLedSet(false);
 }
 
 static void sleepPrepareWakeFromKeypad() {
@@ -102,7 +103,7 @@ static void sleepPrepareWakeFromKeypad() {
 // - GPIO39 NON ha pull-up/down interni.
 //   In molti DFPlayer (soprattutto cloni) il pin BUSY può risultare "flottante" a riposo:
 //   in quel caso aggiungi un pull-up esterno verso 3V3 (10k..47k). Evita il pulldown a GND.
-// - GPIO4 è condiviso: TX DFPlayer (quando suona) e LED sleep (quando dorme)
+// - GPIO4: TX DFPlayer. GPIO15: LED sleep (dedicato).
 
 enum AudioState : uint8_t { AUDIO_IDLE = 0, AUDIO_POWERING, AUDIO_STARTING, AUDIO_PLAYING, AUDIO_TAILING };
 static AudioState g_audioState = AUDIO_IDLE;
@@ -203,12 +204,12 @@ static void audio_stopNow() {
   // Ferma DFPlayer e spegni alimentazione (se presente MOSFET). Niente sleep software: con alcuni cloni può non riprendere.
   dfpPowerSet(false);
 
-  // Hi-Z sui pin UART (evita back-powering e rumore). GPIO4 poi torna LED.
+  // Hi-Z sui pin UART (evita back-powering e rumore quando il DFPlayer è spento).
   pinMode(DFPLAYER_PINS.tx, INPUT);
   if (DFPLAYER_PINS.rx >= 0) pinMode(DFPLAYER_PINS.rx, INPUT);
 
-  // LED off (GPIO4 condiviso): metti in Hi-Z per non tenere basso RX del DFPlayer
-  sleepLedOffHiZ();
+  // LED off
+  sleepLedOff();
 
   g_audioState = AUDIO_IDLE;
   g_busyIdle = -1;
@@ -309,7 +310,7 @@ static void audio_debugStatus() {
 static void enterInactivityLightSleep() {
   Serial.println(F("[SLEEP] Inattività: entro in light-sleep (wake da tastiera)"));
 
-  // Se stava suonando, tronca e spegni DFPlayer (così GPIO4 può diventare LED)
+  // Se stava suonando, tronca e spegni DFPlayer (riduce consumo e evita stati strani)
   audio_stopNow();
 
 #if ENABLE_WIFI_OTA
@@ -336,7 +337,7 @@ static void enterInactivityLightSleep() {
   // --- Wake ---
   Serial.println(F("[SLEEP] Wake da tastiera"));
 
-  sleepLedOffHiZ();
+  sleepLedOff();
   ui_powerSave(false);
 
   // Ripristina configurazione tastiera (righe HIGH inattive, input pull-up)
@@ -1038,7 +1039,7 @@ void setup(){
   delay(50);
 
   // LED esterno: indicatore sleep (OFF all'avvio)
-  sleepLedOffHiZ();
+  sleepLedOff();
   g_lastKeyPressMs = millis();
 
   // DISPLAY SUBITO (per mostrare che la bilancia sta avviando)
