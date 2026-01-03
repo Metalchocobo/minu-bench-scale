@@ -133,3 +133,12 @@ Per provare oggi:
 Se il tuo HX711 è impostato a **80 SPS**, il firmware legge ogni campione ma decima:
 - WORK: media di 5 campioni (≈16 Hz) per stabilità/zero-tracking.
 - LIVE: media di 2 campioni (≈40 Hz) solo in modalità LIVE, con rounding a isteresi (anti-flicker).
+
+
+## Debug seriale HX711 (opzionale)
+Di default il log continuo del sensore è disattivato.
+
+Comandi:
+- `hxlog on` / `hxlog off`
+- `hxlog ?`
+- `hxlog rate <ms>` (50..5000)

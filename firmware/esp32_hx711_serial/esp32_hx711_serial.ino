@@ -47,17 +47,28 @@ static const int  DFPLAYER_BUSY_PIN = 39;  // GPIO39 <- DFPlayer BUSY (serve PUL
 static uint8_t g_dfplayerVol = DFPLAYER_DEFAULT_VOL;
 
 static uint32_t g_lastKeyPressMs = 0;
+// ====================== HX711 serial logging (toggle) ======================
+static bool     g_hxLogEnabled   = false;      // default OFF: il monitor seriale resta pulito
+static uint32_t g_hxLogPeriodMs  = 250;        // rate log quando ON
+static uint32_t g_hxLogLastMs    = 0;
+
 static bool     g_inactivitySleepArmed = true;
 
 // forward decl: lastOledMs viene definito più sotto (serve per forzare refresh post-wake)
 extern unsigned long lastOledMs;
 
 static inline void sleepLedSet(bool on) {
+  // Assume pinMode(SLEEP_LED_PIN, OUTPUT) already set
   if (SLEEP_LED_ACTIVE_HIGH) {
     digitalWrite(SLEEP_LED_PIN, on ? HIGH : LOW);
   } else {
     digitalWrite(SLEEP_LED_PIN, on ? LOW : HIGH);
   }
+}
+
+// LED OFF "safe": lascia il pin in alta impedenza (evita di tenere basso RX del DFPlayer quando condividi GPIO4).
+static inline void sleepLedOffHiZ() {
+  pinMode(SLEEP_LED_PIN, INPUT);
 }
 
 static void sleepPrepareWakeFromKeypad() {
@@ -132,9 +143,8 @@ static void audio_begin() {
 
   pinMode(DFPLAYER_BUSY_PIN, INPUT);
 
-  // In idle teniamo TX (GPIO4) come LED-pin spento (LOW).
-  pinMode(DFPLAYER_PINS.tx, OUTPUT);
-  digitalWrite(DFPLAYER_PINS.tx, LOW);
+  // In idle teniamo TX (GPIO4) in Hi-Z: evita di bloccare RX DFPlayer se il modulo è alimentato.
+  pinMode(DFPLAYER_PINS.tx, INPUT);
 
   if (DFPLAYER_PINS.rx >= 0) {
     pinMode(DFPLAYER_PINS.rx, INPUT);
@@ -190,17 +200,15 @@ static void audio_setVolume(uint8_t vol) {
 }
 
 static void audio_stopNow() {
-  // Porta DFPlayer in sleep e spegni alimentazione (se presente MOSFET)
-  DFPlayer::prepareForEspLightSleep();
+  // Ferma DFPlayer e spegni alimentazione (se presente MOSFET). Niente sleep software: con alcuni cloni può non riprendere.
   dfpPowerSet(false);
 
   // Hi-Z sui pin UART (evita back-powering e rumore). GPIO4 poi torna LED.
   pinMode(DFPLAYER_PINS.tx, INPUT);
   if (DFPLAYER_PINS.rx >= 0) pinMode(DFPLAYER_PINS.rx, INPUT);
 
-  // LED off (se GPIO4 poi verrà usato come LED)
-  pinMode(SLEEP_LED_PIN, OUTPUT);
-  sleepLedSet(false);
+  // LED off (GPIO4 condiviso): metti in Hi-Z per non tenere basso RX del DFPlayer
+  sleepLedOffHiZ();
 
   g_audioState = AUDIO_IDLE;
   g_busyIdle = -1;
@@ -328,7 +336,7 @@ static void enterInactivityLightSleep() {
   // --- Wake ---
   Serial.println(F("[SLEEP] Wake da tastiera"));
 
-  sleepLedSet(false);
+  sleepLedOffHiZ();
   ui_powerSave(false);
 
   // Ripristina configurazione tastiera (righe HIGH inattive, input pull-up)
@@ -1030,8 +1038,7 @@ void setup(){
   delay(50);
 
   // LED esterno: indicatore sleep (OFF all'avvio)
-  pinMode(SLEEP_LED_PIN, OUTPUT);
-  sleepLedSet(false);
+  sleepLedOffHiZ();
   g_lastKeyPressMs = millis();
 
   // DISPLAY SUBITO (per mostrare che la bilancia sta avviando)
@@ -1341,7 +1348,39 @@ void loop(){
         Serial.println(F("[MP3] uso: vol <0..30>"));
       }
     }
-    else if (cmd.startsWith("mp3")) {
+    
+    else if (cmd.startsWith("hxlog")) {
+      // hxlog on|off|?  ; hxlog rate <ms>
+      if (cmd.equalsIgnoreCase("hxlog on")) {
+        g_hxLogEnabled = true;
+        Serial.println(F("[HXLOG] on"));
+      } else if (cmd.equalsIgnoreCase("hxlog off")) {
+        g_hxLogEnabled = false;
+        Serial.println(F("[HXLOG] off"));
+      } else if (cmd.equalsIgnoreCase("hxlog ?") || cmd.equalsIgnoreCase("hxlog")) {
+        Serial.print(F("[HXLOG] "));
+        Serial.print(g_hxLogEnabled ? "on" : "off");
+        Serial.print(F("  rate="));
+        Serial.print(g_hxLogPeriodMs);
+        Serial.println(F("ms"));
+      } else if (cmd.startsWith("hxlog rate")) {
+        int sp = cmd.lastIndexOf(' ');
+        if (sp > 0) {
+          long ms = cmd.substring(sp + 1).toInt();
+          if (ms < 50) ms = 50;
+          if (ms > 5000) ms = 5000;
+          g_hxLogPeriodMs = (uint32_t)ms;
+          Serial.print(F("[HXLOG] rate="));
+          Serial.print(g_hxLogPeriodMs);
+          Serial.println(F("ms"));
+        } else {
+          Serial.println(F("[HXLOG] uso: hxlog rate <ms>  (50..5000)"));
+        }
+      } else {
+        Serial.println(F("[HXLOG] comandi: hxlog on | hxlog off | hxlog ? | hxlog rate <ms>"));
+      }
+    }
+else if (cmd.startsWith("mp3")) {
       // "mp3 <n> [capSec]" -> suona /MP3/000n.mp3
       int sp = cmd.indexOf(' ');
       if (sp > 0) {
@@ -1594,18 +1633,23 @@ if (haveNewWork) {
     if (gDisp < -(long)MAX_DISPLAY_G) gDisp = -(long)MAX_DISPLAY_G;
   }
 
-  // 8) Log
-  Serial.print(F("rawAvg="));   Serial.print(rawAvg);
-  Serial.print(F("  g="));      Serial.print(gLive,2);
-  Serial.print(F("  gDisp="));  Serial.print(gDisp);
-  Serial.print(F("  state="));  Serial.print(modeLabel);
-  Serial.print(F("  rng0.5s="));Serial.print(rng05,2);
-  Serial.print(F("  slope="));  Serial.print(slope_gps,2); Serial.print(F(" g/s"));
-  Serial.print(F("  rng2s="));  Serial.print(rng2s,2);
-  Serial.print(F("  over="));   Serial.print(overload ? 1 : 0);
-  Serial.print(F("  zt_cnt=")); Serial.print(zero_track_counts);
-  Serial.print(F("  off="));    Serial.print(OFFSET_RAW);
-  Serial.print(F("  sc="));     Serial.println(SCALE_CPG,4);
+  // 8) Log (solo se abilitato via comando seriale)
+  if (g_hxLogEnabled && (now - g_hxLogLastMs) >= g_hxLogPeriodMs) {
+    g_hxLogLastMs = now;
+    // 8) Log
+      Serial.print(F("rawAvg="));   Serial.print(rawAvg);
+      Serial.print(F("  g="));      Serial.print(gLive,2);
+      Serial.print(F("  gDisp="));  Serial.print(gDisp);
+      Serial.print(F("  state="));  Serial.print(modeLabel);
+      Serial.print(F("  rng0.5s="));Serial.print(rng05,2);
+      Serial.print(F("  slope="));  Serial.print(slope_gps,2); Serial.print(F(" g/s"));
+      Serial.print(F("  rng2s="));  Serial.print(rng2s,2);
+      Serial.print(F("  over="));   Serial.print(overload ? 1 : 0);
+      Serial.print(F("  zt_cnt=")); Serial.print(zero_track_counts);
+      Serial.print(F("  off="));    Serial.print(OFFSET_RAW);
+      Serial.print(F("  sc="));     Serial.println(SCALE_CPG,4);
+  }
+
 
     // Pubblico i valori WORK per OLED (modalità WORK)
     gDispWorkLast = gDisp;

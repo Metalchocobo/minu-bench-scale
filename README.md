@@ -242,3 +242,11 @@ Firmware corrente:
 - `firmware/esp32_hx711_serial/`
 
 Dentro trovi anche un README “di cartella” con dettagli firmware (driver HX711, note di tuning, ecc.).
+
+
+### Debug HX711 (seriale)
+Nel firmware HX711 il log continuo del sensore è disattivato di default. Attivalo con `hxlog on` e regolalo con `hxlog rate <ms>`.
+
+
+### DFPlayer
+Per affidabilità, niente sleep software del DFPlayer: lo spegnimento avviene via taglio alimentazione (MOSFET) quando disponibile.
