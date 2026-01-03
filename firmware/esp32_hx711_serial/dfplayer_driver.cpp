@@ -79,18 +79,17 @@ void wake() {
 }
 
 void prepareForEspLightSleep() {
-  // Cerchiamo di evitare che il DFPlayer interpreti transizioni del pin TX (che diventa LED)
+  // Fermiamo l'audio e chiudiamo la UART.
+  // NOTE: il comando "sleep" (0x0A) su molti cloni DFPlayer è inaffidabile e può impedire
+  // la riproduzione successiva. Per il risparmio energetico serio, meglio tagliare VCC via MOSFET.
   stop();
-  delay(30);
-  sleep();
-  delay(30);
+  delay(50);
   end();
 }
 
 void restoreAfterEspWake(const Pins& pins, uint8_t vol) {
+  // Riattiva solo la UART + volume. Niente "wake" finché non usiamo davvero lo sleep del DFPlayer.
   begin(pins, 9600);
-  delay(30);
-  wake();
   delay(80);
   setVolume(vol);
 }

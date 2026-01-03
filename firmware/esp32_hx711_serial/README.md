@@ -87,21 +87,29 @@ Il firmware può suonare file MP3 (es. avviso sleep) e poi spegnere il modulo pe
 ### Collegamenti minimi
 - **ESP32 GPIO4 (TX1)** → **1kΩ in serie** → **DFPlayer RX**
 - **DFPlayer TX** → **ESP32 GPIO34 (RX1)** (opzionale, ma consigliato)
-- **DFPlayer BUSY** → **ESP32 GPIO39** (**serve PULLDOWN esterno**, es. 100kΩ a GND)
+- **DFPlayer BUSY** → **ESP32 GPIO39**
+  - BUSY è tipicamente **3.3V** (ok per ESP32)
+  - GPIO39 non ha pull interni: se a riposo il segnale risulta instabile/flottante, aggiungi **pull-up 10k..47k a 3V3**
+  - evita il pulldown a GND (rischi di leggere "busy" fisso)
 - **Altoparlante**: usa **SPK1/SPK2** (8Ω ok)
 
 ### Power-gating (high-side) consigliato
 - **ESP32 GPIO2** comanda l'alimentazione DFPlayer (HIGH=ON) tramite **NPN + P-MOSFET high-side**.
+
+> Nota: evitiamo di usare il comando "sleep" interno del DFPlayer (0x0A) perché su molti cloni non si risveglia in modo affidabile; per risparmio batteria serio è meglio tagliare VCC.
 
 ### Bypass per test (senza MOSFET)
 Per provare oggi:
 - collega **DFPlayer VCC direttamente a +5V** e **GND a GND**
 - lascia GPIO2 non connesso (o connesso ma senza circuito), il firmware funziona lo stesso
 
+> Nota: non usiamo più il comando DFPlayer "sleep" (0x0A) durante i test perché su molti cloni non si risveglia in modo affidabile.
+> Per il risparmio energetico vero, la strada solida è tagliare VCC con MOSFET high-side.
+
 ### Comandi seriale
 - `mp3 1` (suona `/MP3/0001.mp3`)
 - `mp3 1 5` (cap a 5s, solo come paracadute)
-- `stop` (stop + spegne DFPlayer)
+- `stop` (stop; con MOSFET collegato spegne anche l'alimentazione del DFPlayer)
 - `vol 20`
 - `mp3 status`
 

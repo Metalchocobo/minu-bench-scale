@@ -88,7 +88,9 @@ static void sleepPrepareWakeFromKeypad() {
 // - usare BUSY per capire quando il brano è finito, senza conoscere la durata
 //
 // NOTE HW IMPORTANTI:
-// - GPIO39 NON ha pull-up/down interni: se colleghi BUSY, metti un pulldown esterno (es: 100k a GND)
+// - GPIO39 NON ha pull-up/down interni.
+//   In molti DFPlayer (soprattutto cloni) il pin BUSY può risultare "flottante" a riposo:
+//   in quel caso aggiungi un pull-up esterno verso 3V3 (10k..47k). Evita il pulldown a GND.
 // - GPIO4 è condiviso: TX DFPlayer (quando suona) e LED sleep (quando dorme)
 
 enum AudioState : uint8_t { AUDIO_IDLE = 0, AUDIO_POWERING, AUDIO_STARTING, AUDIO_PLAYING, AUDIO_TAILING };
