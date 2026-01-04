@@ -93,7 +93,7 @@ static void sleepPrepareWakeFromKeypad() {
 
 
 
-// ========================= DFPLAYER AUDIO (power-gated, auto-off) =========================
+// ========================= DFPLAYER AUDIO (power-gated, OFF solo in standby) =========================
 // Obiettivo:
 // - poter suonare un MP3 (es: /MP3/0001.mp3) su evento
 // - spegnere davvero il DFPlayer (o metterlo in sleep) quando non serve
@@ -162,6 +162,35 @@ static void audio_begin() {
   g_busyPlaying = -1;
   g_busyPolarityKnown = false;
   g_busyIdleSinceMs = 0;
+}
+
+// Porta DFPlayer in stato "pronto" (alimentato + UART attiva + volume impostato), SENZA riprodurre.
+// Nota: manteniamo comunque il percorso "cold-start" dentro audio_requestPlayMp3(), utile se in futuro
+// si vorrà tornare all'accensione solo-on-demand.
+static void audio_primeReady() {
+  if (g_dfpPowered && g_dfpUartReady) return;
+
+  // Se era spento, accendilo e lascia stabilizzare l'alimentazione.
+  if (!g_dfpPowered) {
+    dfpPowerSet(true);
+    g_dfpPowered = true;
+
+    // Mantieni TX basso durante il boot del DFPlayer
+    pinMode(DFPLAYER_PINS.tx, OUTPUT);
+    digitalWrite(DFPLAYER_PINS.tx, LOW);
+
+    delay(DFP_POWERUP_MS);
+  } else {
+    // Già alimentato ma UART non pronta: attesa minima
+    delay(20);
+  }
+
+  DFPlayer::restoreAfterEspWake(DFPLAYER_PINS, g_dfplayerVol);
+  g_dfpUartReady = true;
+  delay(20);
+
+  // Baseline BUSY in idle (utile per il detect di START/END quando parte il primo play)
+  g_busyIdle = dfpBusyReadStable();
 }
 
 static bool audio_isActive() {
@@ -396,6 +425,9 @@ static void enterInactivityLightSleep() {
   // Evita rientro immediato in sleep
   g_lastKeyPressMs = millis();
   lastOledMs = 0; // forza refresh veloce dopo wake
+
+  // DFPlayer pronto subito al wake (così un evento audio può partire senza cold-start)
+  audio_primeReady();
 }
 Preferences prefs; 
 // Stato boot (per gestire errori "hard" vs "ack")
@@ -1103,8 +1135,11 @@ void setup(){
   // Tastierino (non mostriamo la fase, ma ci serve già da boot per gestire ACK errori)
   keypad_init();
 
-  // Audio DFPlayer: init pin e driver (resta SPENTO finché non lo chiedi da seriale o da evento)
+  // Audio DFPlayer: init pin/driver e lo portiamo subito "pronto" all'avvio,
+  // così possiamo riprodurre un suono immediatamente (senza cold-start sul primo mp3).
+  // Nota: il percorso cold-start resta disponibile dentro audio_requestPlayMp3().
   audio_begin();
+  audio_primeReady();
 
 #if ENABLE_WIFI_OTA
   Net::wifiSetup();
