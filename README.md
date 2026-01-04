@@ -258,8 +258,8 @@ Archivio (legacy, non mantenuto):
 
 > Nota: la documentazione operativa (cablaggi, comandi seriali, DFPlayer, sleep, debug) è in questo README.
 
-### DFPlayer Mini (audio eventi) + spegnimento completo
-Il firmware può suonare file MP3 (es. avviso sleep) e poi spegnere il modulo per non consumare batteria.
+### DFPlayer Mini (audio eventi) + power-gating solo in standby
+Il firmware può suonare file MP3 (es. avviso sleep). Per evitare click e stati strani, **non fa power-cycle a fine brano**: una volta acceso, il DFPlayer resta alimentato durante l’uso e viene spento **solo quando la bilancia entra in standby/light-sleep per inattività**.
 
 ### Collegamenti minimi
 - **ESP32 GPIO4 (TX1)** → **1kΩ in serie** → **DFPlayer RX**
@@ -286,7 +286,7 @@ Per provare oggi:
 ### Comandi seriale
 - `mp3 1` (suona `/MP3/0001.mp3`)
 - `mp3 1 5` (cap a 5s, solo come paracadute)
-- `stop` (stop; con MOSFET collegato spegne anche l'alimentazione del DFPlayer)
+- `stop` (stop della riproduzione; **non** spegne il DFPlayer)
 - `vol 20`
 - `mp3 status`
 

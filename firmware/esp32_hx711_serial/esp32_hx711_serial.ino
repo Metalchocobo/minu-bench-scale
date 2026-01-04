@@ -116,6 +116,10 @@ static int        g_busyPlaying = -1;
 static bool       g_busyPolarityKnown = false;
 static uint32_t   g_busyIdleSinceMs = 0;
 
+// Stato alimentazione DFPlayer (power-gating)
+static bool       g_dfpPowered   = false;
+static bool       g_dfpUartReady = false;
+
 static const uint32_t DFP_POWERUP_MS      = 250;   // tempo minimo dopo power-on
 static const uint32_t DFP_BUSY_DETECT_MS  = 800;   // finestra per auto-detect polarità BUSY
 static const uint32_t DFP_END_STABLE_MS   = 250;   // quanto deve restare "idle" per considerare finito
@@ -141,18 +145,23 @@ static void audio_stopNow();
 static void audio_begin() {
   pinMode(DFPLAYER_EN_PIN, OUTPUT);
   dfpPowerSet(false);
+  g_dfpPowered = false;
+  g_dfpUartReady = false;
 
   pinMode(DFPLAYER_BUSY_PIN, INPUT);
 
-  // In idle teniamo TX (GPIO4) in Hi-Z: evita di bloccare RX DFPlayer se il modulo è alimentato.
+  // A DFPlayer spento teniamo UART in Hi-Z: evita back-powering.
   pinMode(DFPLAYER_PINS.tx, INPUT);
-
   if (DFPLAYER_PINS.rx >= 0) {
     pinMode(DFPLAYER_PINS.rx, INPUT);
   }
 
   DFPlayer::end();
   g_audioState = AUDIO_IDLE;
+  g_busyIdle = -1;
+  g_busyPlaying = -1;
+  g_busyPolarityKnown = false;
+  g_busyIdleSinceMs = 0;
 }
 
 static bool audio_isActive() {
@@ -171,18 +180,8 @@ static void audio_requestPlayMp3(uint16_t track, uint32_t capSeconds = 0) {
   g_audioTimeoutMs = (capSeconds > 0) ? (capSeconds * 1000UL) : DFP_PLAY_TIMEOUT_MS;
   if (g_audioTimeoutMs < 3000) g_audioTimeoutMs = 3000;
 
-  g_audioState = AUDIO_POWERING;
-  g_audioStateMs = millis();
-  g_audioStartMs = 0;
   g_busyPolarityKnown = false;
   g_busyIdleSinceMs = 0;
-
-  // Accendi DFPlayer (se domani metti MOSFET high-side, qui taglia davvero la corrente)
-  dfpPowerSet(true);
-
-  // Mantieni TX basso durante il boot del DFPlayer
-  pinMode(DFPLAYER_PINS.tx, OUTPUT);
-  digitalWrite(DFPLAYER_PINS.tx, LOW);
 
   Serial.print(F("[MP3] richiesto /MP3/"));
   if (track < 10) Serial.print('0');
@@ -190,26 +189,72 @@ static void audio_requestPlayMp3(uint16_t track, uint32_t capSeconds = 0) {
   if (track < 1000) Serial.print('0');
   Serial.print(track);
   Serial.println(F(".mp3"));
+
+  const uint32_t now = millis();
+
+  // Se il DFPlayer è già alimentato e UART pronta, non fare power-cycle: play diretto.
+  if (g_dfpPowered && g_dfpUartReady) {
+    g_busyIdle = dfpBusyReadStable();
+    DFPlayer::playMp3(g_audioTrack);
+
+    g_audioStartMs = now;
+    g_audioState = AUDIO_STARTING;
+    g_audioStateMs = now;
+    return;
+  }
+
+  // Percorso cold-start: accendi DFPlayer e aspetta boot.
+  g_audioState = AUDIO_POWERING;
+  g_audioStateMs = now;
+  g_audioStartMs = 0;
+
+  dfpPowerSet(true);
+  g_dfpPowered = true;
+
+  // Mantieni TX basso durante il boot del DFPlayer
+  pinMode(DFPLAYER_PINS.tx, OUTPUT);
+  digitalWrite(DFPLAYER_PINS.tx, LOW);
 }
 
 static void audio_setVolume(uint8_t vol) {
   if (vol > 30) vol = 30;
   g_dfplayerVol = vol;
-  if (audio_isActive()) {
+
+  // Se la UART DFPlayer è pronta, applica subito il volume anche se non sta suonando.
+  if (g_dfpUartReady) {
     DFPlayer::setVolume(vol);
   }
 }
 
 static void audio_stopNow() {
-  // Ferma DFPlayer e spegni alimentazione (se presente MOSFET). Niente sleep software: con alcuni cloni può non riprendere.
-  dfpPowerSet(false);
+  // Stop riproduzione, ma NON tagliare l'alimentazione.
+  // L'idea è: DFPlayer resta acceso durante l'uso; lo spegniamo solo entrando in standby/light-sleep.
+  if (g_dfpUartReady) {
+    DFPlayer::stop();
+    delay(30);
+  }
 
-  // Hi-Z sui pin UART (evita back-powering e rumore quando il DFPlayer è spento).
+  g_audioState = AUDIO_IDLE;
+  g_busyIdle = -1;
+  g_busyPlaying = -1;
+  g_busyPolarityKnown = false;
+  g_busyIdleSinceMs = 0;
+}
+
+static void audio_powerOffNow() {
+  // Spegne davvero DFPlayer (MOSFET high-side) + mette UART in Hi-Z per evitare back-powering.
+  if (g_dfpUartReady) {
+    DFPlayer::stop();
+    delay(50);
+    DFPlayer::end();
+    g_dfpUartReady = false;
+  }
+
   pinMode(DFPLAYER_PINS.tx, INPUT);
   if (DFPLAYER_PINS.rx >= 0) pinMode(DFPLAYER_PINS.rx, INPUT);
 
-  // LED off
-  sleepLedOff();
+  dfpPowerSet(false);
+  g_dfpPowered = false;
 
   g_audioState = AUDIO_IDLE;
   g_busyIdle = -1;
@@ -228,6 +273,7 @@ static void audio_task(uint32_t now) {
 
       // Attiva UART solo quando serve suonare
       DFPlayer::restoreAfterEspWake(DFPLAYER_PINS, g_dfplayerVol);
+      g_dfpUartReady = true;
       delay(20);
 
       // Idle BUSY prima del play
@@ -310,8 +356,8 @@ static void audio_debugStatus() {
 static void enterInactivityLightSleep() {
   Serial.println(F("[SLEEP] Inattività: entro in light-sleep (wake da tastiera)"));
 
-  // Se stava suonando, tronca e spegni DFPlayer (riduce consumo e evita stati strani)
-  audio_stopNow();
+  // Spegni DFPlayer solo quando entriamo in standby/light-sleep
+  audio_powerOffNow();
 
 #if ENABLE_WIFI_OTA
   Net::wifiSuspend();
