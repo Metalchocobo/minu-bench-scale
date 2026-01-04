@@ -1328,15 +1328,6 @@ static void enterLowBatteryLightSleep() {
   if (battery_is_available()) {
     BatteryStatus st = battery_get_status();
 
-    // Se siamo nella fase "Zzz" pre-sleep per batteria, restiamo qui 5s e poi andiamo in sleep.
-    if (g_battSleepStage == BATT_SLEEP_ZZZ) {
-      if (st.voltage_V <= V_HARD_SLEEP_MIN_V || (nowMs - g_battStageStartMs) >= BATT_ZZZ_MS) {
-        enterLowBatteryLightSleep(); // non ritorna
-      }
-      ui_renderSleepZzz();
-      return true; // oscuriamo la pesata
-    }
-
     ui_showBatteryShutdown(st.voltage_V);
   } else {
     ui_showError("BATTERIA", "INA219 non trovato", "");
@@ -1402,6 +1393,16 @@ static bool maybeEnterSafeShutdown(uint32_t nowMs) {
     g_battSleepStage = BATT_SLEEP_NONE;
     g_battStageStartMs = 0;
     return false;
+  }
+
+  // Se siamo nella fase "Zzz" pre-sleep per batteria (0013):
+  // mostra Z Z Z per 5s, poi vai in light-sleep.
+  if (g_battSleepStage == BATT_SLEEP_ZZZ) {
+    ui_renderSleepZzz();
+    if (st.voltage_V <= V_HARD_SLEEP_MIN_V || (nowMs - g_battStageStartMs) >= BATT_ZZZ_MS) {
+      enterLowBatteryLightSleep(); // non ritorna
+    }
+    return true; // oscuriamo la pesata
   }
 
   // Stato "0 tacche": beep ogni minuto, UI normale
