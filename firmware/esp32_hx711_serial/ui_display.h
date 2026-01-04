@@ -26,3 +26,5 @@ void ui_renderWeight(long gDisp, const char* stateLabel);
 
 // Overlay TARA: mostra testo + barra (0..100)
 void ui_renderTareProgress(uint8_t progressPct);
+// Schermata transizione standby (Zzz...)
+void ui_renderSleepZzz();

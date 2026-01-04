@@ -298,6 +298,27 @@ Per provare oggi:
 - `mp3 status`
 
 
+### Legenda MP3 eventi (cartella /MP3)
+Metti i file in **SD:/MP3/** con nome a 4 cifre (es. `0001.mp3`).
+
+| File | Evento |
+|---:|---|
+| 0001.mp3 | Avvio bilancia |
+| 0002.mp3 | Boot completato |
+| 0003.mp3 | Entrata risparmio energetico (inattività, step 1) |
+| 0004.mp3 | Uscita risparmio energetico (wake) |
+| 0005.mp3 | Wi‑Fi connesso |
+| 0006.mp3 | Wi‑Fi disconnesso |
+| 0007.mp3 | Errore connessione Wi‑Fi (connect failed / SSID non disponibile, con cooldown) |
+| 0011.mp3 | Batteria bassa (una sola volta all'ingresso in 0 tacche, beep resta attivo) |
+| 0012.mp3 | Batteria critica (una sola volta all'ingresso fase critica, beep resta attivo) |
+| 0013.mp3 | Avvio standby (transizione Zzz... 5s prima del light‑sleep) |
+| 0014.mp3 | Errore lettura batteria (INA) |
+| 0015.mp3 | Errore sensore peso (HX) |
+| 0017.mp3 | Modalità WORK |
+| 0018.mp3 | Modalità LIVE |
+
+
 ### Debug seriale HX711 (opzionale)
 Di default il log continuo del sensore è disattivato.
 

@@ -428,8 +428,28 @@ static void enterInactivityLightSleep() {
 
   // DFPlayer pronto subito al wake (così un evento audio può partire senza cold-start)
   audio_primeReady();
+  // 0004.mp3 = Uscita risparmio energetico
+  audio_requestPlayMp3(4);
 }
-Preferences prefs; 
+Preferences prefs;
+
+// Stato boot (true finché non finisce setup)
+static bool g_isBooting = true;
+
+// Inattività: sequenza sleep a 2 step
+// 1) dopo 5 min senza tasti suona 0003 (entrata risparmio energetico)
+// 2) quando finisce, suona 0013 e mostra Zzz... per 5s, poi entra in light-sleep
+enum InactivitySleepStage : uint8_t { INACT_NONE = 0, INACT_ENTRY = 1, INACT_ZZZ = 2 };
+static InactivitySleepStage g_inactivitySleepStage = INACT_NONE;
+static uint32_t g_inactivityStageStartMs = 0;
+static const uint32_t INACTIVITY_SLEEP_AUDIO_TIMEOUT_MS = 15000; // paracadute
+static const uint32_t INACTIVITY_ZZZ_MS = 5000; // schermata Zzz... (5s)
+
+// Audio eventi WiFi (cooldown errore connessione)
+static bool     g_wifiPrevConnected = false;
+static uint32_t g_wifiErrLastMs = 0;
+static const uint32_t WIFI_ERR_COOLDOWN_MS = 60000;
+ 
 // Stato boot (per gestire errori "hard" vs "ack")
 static bool g_hxBeginOk = false;
 
@@ -887,6 +907,7 @@ void doCal(long ref_g){
 
 void setMode(const String& mode){
   if (mode.equalsIgnoreCase("work") || mode.equalsIgnoreCase("normal")){
+    const bool changed = (currentMode != SCALE_MODE_WORK);
     maN = MA_DEFAULT;
     setMA(maN);
     deadbandUnstable = DB_UNSTABLE_N;
@@ -894,9 +915,14 @@ void setMode(const String& mode){
     ztEnable = true;
     resetFiltersAndState();
     currentMode = SCALE_MODE_WORK;
+    if (changed && !g_isBooting) {
+      // 0017.mp3 = Modalità WORK
+      audio_requestPlayMp3(17);
+    }
     Serial.println(F("[MODE] work/normal: MA=6, DB=0.10 g, ST=on, ZT=on"));
   }
   else if (mode.equalsIgnoreCase("fine") || mode.equalsIgnoreCase("live")){
+    const bool changed = (currentMode != SCALE_MODE_LIVE);
     maN = MA_FINE;
     setMA(maN);
     deadbandUnstable = DB_UNSTABLE_F;
@@ -904,6 +930,10 @@ void setMode(const String& mode){
     ztEnable = true;
     resetFiltersAndState();
     currentMode = SCALE_MODE_LIVE;
+    if (changed && !g_isBooting) {
+      // 0018.mp3 = Modalità LIVE
+      audio_requestPlayMp3(18);
+    }
     Serial.println(F("[MODE] fine/live: MA=4, DB=0.05 g, ST=off, ZT=on"));
   }
   else {
@@ -1075,6 +1105,35 @@ bool initHX711(){
 }
 
 // ------------------------- BOOT UX helpers -------------------------
+// ------------------------- WiFi audio (eventi) -------------------------
+static void wifiAudioUpdate(uint32_t now) {
+#if ENABLE_WIFI_OTA || ENABLE_ARDUINO_CLOUD
+  // Evita di fare annunci durante il boot (per non sovrapporre 0001/0002).
+  if (g_isBooting) {
+    g_wifiPrevConnected = WiFi.isConnected();
+    return;
+  }
+
+  const bool connectedNow = WiFi.isConnected();
+  if (connectedNow != g_wifiPrevConnected) {
+    g_wifiPrevConnected = connectedNow;
+    // 0005=connesso, 0006=disconnesso
+    audio_requestPlayMp3(connectedNow ? 5 : 6);
+  }
+
+  // 0007=errore connessione (cooldown)
+  if (!connectedNow) {
+    wl_status_t st = WiFi.status();
+    if (st == WL_CONNECT_FAILED || st == WL_NO_SSID_AVAIL) {
+      if (g_wifiErrLastMs == 0 || (now - g_wifiErrLastMs) >= WIFI_ERR_COOLDOWN_MS) {
+        audio_requestPlayMp3(7);
+        g_wifiErrLastMs = now;
+      }
+    }
+  }
+#endif
+}
+
 static void bootPump(uint32_t ms) {
   uint32_t start = millis();
   while (millis() - start < ms) {
@@ -1084,6 +1143,8 @@ static void bootPump(uint32_t ms) {
     // Manteniamo viva la lettura tastiera anche durante boot (utile se qualcosa si blocca)
     uint32_t now = millis();
     keypad_update(now);
+    audio_task(now);
+    wifiAudioUpdate(now);
     (void)keypad_get_event();
     delay(10);
   }
@@ -1098,6 +1159,8 @@ static void bootWaitTare() {
   while (true) {
     uint32_t now = millis();
     keypad_update(now);
+    audio_task(now);
+    wifiAudioUpdate(now);
     KeyCode k = keypad_get_event();
     if (k == KEY_TARE) {
       buzzerKeyClick();
@@ -1126,7 +1189,11 @@ void setup(){
 
   // Suono subito dopo che il display è acceso
   buzzerInit();
-  buzzerBootMelody();
+  // buzzerBootMelody() resta nel codice, ma non lo lanciamo se usiamo l'MP3 di avvio.
+  static const bool BOOT_BUZZER_MELODY_ENABLED = false;
+  if (BOOT_BUZZER_MELODY_ENABLED) {
+    buzzerBootMelody();
+  }
   
   Serial.println(F("\n=== ESP32 + HX711 — versione light + OLED SSD1322 ==="));
 
@@ -1140,6 +1207,9 @@ void setup(){
   // Nota: il percorso cold-start resta disponibile dentro audio_requestPlayMp3().
   audio_begin();
   audio_primeReady();
+  // 0001.mp3 = Avvio bilancia
+  audio_requestPlayMp3(1);
+
 
 #if ENABLE_WIFI_OTA
   Net::wifiSetup();
@@ -1164,6 +1234,8 @@ void setup(){
   // Se il modulo non è trovato, è un errore duro: ritenta su TARE
   while (!g_hxBeginOk) {
     ui_showError("HX711", "Modulo non trovato", "Premi TARA per ritentare");
+    // 0015.mp3 = Errore sensore peso (HX)
+    audio_requestPlayMp3(15);
     bootWaitTare();
     bootShow("Sensore peso", "Ritentativo...");
     hxOk = initHX711();
@@ -1172,6 +1244,8 @@ void setup(){
   // Config/AFE fallite: mostriamo errore, ma dopo ACK si procede (può comunque funzionare)
   if (!hxOk) {
     ui_showError("HX711", "Init: FAIL", "Premi TARA per continuare");
+    // 0015.mp3 = Errore sensore peso (HX)
+    audio_requestPlayMp3(15);
     bootWaitTare();
   }
   bootShow("Sensore peso", "OK");
@@ -1201,10 +1275,16 @@ void setup(){
   battery_init();
   if (!battery_is_available()) {
     ui_showError("Batteria", "INA219 non trovato", "Premi TARA per continuare");
+    // 0014.mp3 = Errore lettura batteria (INA)
+    audio_requestPlayMp3(14);
     bootWaitTare();
   }
 
   bootShow("Avvio", "Completato");
+
+  // 0002.mp3 = Boot completato
+  audio_requestPlayMp3(2);
+  g_isBooting = false;
 
   lastOledMs = millis();
 
@@ -1233,6 +1313,10 @@ static uint32_t g_lowBattSinceMs      = 0;
 static uint32_t g_preSleepStartMs     = 0;
 static uint32_t g_lastEmptyBeepMs     = 0;
 static uint32_t g_lastCountdownBeepMs = 0;
+
+// Audio batteria (una sola volta all'ingresso dello stato)
+static bool g_mp3BattLowPlayed  = false; // 0011
+static bool g_mp3BattCritPlayed = false; // 0012
 
 static void enterLowBatteryLightSleep() {
   // Ultima schermata: avviso e richiesta alimentatore, poi sleep.
@@ -1295,11 +1379,19 @@ static bool maybeEnterSafeShutdown(uint32_t nowMs) {
     g_preSleepStartMs = 0;
     g_lastEmptyBeepMs = 0;
     g_lastCountdownBeepMs = 0;
+    g_mp3BattLowPlayed = false;
+    g_mp3BattCritPlayed = false;
     return false;
   }
 
   // Stato "0 tacche": beep ogni minuto, UI normale
   if (st.level == BATT_LEVEL_EMPTY && st.voltage_V > V_SAFE_SHUTDOWN_MIN_V) {
+    if (!g_mp3BattLowPlayed) {
+      // 0011.mp3 = Batteria bassa (una sola volta all'ingresso)
+      audio_requestPlayMp3(11);
+      g_mp3BattLowPlayed = true;
+    }
+
     if (g_lastEmptyBeepMs == 0 || (nowMs - g_lastEmptyBeepMs) >= BEEP_EMPTY_MS) {
       buzzerWarn();
       g_lastEmptyBeepMs = nowMs;
@@ -1309,6 +1401,11 @@ static bool maybeEnterSafeShutdown(uint32_t nowMs) {
 
   // Sotto hard-min: sleep immediato (dopo una schermata)
   if (st.voltage_V <= V_HARD_SLEEP_MIN_V) {
+    if (!g_mp3BattCritPlayed) {
+      // 0012.mp3 = Batteria critica
+      audio_requestPlayMp3(12);
+      g_mp3BattCritPlayed = true;
+    }
     buzzerWarn();
     enterLowBatteryLightSleep(); // non ritorna
     return true;
@@ -1327,6 +1424,12 @@ static bool maybeEnterSafeShutdown(uint32_t nowMs) {
     if (g_preSleepStartMs == 0) {
       g_preSleepStartMs = nowMs;
       g_lastCountdownBeepMs = 0;
+
+      if (!g_mp3BattCritPlayed) {
+        // 0012.mp3 = Batteria critica (una sola volta all'ingresso fase stacco)
+        audio_requestPlayMp3(12);
+        g_mp3BattCritPlayed = true;
+      }
     }
 
     // Durante countdown: mostra SOLO avviso
@@ -1355,6 +1458,7 @@ static bool maybeEnterSafeShutdown(uint32_t nowMs) {
 void loop(){
 #if ENABLE_WIFI_OTA || ENABLE_ARDUINO_CLOUD
   Net::update();
+  wifiAudioUpdate(millis());
 #endif
 
 
@@ -1539,6 +1643,13 @@ else if (cmd.startsWith("mp3")) {
   KeyCode key = keypad_get_event();
   if (key != KEY_NONE){
     g_lastKeyPressMs = now;
+    if (g_inactivitySleepStage != INACT_NONE) {
+      // Se l'utente preme un tasto mentre stiamo per andare in standby, annulla la sequenza.
+      g_inactivitySleepStage = INACT_NONE;
+      g_inactivityStageStartMs = 0;
+      audio_stopNow();
+      lastOledMs = 0; // ripristina UI normale subito
+    }
     handleKeyEvent(key);
   }
 
@@ -1546,15 +1657,44 @@ else if (cmd.startsWith("mp3")) {
   battery_update(now);
   if (maybeEnterSafeShutdown(now)) { return; }
 
-  // Sleep per inattività (5 min senza tasti). Evita di dormire durante OTA.
+    // Sleep per inattività (5 min senza tasti). Evita di dormire durante OTA.
   bool allowInactivitySleep = g_inactivitySleepArmed;
-  if (audio_isActive()) allowInactivitySleep = false; // evita sleep mentre suona
+  // Se non è in corso una sequenza standby, evita di dormire mentre è in corso un audio "non-standby".
+  if (g_inactivitySleepStage == INACT_NONE && audio_isActive()) allowInactivitySleep = false;
 #if ENABLE_WIFI_OTA
   if (Net::isOtaInProgress()) allowInactivitySleep = false;
 #endif
-  if (allowInactivitySleep && (now - g_lastKeyPressMs) >= INACTIVITY_SLEEP_MS) {
-    enterInactivityLightSleep();
-    return; // riparti dal loop() dopo il wake
+
+  if (!allowInactivitySleep) {
+    g_inactivitySleepStage = INACT_NONE;
+    g_inactivityStageStartMs = 0;
+  } else {
+    if (g_inactivitySleepStage == INACT_NONE) {
+      if ((now - g_lastKeyPressMs) >= INACTIVITY_SLEEP_MS) {
+        // Step 1: annuncia risparmio energetico
+        // 0003.mp3 = Entrata risparmio energetico (inattività)
+        audio_requestPlayMp3(3);
+        g_inactivitySleepStage = INACT_ENTRY;
+        g_inactivityStageStartMs = now;
+      }
+    } else if (g_inactivitySleepStage == INACT_ENTRY) {
+      // Step 2: quando finisce (o va in timeout), avvia la transizione Zzz... e poi va in sleep.
+      if (!audio_isActive() || (now - g_inactivityStageStartMs) >= INACTIVITY_SLEEP_AUDIO_TIMEOUT_MS) {
+        // 0013.mp3 = Avvio standby (transizione prima dello sleep)
+        audio_requestPlayMp3(13);
+        ui_renderSleepZzz();
+        g_inactivitySleepStage = INACT_ZZZ;
+        g_inactivityStageStartMs = now;
+        lastOledMs = 0; // forza refresh rapido
+      }
+    } else { // INACT_ZZZ
+      if ((now - g_inactivityStageStartMs) >= INACTIVITY_ZZZ_MS) {
+        g_inactivitySleepStage = INACT_NONE;
+        g_inactivityStageStartMs = 0;
+        enterInactivityLightSleep();
+        return;
+      }
+    }
   }
 
   // Ogni 3 secondi stampa lo stato batteria
@@ -1746,27 +1886,32 @@ if (haveNewWork) {
 if (now - lastOledMs >= OLED_UPDATE_MS) {
   lastOledMs = now;
 
-  bool drewTare = false;
+  // Standby transition: schermata Zzz... per 5s (prima del light-sleep)
+  if (g_inactivitySleepStage == INACT_ZZZ) {
+    ui_renderSleepZzz();
+  } else {
+    bool drewTare = false;
 
-  // TARA: oscura il peso e mostra "- TARA -" + barra per 1.5s
-  if (gTareUiActive) {
-    uint32_t elapsed = now - gTareUiStartMs;
-    uint8_t pct = (elapsed >= TARE_UI_CLAMP_MS) ? 100 : (uint8_t)((elapsed * 100UL) / TARE_UI_CLAMP_MS);
-    ui_renderTareProgress(pct);
-    drewTare = true;
+    // TARA: oscura il peso e mostra "- TARA -" + barra per 1.5s
+    if (gTareUiActive) {
+      uint32_t elapsed = now - gTareUiStartMs;
+      uint8_t pct = (elapsed >= TARE_UI_CLAMP_MS) ? 100 : (uint8_t)((elapsed * 100UL) / TARE_UI_CLAMP_MS);
+      ui_renderTareProgress(pct);
+      drewTare = true;
 
-    // chiudi la UI solo dopo aver disegnato l'ultimo frame (pct=100)
-    if (now >= gTareUiEndMs) {
-      gTareUiActive = false;
+      // chiudi la UI solo dopo aver disegnato l'ultimo frame (pct=100)
+      if (now >= gTareUiEndMs) {
+        gTareUiActive = false;
+      }
     }
-  }
 
-  if (!drewTare) {
-    if (!stEnable) {
-      // LIVE: usa flusso veloce (N=2) + debounce
-      ui_renderWeight(gDispLiveLast, "LIVE");
-    } else {
-      ui_renderWeight(gDispWorkLast, gStateLabelWorkLast);
+    if (!drewTare) {
+      if (!stEnable) {
+        // LIVE: usa flusso veloce (N=2) + debounce
+        ui_renderWeight(gDispLiveLast, "LIVE");
+      } else {
+        ui_renderWeight(gDispWorkLast, gStateLabelWorkLast);
+      }
     }
   }
 }

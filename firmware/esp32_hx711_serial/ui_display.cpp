@@ -349,6 +349,33 @@ void ui_powerSave(bool enable) {
   oled.setPowerSave(enable ? 1 : 0);
 }
 
+
+// -----------------------------------------------------------------------------
+// SCHERMATA STANDBY: Zzz... (transizione prima del light-sleep)
+// -----------------------------------------------------------------------------
+void ui_renderSleepZzz() {
+  oled.clearBuffer();
+
+  // Disegno semplice: 3 "Z" su diagonale, come fumetto sleep.
+  // (3 altezze diverse => tre baseline differenti)
+  oled.setFont(u8g2_font_6x12_tr);
+
+  int16_t wZ = oled.getStrWidth("Z");
+  int16_t spacing = 10;
+  int16_t totalW = wZ * 3 + spacing * 2;
+  int16_t x0 = (256 - totalW) / 2;
+
+  oled.drawStr(x0 + 0*(wZ+spacing), 24, "Z");
+  oled.drawStr(x0 + 1*(wZ+spacing), 38, "Z");
+  oled.drawStr(x0 + 2*(wZ+spacing), 52, "Z");
+
+  // Puntini centrali (facoltativi, ma aiutano a capire che è standby)
+  int16_t wDots = oled.getStrWidth("...");
+  oled.drawStr((256 - wDots)/2, 46, "...");
+
+  oled.sendBuffer();
+}
+
 // -----------------------------------------------------------------------------
 // LAYOUT PRINCIPALE PESO
 // -----------------------------------------------------------------------------
