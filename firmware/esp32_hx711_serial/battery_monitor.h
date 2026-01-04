@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
+#include "settings.h"
 
 enum BatteryLevel {
   BATT_LEVEL_FULL = 0,
@@ -28,6 +29,10 @@ void battery_update(uint32_t nowMs);
 
 // Restituisce l'ultimo stato calcolato (copia per valore)
 BatteryStatus battery_get_status();
+
+// Imposta le soglie di livello batteria (persistenti fino al riavvio).
+void battery_set_thresholds(const BatteryThresholds &thresholds);
+BatteryThresholds battery_get_thresholds();
 
 // Stampa su Serial una riga di debug leggibile
 void battery_debug_print(const BatteryStatus &st);

@@ -2,6 +2,7 @@
 
 #include <Wire.h>
 #include <Adafruit_INA219.h>
+#include "settings.h"
 
 // -----------------------------------------------------------------------------
 // CONFIGURAZIONE INA219 / FILTRI / SOGLIE
@@ -31,18 +32,13 @@ static const uint32_t CHARGE_DEBOUNCE_OUT_MS = 10000; // 10s
 static const uint32_t CHARGE_MIN_ON_MS = 20000; // 20s
 
 // Soglie di tensione (V) per batteria SLA 6V (3 celle) sul valore filtrato.
-// Nota: la tensione dipende molto dal carico e dalla fase di carica; queste soglie sono
-// una mappa "pratica" per UI (tacche) e non una misura precisa di SoC.
-//
-// FULL: tipicamente ~6.35-6.40 V a riposo; in carica può salire oltre.
-static const float V_FULL_MIN      = 6.35f;
-// GOOD: batteria ancora "comoda" sotto carico leggero.
-static const float V_GOOD_MIN      = 6.20f;
-// LOW: zona medio-bassa.
-static const float V_LOW_MIN       = 6.05f;
-// CRITICAL: vicino a scarica (sotto carico può oscillare).
-static const float V_CRITICAL_MIN  = 5.90f;
-// Sotto V_CRITICAL_MIN => LEVEL_EMPTY
+// Configurabili via Settings/NVS (default in settings.h).
+static BatteryThresholds g_thresholds = {
+  Settings::DEFAULT_BATT_FULL_MIN,
+  Settings::DEFAULT_BATT_GOOD_MIN,
+  Settings::DEFAULT_BATT_LOW_MIN,
+  Settings::DEFAULT_BATT_CRITICAL_MIN
+};
 
 // -----------------------------------------------------------------------------
 // STATO INTERNO
@@ -76,13 +72,13 @@ static float lowPassUpdate(float prev, float value, float alpha) {
 }
 
 static BatteryLevel levelFromVoltage(float v) {
-  if (v >= V_FULL_MIN) {
+  if (v >= g_thresholds.fullMin) {
     return BATT_LEVEL_FULL;
-  } else if (v >= V_GOOD_MIN) {
+  } else if (v >= g_thresholds.goodMin) {
     return BATT_LEVEL_GOOD;
-  } else if (v >= V_LOW_MIN) {
+  } else if (v >= g_thresholds.lowMin) {
     return BATT_LEVEL_LOW;
-  } else if (v >= V_CRITICAL_MIN) {
+  } else if (v >= g_thresholds.criticalMin) {
     return BATT_LEVEL_CRITICAL;
   } else {
     return BATT_LEVEL_EMPTY;
@@ -192,6 +188,14 @@ void battery_update(uint32_t nowMs) {
 
 BatteryStatus battery_get_status() {
   return g_status;
+}
+
+void battery_set_thresholds(const BatteryThresholds &thresholds) {
+  g_thresholds = thresholds;
+}
+
+BatteryThresholds battery_get_thresholds() {
+  return g_thresholds;
 }
 
 void battery_debug_print(const BatteryStatus &st) {

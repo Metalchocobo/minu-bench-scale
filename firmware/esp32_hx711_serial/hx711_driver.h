@@ -18,6 +18,11 @@ enum HX711Gain {
   HX711_GAIN_64_A  = 3,
 };
 
+struct HX711Result {
+  bool ok;
+  long value;
+};
+
 void hx711_begin(int doutPin, int sckPin, HX711Gain gain = HX711_GAIN_128_A, uint8_t pulseUs = 1);
 void hx711_set_gain(HX711Gain gain);
 
@@ -30,5 +35,5 @@ bool hx711_wait_ready(uint32_t timeoutMs);
 // Lettura non-bloccante (assume che hx711_is_ready() sia true).
 long hx711_read();
 
-// Lettura bloccante con timeout (ms). Ritorna 0 su timeout.
-long hx711_read_blocking(uint32_t timeoutMs);
+// Lettura bloccante con timeout (ms). Ritorna {ok=false} su timeout.
+HX711Result hx711_read_blocking(uint32_t timeoutMs);

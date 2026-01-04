@@ -19,6 +19,15 @@ void ui_showBatteryShutdown(float voltage_V);
 // Abilita/disabilita power-save del display (riduce consumi)
 void ui_powerSave(bool enable);
 
+// Stato rete (WiFi/OTA) da mostrare nell'icona in alto.
+struct UiNetStatus {
+  bool enabled;        // WiFi abilitato
+  bool connected;      // WiFi connesso
+  bool otaEnabled;     // OTA attivo insieme al WiFi
+  bool hasCredentials; // Sono state configurate credenziali valide
+};
+void ui_setNetStatus(const UiNetStatus &status);
+
 // Render principale del layout peso
 //  - gDisp: peso da mostrare (grammi, intero)
 //  - stateLabel: "STABLE", "UNSTABLE" o "LIVE"

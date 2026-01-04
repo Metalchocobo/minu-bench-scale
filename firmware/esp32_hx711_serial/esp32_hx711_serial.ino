@@ -18,13 +18,13 @@
 #include "ui_display.h"
 #include "keypad.h"
 #include "scale_core.h"
-#include <Preferences.h>
 #include <math.h>
 #include "buzzer.h"
 #include "net_ota_cloud.h"
 #include "dfplayer_driver.h"
 #include <esp_sleep.h>
 #include <driver/gpio.h>
+#include "settings.h"
 
 // ========================= POWER SAVE (inattività) =========================
 // Dopo N ms senza tasti, entra in light-sleep; wake su qualunque tasto.
@@ -47,6 +47,16 @@ static const int  DFPLAYER_BUSY_PIN = 39;  // GPIO39 <- DFPlayer BUSY (GPIO39 no
 static uint8_t g_dfplayerVol = DFPLAYER_DEFAULT_VOL;
 
 static uint32_t g_lastKeyPressMs = 0;
+
+// ========================= SETTINGS RUNTIME =========================
+// Parametri persistenti caricati da NVS (vedi settings.h / settings.cpp).
+static ScaleSettings     g_scaleSettings;    // OFFSET/SCALE/REF
+static WifiSettings      g_wifiSettings;     // WiFi/OTA abilitati + credenziali
+static BatteryThresholds g_battThresholds;   // Soglie batteria configurabili
+static NetStatus         g_netStatus = {false, false, false, false};
+
+// Forward declaration per gestione eventi WiFi (audio + UI)
+static void wifiAudioUpdate(uint32_t now);
 // ====================== HX711 serial logging (toggle) ======================
 static bool     g_hxLogEnabled   = false;      // default OFF: il monitor seriale resta pulito
 static uint32_t g_hxLogPeriodMs  = 250;        // rate log quando ON
@@ -120,6 +130,11 @@ static uint32_t   g_busyIdleSinceMs = 0;
 static bool       g_dfpPowered   = false;
 static bool       g_dfpUartReady = false;
 
+// Filtro non bloccante per il pin BUSY (niente delay nel loop principale)
+static int        g_busyStable = -1;
+static int        g_busyLastSample = -1;
+static uint32_t   g_busyLastChangeMs = 0;
+
 static const uint32_t DFP_POWERUP_MS      = 250;   // tempo minimo dopo power-on
 static const uint32_t DFP_BUSY_DETECT_MS  = 800;   // finestra per auto-detect polarità BUSY
 static const uint32_t DFP_END_STABLE_MS   = 250;   // quanto deve restare "idle" per considerare finito
@@ -130,14 +145,26 @@ static inline void dfpPowerSet(bool on) {
   digitalWrite(DFPLAYER_EN_PIN, on ? HIGH : LOW);
 }
 
-static int dfpBusyReadStable() {
-  // Lettura "stabile" senza bloccare troppo (≈16 ms)
-  int ones = 0;
-  for (int i = 0; i < 8; i++) {
-    ones += (digitalRead(DFPLAYER_BUSY_PIN) != 0) ? 1 : 0;
-    delay(2);
+static int dfpBusyReadFiltered(uint32_t now) {
+  int sample = (digitalRead(DFPLAYER_BUSY_PIN) != 0) ? 1 : 0;
+
+  if (g_busyLastSample < 0) {
+    g_busyLastSample = sample;
+    g_busyStable = sample;
+    g_busyLastChangeMs = now;
+    return sample;
   }
-  return (ones >= 5) ? 1 : 0;
+
+  if (sample != g_busyLastSample) {
+    g_busyLastSample = sample;
+    g_busyLastChangeMs = now;
+  }
+
+  // Consideriamo stabile dopo pochi millisecondi senza cambi.
+  if ((now - g_busyLastChangeMs) >= 6) {
+    g_busyStable = g_busyLastSample;
+  }
+  return g_busyStable;
 }
 
 static void audio_stopNow();
@@ -162,6 +189,9 @@ static void audio_begin() {
   g_busyPlaying = -1;
   g_busyPolarityKnown = false;
   g_busyIdleSinceMs = 0;
+  g_busyStable = -1;
+  g_busyLastSample = -1;
+  g_busyLastChangeMs = 0;
 }
 
 // Porta DFPlayer in stato "pronto" (alimentato + UART attiva + volume impostato), SENZA riprodurre.
@@ -190,7 +220,7 @@ static void audio_primeReady() {
   delay(20);
 
   // Baseline BUSY in idle (utile per il detect di START/END quando parte il primo play)
-  g_busyIdle = dfpBusyReadStable();
+  g_busyIdle = dfpBusyReadFiltered(millis());
 }
 
 static bool audio_isActive() {
@@ -223,7 +253,7 @@ static void audio_requestPlayMp3(uint16_t track, uint32_t capSeconds = 0) {
 
   // Se il DFPlayer è già alimentato e UART pronta, non fare power-cycle: play diretto.
   if (g_dfpPowered && g_dfpUartReady) {
-    g_busyIdle = dfpBusyReadStable();
+    g_busyIdle = dfpBusyReadFiltered(now);
     DFPlayer::playMp3(g_audioTrack);
 
     g_audioStartMs = now;
@@ -268,6 +298,9 @@ static void audio_stopNow() {
   g_busyPlaying = -1;
   g_busyPolarityKnown = false;
   g_busyIdleSinceMs = 0;
+  g_busyStable = -1;
+  g_busyLastSample = -1;
+  g_busyLastChangeMs = 0;
 }
 
 static void audio_powerOffNow() {
@@ -290,6 +323,9 @@ static void audio_powerOffNow() {
   g_busyPlaying = -1;
   g_busyPolarityKnown = false;
   g_busyIdleSinceMs = 0;
+  g_busyStable = -1;
+  g_busyLastSample = -1;
+  g_busyLastChangeMs = 0;
 }
 
 static void audio_task(uint32_t now) {
@@ -306,7 +342,7 @@ static void audio_task(uint32_t now) {
       delay(20);
 
       // Idle BUSY prima del play
-      g_busyIdle = dfpBusyReadStable();
+      g_busyIdle = dfpBusyReadFiltered(now);
 
       // Avvia play da cartella /MP3/0001.mp3 ...
       DFPlayer::playMp3(g_audioTrack);
@@ -317,7 +353,7 @@ static void audio_task(uint32_t now) {
       return;
 
     case AUDIO_STARTING: {
-      int b = dfpBusyReadStable();
+      int b = dfpBusyReadFiltered(now);
 
       if (b != g_busyIdle) {
         g_busyPlaying = b;
@@ -348,7 +384,7 @@ static void audio_task(uint32_t now) {
         return;
       }
 
-      int b = dfpBusyReadStable();
+      int b = dfpBusyReadFiltered(now);
 
       // Se BUSY è tornato al livello "idle" in modo stabile, consideriamo finito.
       if (b == g_busyIdle) {
@@ -431,8 +467,6 @@ static void enterInactivityLightSleep() {
   // 0004.mp3 = Uscita risparmio energetico
   audio_requestPlayMp3(4);
 }
-Preferences prefs;
-
 // Stato boot (true finché non finisce setup)
 static bool g_isBooting = true;
 
@@ -465,19 +499,19 @@ static const uint8_t HX711_PULSE_US = 1;
 // Se DOUT non va mai LOW, consideriamo "sensore non trovato"
 static const uint32_t HX711_INIT_TIMEOUT_MS = 1200;
 
-static long readRawHXOnceBlocking(uint32_t timeoutMs){
+static HX711Result readRawHXOnceBlocking(uint32_t timeoutMs){
   return hx711_read_blocking(timeoutMs);
 }
 
-static long readRawHXAvg(int n){
+static HX711Result readRawHXAvg(int n){
   if (n <= 1) return readRawHXOnceBlocking(200);
   long s = 0;
   for(int i=0;i<n;i++){
-    long r = readRawHXOnceBlocking(200);
-    if (r == 0) return 0;
-    s += r;
+    HX711Result r = readRawHXOnceBlocking(200);
+    if (!r.ok) return { false, 0 };
+    s += r.value;
   }
-  return s / n;
+  return { true, s / n };
 }
 
 // ========================= CONFIG =========================
@@ -614,7 +648,14 @@ static void tareMaybeApply(uint32_t nowMs){
     rawZero = (long)(gTareSum / (int64_t)gTareCnt);
   } else {
     // fallback robusto (blocking) se non sono arrivati abbastanza campioni
-    rawZero = readRawHXAvg(40); // ~0.5s @ 80 SPS
+    HX711Result raw = readRawHXAvg(40); // ~0.5s @ 80 SPS
+    if (!raw.ok) {
+      Serial.println(F("[TARE] ERRORE: nessuna lettura valida HX711 durante la tara."));
+      gTareUiActive = false;
+      gTareOffsetApplied = true;
+      return;
+    }
+    rawZero = raw.value;
   }
 
   OFFSET_RAW = rawZero;
@@ -805,30 +846,205 @@ void printHelp(){
   Serial.println(F("  mp3 ? / mp3 status -> stato DFPlayer/BUSY"));
   Serial.println(F("  stop             -> stop + spegne DFPlayer"));
   Serial.println(F("  vol <0..30>       -> volume DFPlayer"));
+  Serial.println(F("  wifi status/on/off/ota on|off/ssid1|ssid2/pass1|pass2/save"));
+  Serial.println(F("  batt ? | batt set <full> <good> <low> <critical> | batt save"));
 
 }
 
 void loadFromNVS(){
-  // Comportamento "come prima" (firmware NAU): nessuna firma sensore.
-  // Se in NVS ci sono valori vecchi/non compatibili, vedrai pesi sballati -> fai CAL e poi salva.
-  prefs.begin("minu_scale", true);
-  long  off = prefs.getLong ("offset", 0);
-  float sc  = prefs.getFloat("scale",  NAN);
-  long  rg  = prefs.getLong ("ref_g",  DEFAULT_REF_G);
-  prefs.end();
+  // Carichiamo tutti i parametri persistenti (scala, WiFi, batteria).
+  PersistedSettings loaded;
+  Settings::loadAll(loaded);
+
+  g_wifiSettings = loaded.wifi;
+  g_battThresholds = loaded.battery;
+  battery_set_thresholds(g_battThresholds);
+
+  // Scala: fallback ai default se i valori sono assenti/invalidi.
+  float sc  = loaded.scale.scaleCpg;
+  long  off = loaded.scale.offsetRaw;
+  long  rg  = loaded.scale.refG;
 
   SCALE_CPG = (!isnan(sc) && sc>0.01f) ? sc : DEFAULT_CPG;
-  REF_G     = rg;
+  REF_G     = (rg > 0) ? rg : DEFAULT_REF_G;
   OFFSET_RAW= (off != 0) ? off : DEFAULT_ZERO_RAW;
+
+  g_scaleSettings.offsetRaw = OFFSET_RAW;
+  g_scaleSettings.scaleCpg  = SCALE_CPG;
+  g_scaleSettings.refG      = REF_G;
 }
 
 void saveToNVS(){
-  prefs.begin("minu_scale", false);
-  prefs.putLong("offset", OFFSET_RAW);
-  prefs.putFloat("scale", SCALE_CPG);
-  prefs.putLong("ref_g",  REF_G);
-  prefs.end();
+  g_scaleSettings.offsetRaw = OFFSET_RAW;
+  g_scaleSettings.scaleCpg  = SCALE_CPG;
+  g_scaleSettings.refG      = REF_G;
+  Settings::saveScale(g_scaleSettings);
   Serial.println(F("[SAVE] Parametri salvati in NVS."));
+}
+
+// ------------------------- WiFi / OTA runtime helpers -------------------------
+static bool hasWifiCredentials(const WifiSettings &cfg) {
+  return cfg.primary.ssid.length() > 0 || cfg.secondary.ssid.length() > 0;
+}
+
+static void printWifiConfig() {
+  Serial.print(F("[WIFI] enabled=")); Serial.print(g_wifiSettings.wifiEnabled ? F("ON") : F("OFF"));
+  Serial.print(F(" ota=")); Serial.print(g_wifiSettings.otaEnabled ? F("ON") : F("OFF"));
+  Serial.print(F(" cred=")); Serial.println(hasWifiCredentials(g_wifiSettings) ? F("yes") : F("no"));
+
+  Serial.print(F("       SSID1=")); Serial.println(g_wifiSettings.primary.ssid);
+  Serial.print(F("       SSID2=")); Serial.println(g_wifiSettings.secondary.ssid);
+}
+
+static void applyWifiSettingsRuntime() {
+#if ENABLE_WIFI_OTA
+  if (!hasWifiCredentials(g_wifiSettings)) {
+    Serial.println(F("[WIFI] Nessun SSID configurato: WiFi resta OFF."));
+    g_wifiSettings.wifiEnabled = false;
+    g_wifiSettings.otaEnabled  = false;
+  }
+  Net::wifiSuspend();
+  Net::begin(g_wifiSettings);
+  wifiAudioUpdate(millis());
+#else
+  Serial.println(F("[WIFI] WiFi/OTA non compilati in questo firmware."));
+#endif
+}
+
+static void handleWifiCommand(const String& cmd) {
+  if (cmd.equalsIgnoreCase("wifi ?") || cmd.equalsIgnoreCase("wifi status")) {
+    printWifiConfig();
+    return;
+  }
+  if (cmd.equalsIgnoreCase("wifi on")) {
+    g_wifiSettings.wifiEnabled = true;
+    applyWifiSettingsRuntime();
+    return;
+  }
+  if (cmd.equalsIgnoreCase("wifi off")) {
+    g_wifiSettings.wifiEnabled = false;
+    g_wifiSettings.otaEnabled  = false;
+    applyWifiSettingsRuntime();
+    return;
+  }
+  if (cmd.equalsIgnoreCase("wifi ota on")) {
+    g_wifiSettings.otaEnabled = true;
+    if (!g_wifiSettings.wifiEnabled) {
+      Serial.println(F("[WIFI] OTA abilitato ma WiFi è OFF: abilitalo con 'wifi on'."));
+    }
+    applyWifiSettingsRuntime();
+    return;
+  }
+  if (cmd.equalsIgnoreCase("wifi ota off")) {
+    g_wifiSettings.otaEnabled = false;
+    applyWifiSettingsRuntime();
+    return;
+  }
+
+  auto setField = [](String value, String &target) {
+    value.trim();
+    target = value;
+  };
+
+  if (cmd.startsWith("wifi ssid1 ")) {
+    setField(cmd.substring(11), g_wifiSettings.primary.ssid);
+    applyWifiSettingsRuntime();
+    return;
+  }
+  if (cmd.startsWith("wifi pass1 ")) {
+    setField(cmd.substring(11), g_wifiSettings.primary.password);
+    applyWifiSettingsRuntime();
+    return;
+  }
+  if (cmd.startsWith("wifi ssid2 ")) {
+    setField(cmd.substring(11), g_wifiSettings.secondary.ssid);
+    applyWifiSettingsRuntime();
+    return;
+  }
+  if (cmd.startsWith("wifi pass2 ")) {
+    setField(cmd.substring(11), g_wifiSettings.secondary.password);
+    applyWifiSettingsRuntime();
+    return;
+  }
+
+  if (cmd.equalsIgnoreCase("wifi save")) {
+    Settings::saveWifi(g_wifiSettings);
+    Serial.println(F("[WIFI] Config salvata in NVS."));
+    return;
+  }
+
+  Serial.println(F("[WIFI] comandi: wifi on/off | wifi ota on/off | wifi ssid1 <...> | wifi pass1 <...> | wifi ssid2 <...> | wifi pass2 <...> | wifi status | wifi save"));
+}
+
+// ------------------------- Batteria: soglie configurabili -------------------------
+static void printBatteryThresholds() {
+  Serial.print(F("[BATT] full>=")); Serial.print(g_battThresholds.fullMin, 2);
+  Serial.print(F("  good>="));      Serial.print(g_battThresholds.goodMin, 2);
+  Serial.print(F("  low>="));       Serial.print(g_battThresholds.lowMin, 2);
+  Serial.print(F("  critical>="));  Serial.println(g_battThresholds.criticalMin, 2);
+}
+
+static bool parseBatterySet(const String& cmd) {
+  String rest = cmd.substring(String("batt set").length());
+  rest.trim();
+  float vals[4] = {0};
+  int parsed = 0;
+  int start = 0;
+  while (parsed < 4 && start < rest.length()) {
+    int sp = rest.indexOf(' ', start);
+    String token = (sp == -1) ? rest.substring(start) : rest.substring(start, sp);
+    token.trim();
+    if (token.length() == 0) {
+      if (sp == -1) break;
+      start = sp + 1;
+      continue;
+    }
+    vals[parsed++] = token.toFloat();
+    start = (sp == -1) ? rest.length() : sp + 1;
+  }
+
+  if (parsed != 4) {
+    Serial.println(F("[BATT] Uso: batt set <full> <good> <low> <critical>"));
+    return false;
+  }
+
+  BatteryThresholds candidate = {
+    vals[0],
+    vals[1],
+    vals[2],
+    vals[3]
+  };
+
+  if (!(candidate.criticalMin < candidate.lowMin &&
+        candidate.lowMin < candidate.goodMin &&
+        candidate.goodMin < candidate.fullMin)) {
+    Serial.println(F("[BATT] Ordine non valido: serve full>good>low>critical."));
+    return false;
+  }
+
+  g_battThresholds = candidate;
+  battery_set_thresholds(g_battThresholds);
+  Serial.println(F("[BATT] Soglie aggiornate (non ancora salvate)."));
+  printBatteryThresholds();
+  return true;
+}
+
+static void handleBatteryCommand(const String& cmd) {
+  if (cmd.equalsIgnoreCase("batt ?") || cmd.equalsIgnoreCase("batt status")) {
+    printBatteryThresholds();
+    return;
+  }
+  if (cmd.startsWith("batt set")) {
+    (void)parseBatterySet(cmd);
+    return;
+  }
+  if (cmd.equalsIgnoreCase("batt save")) {
+    Settings::saveBattery(g_battThresholds);
+    Serial.println(F("[BATT] Soglie salvate in NVS."));
+    return;
+  }
+
+  Serial.println(F("[BATT] comandi: batt ? | batt set <full> <good> <low> <critical> | batt save"));
 }
 
 
@@ -893,8 +1109,12 @@ void doTare(){
   tareStart(millis());
 }
 void doCal(long ref_g){
-  long rawRef = readRawHXAvg(15);
-  long delta  = rawRef - OFFSET_RAW;
+  HX711Result rawRef = readRawHXAvg(15);
+  if (!rawRef.ok) {
+    Serial.println(F("[CAL] ERRORE: lettura HX711 non valida, riprova."));
+    return;
+  }
+  long delta  = rawRef.value - OFFSET_RAW;
   if (delta == 0) delta = 1;
   SCALE_CPG = (float)delta / (float)ref_g;
   zero_track_counts = 0;
@@ -1021,13 +1241,13 @@ bool autoTareOnBoot(uint16_t maxSamples){
   uint32_t quietStart = 0;
 
   while (n < maxSamples){
-    long r = readRawHXOnceBlocking(200);
-    if (r == 0) {
+    HX711Result r = readRawHXOnceBlocking(200);
+    if (!r.ok) {
       Serial.println(F("[BOOT] Auto-TARE FAIL (timeout lettura HX711)"));
       return false;
     }
 
-    buf[n++] = r;
+    buf[n++] = r.value;
 
     if (n >= minSamples){
       // Range sull'ultima finestra minSamples
@@ -1107,13 +1327,21 @@ bool initHX711(){
 // ------------------------- WiFi audio (eventi) -------------------------
 static void wifiAudioUpdate(uint32_t now) {
 #if ENABLE_WIFI_OTA || ENABLE_ARDUINO_CLOUD
+  g_netStatus = Net::status();
+  ui_setNetStatus(UiNetStatus{
+    g_netStatus.enabled,
+    g_netStatus.connected,
+    g_netStatus.otaEnabled,
+    g_netStatus.hasCredentials
+  });
+
   // Evita di fare annunci durante il boot (per non sovrapporre 0001/0002).
-  if (g_isBooting) {
-    g_wifiPrevConnected = WiFi.isConnected();
+  if (g_isBooting || !g_netStatus.enabled) {
+    g_wifiPrevConnected = g_netStatus.connected;
     return;
   }
 
-  const bool connectedNow = WiFi.isConnected();
+  const bool connectedNow = g_netStatus.connected;
   if (connectedNow != g_wifiPrevConnected) {
     g_wifiPrevConnected = connectedNow;
     // 0005=connesso, 0006=disconnesso
@@ -1130,6 +1358,10 @@ static void wifiAudioUpdate(uint32_t now) {
       }
     }
   }
+#else
+  (void)now;
+  g_netStatus = NetStatus{false, false, false, false};
+  ui_setNetStatus(UiNetStatus{false, false, false, false});
 #endif
 }
 
@@ -1211,12 +1443,9 @@ void setup(){
 
 
 #if ENABLE_WIFI_OTA
-  Net::wifiSetup();
-  Net::otaSetup("minu-bench-scale");
 #endif
 
 #if ENABLE_ARDUINO_CLOUD
-  Net::cloudSetup();
 #endif
 
 
@@ -1253,6 +1482,12 @@ void setup(){
   bootShow("Parametri", "Carico NVS...");
   loadFromNVS();
   bootShow("Parametri", "OK");
+
+#if ENABLE_WIFI_OTA
+  // Config WiFi/OTA da Preferences (default OFF se credenziali mancanti).
+  Net::begin(g_wifiSettings);
+  wifiAudioUpdate(millis());
+#endif
 
   // Preset iniziale
   bootShow("Preset", "WORK");
@@ -1546,6 +1781,12 @@ void loop(){
     else if (cmd.equalsIgnoreCase("stop") || cmd.equalsIgnoreCase("mp3 stop")) {
       Serial.println(F("[MP3] stop"));
       audio_stopNow();
+    }
+    else if (cmd.startsWith("wifi")) {
+      handleWifiCommand(cmd);
+    }
+    else if (cmd.startsWith("batt")) {
+      handleBatteryCommand(cmd);
     }
     else if (cmd.equalsIgnoreCase("mp3 ?") || cmd.equalsIgnoreCase("mp3 status") || cmd.equalsIgnoreCase("audio ?")) {
       audio_debugStatus();
