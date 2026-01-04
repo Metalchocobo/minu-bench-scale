@@ -195,6 +195,7 @@ Comportamento:
   - schermo “batteria scarica, collega alimentatore”
   - beep ogni **10 s** per **60 s**
   - poi entra in **LIGHT-SLEEP**
+- Prima del light-sleep per batteria scarica: DFPlayer viene **spento** via MOSFET (zero consumo audio in sleep).
 - Wake: premendo un tasto (la tastiera risveglia, poi l’ESP32 riparte con reboot pulito)
 
 ---
@@ -264,7 +265,7 @@ Il firmware può suonare file MP3 (es. avviso sleep). Per evitare click e stati 
 Comportamento attuale:
 - DFPlayer viene portato in stato **pronto** automaticamente **all’avvio** e a ogni **wake** (alimentazione ON + UART init + volume), così un suono può partire subito.
 - Durante l’uso resta alimentato.
-- Viene spento **solo quando la bilancia entra in standby/light-sleep per inattività**.
+- Viene spento **quando la bilancia entra in standby/light-sleep per inattività** e anche **prima del light-sleep per batteria scarica**.
 
 Nota: il firmware mantiene comunque il percorso “cold-start” sul primo `mp3` (utile se in futuro vuoi tornare all’accensione on-demand).
 
@@ -305,14 +306,14 @@ Metti i file in **SD:/MP3/** con nome a 4 cifre (es. `0001.mp3`).
 |---:|---|
 | 0001.mp3 | Avvio bilancia |
 | 0002.mp3 | Boot completato |
-| 0003.mp3 | Entrata risparmio energetico (inattività, step 1) |
+| 0003.mp3 | Entrata risparmio energetico (inattività: schermata Zzz... 5s prima del light-sleep) |
 | 0004.mp3 | Uscita risparmio energetico (wake) |
 | 0005.mp3 | Wi‑Fi connesso |
 | 0006.mp3 | Wi‑Fi disconnesso |
 | 0007.mp3 | Errore connessione Wi‑Fi (connect failed / SSID non disponibile, con cooldown) |
 | 0011.mp3 | Batteria bassa (una sola volta all'ingresso in 0 tacche, beep resta attivo) |
 | 0012.mp3 | Batteria critica (una sola volta all'ingresso fase critica, beep resta attivo) |
-| 0013.mp3 | Avvio standby (transizione Zzz... 5s prima del light‑sleep) |
+| 0013.mp3 | Standby pre‑sleep per batteria scarica (schermata Zzz... 5s prima del light-sleep) |
 | 0014.mp3 | Errore lettura batteria (INA) |
 | 0015.mp3 | Errore sensore peso (HX) |
 | 0017.mp3 | Modalità WORK |

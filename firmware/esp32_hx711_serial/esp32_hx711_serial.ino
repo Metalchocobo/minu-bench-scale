@@ -436,13 +436,11 @@ Preferences prefs;
 // Stato boot (true finché non finisce setup)
 static bool g_isBooting = true;
 
-// Inattività: sequenza sleep a 2 step
-// 1) dopo 5 min senza tasti suona 0003 (entrata risparmio energetico)
-// 2) quando finisce, suona 0013 e mostra Zzz... per 5s, poi entra in light-sleep
-enum InactivitySleepStage : uint8_t { INACT_NONE = 0, INACT_ENTRY = 1, INACT_ZZZ = 2 };
+// Inattività: dopo 5 min senza tasti mostriamo Zzz... per 5s e durante suona 0003,
+// poi entriamo in light-sleep (wake da tastiera). Qualsiasi tasto annulla la sequenza.
+enum InactivitySleepStage : uint8_t { INACT_NONE = 0, INACT_ZZZ = 1 };
 static InactivitySleepStage g_inactivitySleepStage = INACT_NONE;
 static uint32_t g_inactivityStageStartMs = 0;
-static const uint32_t INACTIVITY_SLEEP_AUDIO_TIMEOUT_MS = 15000; // paracadute
 static const uint32_t INACTIVITY_ZZZ_MS = 5000; // schermata Zzz... (5s)
 
 // Audio eventi WiFi (cooldown errore connessione)
@@ -964,7 +962,8 @@ void handleKeyEvent(KeyCode key){
     case KEY_MODE:
       Serial.println(F("[KEYPAD] MODE pressed"));
       toggleModeFromKeypad();
-      buzzerOk();
+      // Niente beep buzzer: usiamo 0017/0018.mp3
+
       break;
 
     // Tasti ancora non utilizzati, lasciati intenzionalmente liberi:
@@ -1318,10 +1317,26 @@ static uint32_t g_lastCountdownBeepMs = 0;
 static bool g_mp3BattLowPlayed  = false; // 0011
 static bool g_mp3BattCritPlayed = false; // 0012
 
+// Pre-sleep "Zzz..." per batteria scarica (prima del light-sleep): 5s + 0013
+enum BattSleepStage : uint8_t { BATT_SLEEP_NONE = 0, BATT_SLEEP_ZZZ = 1 };
+static BattSleepStage g_battSleepStage = BATT_SLEEP_NONE;
+static uint32_t g_battStageStartMs = 0;
+static const uint32_t BATT_ZZZ_MS = 5000;
+
 static void enterLowBatteryLightSleep() {
   // Ultima schermata: avviso e richiesta alimentatore, poi sleep.
   if (battery_is_available()) {
     BatteryStatus st = battery_get_status();
+
+    // Se siamo nella fase "Zzz" pre-sleep per batteria, restiamo qui 5s e poi andiamo in sleep.
+    if (g_battSleepStage == BATT_SLEEP_ZZZ) {
+      if (st.voltage_V <= V_HARD_SLEEP_MIN_V || (nowMs - g_battStageStartMs) >= BATT_ZZZ_MS) {
+        enterLowBatteryLightSleep(); // non ritorna
+      }
+      ui_renderSleepZzz();
+      return true; // oscuriamo la pesata
+    }
+
     ui_showBatteryShutdown(st.voltage_V);
   } else {
     ui_showError("BATTERIA", "INA219 non trovato", "");
@@ -1329,6 +1344,9 @@ static void enterLowBatteryLightSleep() {
 
   // Un piccolo margine per far vedere la schermata
   delay(80);
+
+  // Spegni DFPlayer (MOSFET) prima del light-sleep per ridurre consumi
+  audio_powerOffNow();
 
   // Riduci consumi
 #if ENABLE_WIFI_OTA || ENABLE_ARDUINO_CLOUD
@@ -1381,6 +1399,8 @@ static bool maybeEnterSafeShutdown(uint32_t nowMs) {
     g_lastCountdownBeepMs = 0;
     g_mp3BattLowPlayed = false;
     g_mp3BattCritPlayed = false;
+    g_battSleepStage = BATT_SLEEP_NONE;
+    g_battStageStartMs = 0;
     return false;
   }
 
@@ -1441,7 +1461,13 @@ static bool maybeEnterSafeShutdown(uint32_t nowMs) {
     }
 
     if ((nowMs - g_preSleepStartMs) >= PRE_SLEEP_COUNTDOWN_MS) {
-      enterLowBatteryLightSleep(); // non ritorna
+      // Prima di andare in sleep per batteria: schermata Zzz... 5s + 0013.mp3 (una sola volta)
+      if (g_battSleepStage == BATT_SLEEP_NONE) {
+        ui_renderSleepZzz();
+        audio_requestPlayMp3(13);
+        g_battSleepStage = BATT_SLEEP_ZZZ;
+        g_battStageStartMs = nowMs;
+      }
     }
 
     return true; // oscuriamo la pesata mentre siamo in countdown
@@ -1451,6 +1477,8 @@ static bool maybeEnterSafeShutdown(uint32_t nowMs) {
   g_lowBattSinceMs = 0;
   g_preSleepStartMs = 0;
   g_lastCountdownBeepMs = 0;
+  g_battSleepStage = BATT_SLEEP_NONE;
+  g_battStageStartMs = 0;
   return false;
 }
 
@@ -1671,18 +1699,10 @@ else if (cmd.startsWith("mp3")) {
   } else {
     if (g_inactivitySleepStage == INACT_NONE) {
       if ((now - g_lastKeyPressMs) >= INACTIVITY_SLEEP_MS) {
-        // Step 1: annuncia risparmio energetico
+        // Transizione risparmio energetico: mostra Zzz... per 5s e durante suona 0003.
+        ui_renderSleepZzz();
         // 0003.mp3 = Entrata risparmio energetico (inattività)
         audio_requestPlayMp3(3);
-        g_inactivitySleepStage = INACT_ENTRY;
-        g_inactivityStageStartMs = now;
-      }
-    } else if (g_inactivitySleepStage == INACT_ENTRY) {
-      // Step 2: quando finisce (o va in timeout), avvia la transizione Zzz... e poi va in sleep.
-      if (!audio_isActive() || (now - g_inactivityStageStartMs) >= INACTIVITY_SLEEP_AUDIO_TIMEOUT_MS) {
-        // 0013.mp3 = Avvio standby (transizione prima dello sleep)
-        audio_requestPlayMp3(13);
-        ui_renderSleepZzz();
         g_inactivitySleepStage = INACT_ZZZ;
         g_inactivityStageStartMs = now;
         lastOledMs = 0; // forza refresh rapido
@@ -1695,9 +1715,7 @@ else if (cmd.startsWith("mp3")) {
         return;
       }
     }
-  }
-
-  // Ogni 3 secondi stampa lo stato batteria
+// Ogni 3 secondi stampa lo stato batteria
   if (now - lastBattDebug > 3000) {
     lastBattDebug = now;
     BatteryStatus st = battery_get_status();

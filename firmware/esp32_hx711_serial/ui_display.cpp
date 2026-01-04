@@ -356,22 +356,40 @@ void ui_powerSave(bool enable) {
 void ui_renderSleepZzz() {
   oled.clearBuffer();
 
-  // Disegno semplice: 3 "Z" su diagonale, come fumetto sleep.
-  // (3 altezze diverse => tre baseline differenti)
+  // Disegno: 3 "Z" su diagonale, tutte centrate nel complesso.
+  // Richiesta: prima Z più grande (in alto), ultima Z più piccola (in basso), senza puntini.
+
+  // Font diversi per dare la gerarchia visiva.
+  // (Questi font sono parte della libreria U8G2 standard.)
+  oled.setFont(u8g2_font_10x20_tr);
+  int16_t wZ1 = oled.getStrWidth("Z");
+
   oled.setFont(u8g2_font_6x12_tr);
+  int16_t wZ2 = oled.getStrWidth("Z");
 
-  int16_t wZ = oled.getStrWidth("Z");
-  int16_t spacing = 10;
-  int16_t totalW = wZ * 3 + spacing * 2;
-  int16_t x0 = (256 - totalW) / 2;
+  oled.setFont(u8g2_font_5x8_tr);
+  int16_t wZ3 = oled.getStrWidth("Z");
 
-  oled.drawStr(x0 + 0*(wZ+spacing), 24, "Z");
-  oled.drawStr(x0 + 1*(wZ+spacing), 38, "Z");
-  oled.drawStr(x0 + 2*(wZ+spacing), 52, "Z");
+  const int16_t spacing = 10;
+  const int16_t totalW = wZ1 + wZ2 + wZ3 + spacing * 2;
+  const int16_t x0 = (256 - totalW) / 2;
 
-  // Puntini centrali (facoltativi, ma aiutano a capire che è standby)
-  int16_t wDots = oled.getStrWidth("...");
-  oled.drawStr((256 - wDots)/2, 46, "...");
+  // Baseline: in alto -> in basso
+  const int16_t y1 = 24;
+  const int16_t y2 = 40;
+  const int16_t y3 = 54;
+
+  // Z1 (grande)
+  oled.setFont(u8g2_font_10x20_tr);
+  oled.drawStr(x0, y1, "Z");
+
+  // Z2 (media)
+  oled.setFont(u8g2_font_6x12_tr);
+  oled.drawStr(x0 + wZ1 + spacing, y2, "Z");
+
+  // Z3 (piccola)
+  oled.setFont(u8g2_font_5x8_tr);
+  oled.drawStr(x0 + wZ1 + spacing + wZ2 + spacing, y3, "Z");
 
   oled.sendBuffer();
 }
