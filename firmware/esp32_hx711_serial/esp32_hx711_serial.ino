@@ -131,13 +131,10 @@ static inline void dfpPowerSet(bool on) {
 }
 
 static int dfpBusyReadStable() {
-  // Lettura "stabile" senza bloccare troppo (≈16 ms)
-  int ones = 0;
-  for (int i = 0; i < 8; i++) {
-    ones += (digitalRead(DFPLAYER_BUSY_PIN) != 0) ? 1 : 0;
-    delay(2);
-  }
-  return (ones >= 5) ? 1 : 0;
+  // Lettura NON bloccante: BUSY è un livello logico stabile.
+  // (In passato campionavamo con delay per attenuare pin flottanti; ora preferiamo
+  // non rallentare la loop mentre l'audio sta suonando.)
+  return (digitalRead(DFPLAYER_BUSY_PIN) != 0) ? 1 : 0;
 }
 
 static void audio_stopNow();
