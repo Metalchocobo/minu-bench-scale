@@ -26,9 +26,7 @@ static KeyCode keyMap[4][2] = {
 // Stato interno per debounce
 static KeyCode rawKeyLast    = KEY_NONE;
 static uint32_t rawChangeMs  = 0;
-
-static KeyCode stableKey     = KEY_NONE;
-static KeyCode lastReported  = KEY_NONE;
+static KeyCode lastStableKey = KEY_NONE;
 
 // Ultimo evento "nuovo" da consegnare
 static KeyCode pendingEvent  = KEY_NONE;
@@ -71,24 +69,25 @@ void keypad_init() {
 
   rawKeyLast    = KEY_NONE;
   rawChangeMs   = 0;
-  stableKey     = KEY_NONE;
-  lastReported  = KEY_NONE;
+  lastStableKey = KEY_NONE;
   pendingEvent  = KEY_NONE;
 }
 
-static KeyCode lastStableKey = KEY_NONE;
-
 void keypad_update(uint32_t nowMs) {
-  (void)nowMs; // non usato
+  KeyCode raw = keypad_scan_once();
 
-  KeyCode k = keypad_scan_once();
+  // Prima fase: debounce sul valore raw.
+  if (raw != rawKeyLast) {
+    rawKeyLast = raw;
+    rawChangeMs = nowMs;
+  }
 
-  if (k != lastStableKey) {
-    if (k != KEY_NONE) {
-      // genera evento quando passa da NONE -> tasto
-      pendingEvent = k;
+  // Aggiorna il keycode stabile solo se il valore resta fermo per DEBOUNCE_MS.
+  if (lastStableKey != raw && (nowMs - rawChangeMs) >= DEBOUNCE_MS) {
+    lastStableKey = raw;
+    if (lastStableKey != KEY_NONE) {
+      pendingEvent = lastStableKey;
     }
-    lastStableKey = k;
   }
 }
 
