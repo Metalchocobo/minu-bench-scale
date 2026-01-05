@@ -2,13 +2,16 @@
 
 // Gestione WiFi + OTA + Arduino Cloud per Minù Bench Scale
 // NOTE:
-//  - Di default è attivo solo WiFi + OTA via Arduino IDE.
+//  - WiFi/OTA sono compilati ma disattivati di default e dipendono da credenziali
+//    presenti in Preferences (vedi settings.h).
 //  - Arduino Cloud è disabilitato; abilitalo cambiando ENABLE_ARDUINO_CLOUD a 1
 //    e aggiungendo thingProperties.h generato da Arduino Cloud nella stessa cartella.
 
 // Abilita / disabilita i vari moduli
-#define ENABLE_WIFI_OTA       1   // 1 = attiva WiFi + OTA
+#define ENABLE_WIFI_OTA       1   // 1 = compila WiFi + OTA, runtime controllato via Preferences
 #define ENABLE_ARDUINO_CLOUD  0   // 1 = attiva Arduino Cloud (richiede librerie + thingProperties.h)
+
+#include "settings.h"
 
 #if ENABLE_WIFI_OTA
   #include <WiFi.h>
@@ -24,6 +27,13 @@
   #include "thingProperties.h"
 #endif
 
+struct NetStatus {
+  bool enabled;         // WiFi attivato dal configuration (cred + flag)
+  bool connected;       // WiFi::isConnected()
+  bool otaEnabled;      // OTA attivo (config + WiFi on)
+  bool hasCredentials;  // almeno un SSID valido in config
+};
+
 namespace Net {
 
 #if ENABLE_WIFI_OTA
@@ -31,38 +41,78 @@ namespace Net {
   static WiFiMulti wifiMulti;
 
   // Stato interno (WiFi non bloccante)
-  static bool     wifiConfigured = false;
-  static bool     wifiPaused     = false;
-  static uint32_t wifiLastRunMs  = 0;
+  static bool     wifiConfigured   = false;
+  static bool     wifiPaused       = false;
+  static uint32_t wifiLastRunMs    = 0;
   static bool     wifiWasConnected = false;
+  static WifiSettings g_wifiSettings;
+  static bool     g_hasCredentials = false;
 
   // OTA non bloccante: config (handler) e begin quando WiFi è connesso
-  static bool     otaConfigured  = false;
   static bool     otaBegun       = false;
   static bool     otaInProgress  = false;
   static const char* otaHostname = "minu-bench-scale";
 
-  // Due reti fittizie da sostituire con i tuoi dati reali
-  static const char* WIFI_SSID_1 = "Shadowfiend";
-  static const char* WIFI_PASS_1 = "questa dannata rete";
-  static const char* WIFI_SSID_2 = "Laboratorio di Minu'";
-  static const char* WIFI_PASS_2 = "questa dannata rete";
+  inline bool hasAnyCredential(const WifiSettings& cfg) {
+    return cfg.primary.ssid.length() > 0 || cfg.secondary.ssid.length() > 0;
+  }
 
-  // Inizializza WiFi STA (NON BLOCCANTE): la connessione avviene in background dentro Net::update()
-  inline void wifiSetup() {
+  // Configura WiFi manager ma NON abilita ancora OTA/Cloud.
+  inline void begin(const WifiSettings &cfg) {
+    g_wifiSettings = cfg;
+    g_hasCredentials = hasAnyCredential(cfg);
+
+    if (!cfg.wifiEnabled || !g_hasCredentials) {
+      wifiConfigured = false;
+      wifiPaused = true;
+      wifiWasConnected = false;
+      otaBegun = false;
+      otaInProgress = false;
+      return;
+    }
+
     WiFi.mode(WIFI_STA);
     WiFi.setAutoReconnect(true);
     WiFi.persistent(false);
 
-    // Aggiungi qui le reti disponibili (puoi aggiungerne altre se vuoi)
-    wifiMulti.addAP(WIFI_SSID_1, WIFI_PASS_1);
-    wifiMulti.addAP(WIFI_SSID_2, WIFI_PASS_2);
+    wifiMulti = WiFiMulti();
+    if (cfg.primary.ssid.length() > 0) {
+      wifiMulti.addAP(cfg.primary.ssid.c_str(), cfg.primary.password.c_str());
+    }
+    if (cfg.secondary.ssid.length() > 0) {
+      wifiMulti.addAP(cfg.secondary.ssid.c_str(), cfg.secondary.password.c_str());
+    }
 
     wifiConfigured = true;
     wifiPaused     = false;
     wifiLastRunMs  = 0;
     wifiWasConnected = false;
-    Serial.println(F("[NET] WiFi avviato (background)."));
+
+    Serial.println(F("[NET] WiFi abilitato da config (background)."));
+
+    if (cfg.otaEnabled) {
+      ArduinoOTA.setHostname(otaHostname);
+
+      ArduinoOTA.onStart([]() {
+        Serial.println(F("[OTA] Update iniziato"));
+        otaInProgress = true;
+      });
+
+      ArduinoOTA.onEnd([]() {
+        Serial.println(F("\n[OTA] Update finito"));
+        otaInProgress = false;
+      });
+
+      ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+        if (total == 0) return;
+        Serial.printf("[OTA] Avanzamento: %u%%\r", (progress * 100) / total);
+      });
+
+      ArduinoOTA.onError([](ota_error_t error) {
+        Serial.printf("[OTA] Errore[%u]\n", error);
+        otaInProgress = false;
+      });
+    }
   }
 
   // Sospende WiFi/OTA (utile prima di andare in light-sleep)
@@ -90,57 +140,8 @@ namespace Net {
 
   inline bool isOtaInProgress() { return otaInProgress; }
 
-  // Configura OTA via Arduino IDE (porta di rete)
-  // NON BLOCCANTE: registra gli handler e fa begin() appena il WiFi risulta connesso.
-  inline void otaSetup(const char* hostname = "minu-bench-scale") {
-    otaHostname  = hostname;
-    otaConfigured = true;
-    otaBegun      = false;
-
-    ArduinoOTA.setHostname(otaHostname);
-
-    ArduinoOTA.onStart([]() {
-      Serial.println(F("[OTA] Update iniziato"));
-      otaInProgress = true;
-      // Se serve, qui puoi sospendere logica della bilancia
-    });
-
-    ArduinoOTA.onEnd([]() {
-      Serial.println(F("\n[OTA] Update finito"));
-      otaInProgress = false;
-    });
-
-    ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-      if (total == 0) return;
-      Serial.printf("[OTA] Avanzamento: %u%%\r", (progress * 100) / total);
-    });
-
-    ArduinoOTA.onError([](ota_error_t error) {
-      Serial.printf("[OTA] Errore[%u]\n", error);
-      otaInProgress = false;
-    });
-
-    Serial.println(F("[OTA] Configurato. Si attiva quando il WiFi si connette."));
-  }
-#endif // ENABLE_WIFI_OTA
-
-#if ENABLE_ARDUINO_CLOUD
-  // Inizializza Arduino Cloud dopo che il WiFi è attivo
-  inline void cloudSetup() {
-    Serial.println(F("[CLOUD] initProperties()..."));
-    initProperties(); // definito in thingProperties.h
-
-    Serial.println(F("[CLOUD] ArduinoCloud.begin()..."));
-    ArduinoCloud.begin(ArduinoIoTPreferredConnection);
-
-    setDebugMessageLevel(2);
-    ArduinoCloud.printDebugInfo();
-  }
-#endif // ENABLE_ARDUINO_CLOUD
-
   // Da chiamare nel loop principale
   inline void update() {
-  #if ENABLE_WIFI_OTA
     // Tick WiFi (ogni ~1s) per tentare/ri-tentare la connessione
     if (wifiConfigured && !wifiPaused) {
       uint32_t now = millis();
@@ -162,7 +163,7 @@ namespace Net {
         }
 
         // Avvia OTA appena siamo connessi
-        if (otaConfigured && !otaBegun && WiFi.isConnected()) {
+        if (g_wifiSettings.otaEnabled && !otaBegun && WiFi.isConnected()) {
           ArduinoOTA.begin();
           otaBegun = true;
           Serial.println(F("[OTA] Pronto (WiFi connesso). In Arduino IDE seleziona la porta di rete dell'ESP32."));
@@ -174,11 +175,27 @@ namespace Net {
     if (otaBegun) {
       ArduinoOTA.handle();
     }
-  #endif
-
-  #if ENABLE_ARDUINO_CLOUD
-    ArduinoCloud.update();
-  #endif
   }
+
+  inline NetStatus status() {
+    const bool enabled = wifiConfigured && !wifiPaused;
+    const bool connected = enabled && WiFi.isConnected();
+    return NetStatus{
+      enabled,
+      connected,
+      enabled && g_wifiSettings.otaEnabled,
+      g_hasCredentials
+    };
+  }
+
+#else
+  // Stub quando il WiFi non è compilato
+  inline void begin(const WifiSettings&) {}
+  inline void wifiSuspend() {}
+  inline void wifiResume() {}
+  inline void update() {}
+  inline bool isOtaInProgress() { return false; }
+  inline NetStatus status() { return NetStatus{false, false, false, false}; }
+#endif
 
 } // namespace Net

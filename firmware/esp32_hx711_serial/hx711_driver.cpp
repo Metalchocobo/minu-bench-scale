@@ -79,7 +79,9 @@ long hx711_read(){
   return (long)(int32_t)value;
 }
 
-long hx711_read_blocking(uint32_t timeoutMs){
-  if (!hx711_wait_ready(timeoutMs)) return 0;
-  return hx711_read();
+HX711Result hx711_read_blocking(uint32_t timeoutMs){
+  if (!hx711_wait_ready(timeoutMs)) {
+    return { false, 0 };
+  }
+  return { true, hx711_read() };
 }

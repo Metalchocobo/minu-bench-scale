@@ -2,9 +2,9 @@
 
 #include <SPI.h>
 #include <U8g2lib.h>
-#include <WiFi.h>
 
 #include "battery_monitor.h"
+#include "ui_display.h"
 
 // -----------------------------------------------------------------------------
 // PIN OLED (come firmware originale)
@@ -31,6 +31,13 @@ static U8G2_SSD1322_NHD_256X64_F_4W_HW_SPI oled(
 // Variabile globale esterna per capire il preset di lavoro (WORK vs LIVE)
 // definita nel .ino principale
 extern bool stEnable;
+
+// Stato rete da mostrare in UI (aggiornato dal loop principale).
+static UiNetStatus g_uiNetStatus = { false, false, false, false };
+
+void ui_setNetStatus(const UiNetStatus &status) {
+  g_uiNetStatus = status;
+}
 
 // -----------------------------------------------------------------------------
 // LOGO MINÙ (bitmap 1-bit, 56x56)
@@ -140,9 +147,17 @@ static void drawBatteryIcon(int x, int y, uint8_t level, bool charging) {
 }
 
 // -----------------------------------------------------------------------------
-// ICONA RETE (placeholder, per ora non collegata a logica reale)
+// ICONA RETE (mostra OFF / credenziali mancanti / OTA attivo)
 // -----------------------------------------------------------------------------
-static void drawNetIcon(int x, int y, bool connected) {
+static void drawNetIcon(int x, int y, const UiNetStatus &status) {
+  // Stato OFF / credenziali assenti: riquadro con X
+  if (!status.enabled || !status.hasCredentials) {
+    oled.drawFrame(x, y, 10, 8);
+    oled.drawLine(x, y, x + 9, y + 7);
+    oled.drawLine(x, y + 7, x + 9, y);
+    return;
+  }
+
   int baseY = y + 6;  // "suolo" delle tacche
 
   // 3 barrette crescenti
@@ -150,10 +165,13 @@ static void drawNetIcon(int x, int y, bool connected) {
   oled.drawBox(x + 3, baseY - 4, 2, 4); // alta 4
   oled.drawBox(x + 6, baseY - 6, 2, 6); // alta 6
 
-  if (!connected) {
+  if (!status.connected) {
     // slash di disconnessione
     oled.drawLine(x,     y,
                   x + 7, y + 6);
+  } else if (status.otaEnabled) {
+    // puntino OTA nell'angolo in alto a destra
+    oled.drawDisc(x + 9, y, 1);
   }
 }
 
@@ -408,10 +426,10 @@ void ui_renderWeight(long gDisp, const char* stateLabel) {
   // ------- Riga alta: batteria + wifi -------
   uint8_t batteryLevel = uiGetBatteryLevel4Step();  // 0..4
   bool    isCharging   = uiIsBatteryCharging();
-  bool    netConnected = WiFi.isConnected();
+  UiNetStatus netStatus = g_uiNetStatus;
 
   drawBatteryIcon(2, 2, batteryLevel, isCharging);
-  drawNetIcon(30, 3, netConnected);
+  drawNetIcon(30, 3, netStatus);
 
   // ------- Info Mode / State (allineate) -------
   oled.setFont(u8g2_font_6x12_tr);
@@ -481,10 +499,10 @@ void ui_renderTareProgress(uint8_t progressPct) {
   // ------- Riga alta: batteria + wifi -------
   uint8_t batteryLevel = uiGetBatteryLevel4Step();  // 0..4
   bool    isCharging   = uiIsBatteryCharging();
-  bool    netConnected = WiFi.isConnected();
+  UiNetStatus netStatus = g_uiNetStatus;
 
   drawBatteryIcon(2, 2, batteryLevel, isCharging);
-  drawNetIcon(30, 3, netConnected);
+  drawNetIcon(30, 3, netStatus);
 
   
 
