@@ -16,10 +16,13 @@ enum KeyCode {
 // Inizializza i pin e lo stato interno
 void keypad_init();
 
-// Da chiamare nel loop principale con now = millis()
+// Da chiamare nel loop principale con now = millis().
+// Debounce + evento one-shot su pressione (transizione stabile NONE -> KEY).
 void keypad_update(uint32_t nowMs);
 
-// Ritorna l'ULTIMO tasto "nuovo" premuto.
+// Ritorna l'ULTIMO tasto "nuovo" premuto (one-shot).
+// - Tenere premuto non genera eventi ripetuti
+// - Il rilascio non genera evento
 // Se non ci sono eventi nuovi, ritorna KEY_NONE.
 KeyCode keypad_get_event();
 

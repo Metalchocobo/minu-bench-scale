@@ -197,6 +197,18 @@ static bool audio_isActive() {
 static void audio_requestPlayMp3(uint16_t track, uint32_t capSeconds = 0) {
   if (track < 1) track = 1;
 
+  // Guard anti-retrigger: evita di rilanciare lo stesso MP3 in raffica (rimbalzi tasto, eventi duplicati).
+  // Side effect: lo stesso track richiesto più volte entro la finestra viene ignorato.
+  static uint16_t s_lastReqTrack = 0;
+  static uint32_t s_lastReqMs = 0;
+  const uint32_t nowReq = millis();
+  const uint32_t REQ_GUARD_MS = 250;
+  if (track == s_lastReqTrack && (uint32_t)(nowReq - s_lastReqMs) < REQ_GUARD_MS) {
+    return;
+  }
+  s_lastReqTrack = track;
+  s_lastReqMs = nowReq;
+
   // Se stava già suonando, tronca e riparti.
   if (audio_isActive()) {
     audio_stopNow();
@@ -216,7 +228,7 @@ static void audio_requestPlayMp3(uint16_t track, uint32_t capSeconds = 0) {
   Serial.print(track);
   Serial.println(F(".mp3"));
 
-  const uint32_t now = millis();
+  const uint32_t now = nowReq;
 
   // Se il DFPlayer è già alimentato e UART pronta, non fare power-cycle: play diretto.
   if (g_dfpPowered && g_dfpUartReady) {

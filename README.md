@@ -325,8 +325,13 @@ Metti i file in **SD:/MP3/** con nome a 4 cifre (es. `0001.mp3`).
 Di default il log continuo del sensore è disattivato.
 
 Nota: il parser comandi seriali è **non bloccante** (nessun timeout/attesa). I comandi vengono eseguiti solo quando invii una riga completa (terminata da invio). 
-
 Comandi:
 - `hxlog on` / `hxlog off`
 - `hxlog ?`
 - `hxlog rate <ms>` (50..5000)
+
+
+### Tastiera: debounce + one-shot
+La tastiera ha un debounce software (40 ms) e genera eventi **one-shot**: un tasto premuto produce **un solo evento**, anche se lo tieni premuto.
+
+Se in futuro ti serve una logica di "long press" o autorepeat (freccia UP), va aggiunta esplicitamente.

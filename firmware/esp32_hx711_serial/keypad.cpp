@@ -23,17 +23,21 @@ static KeyCode keyMap[4][2] = {
   {KEY_CALI,   KEY_MODE}   // R4 (filo 4)
 };
 
-// Stato interno per debounce
-static KeyCode rawKeyLast    = KEY_NONE;
-static uint32_t rawChangeMs  = 0;
-
-static KeyCode stableKey     = KEY_NONE;
-static KeyCode lastReported  = KEY_NONE;
+// Stato interno tastiera.
+// Obiettivo:
+// - Debounce per eliminare rimbalzi (contatto meccanico)
+// - Evento "one-shot" solo su pressione (transizione stabile NONE -> KEY)
+// Side effects:
+// - Tenere premuto non genera eventi ripetuti
+// - Il rilascio non genera evento
+static KeyCode rawKeyLast   = KEY_NONE;
+static uint32_t rawChangeMs = 0;
+static KeyCode stableKey    = KEY_NONE;
 
 // Ultimo evento "nuovo" da consegnare
-static KeyCode pendingEvent  = KEY_NONE;
+static KeyCode pendingEvent = KEY_NONE;
 
-// Parametro debounce (ms)
+// Debounce (ms): 30-50 ms è la forchetta tipica. Qui 40 ms.
 static const uint32_t DEBOUNCE_MS = 40;
 
 // Scansione singola (senza debounce pesante)
@@ -69,26 +73,31 @@ void keypad_init() {
     pinMode(colPins[c], INPUT_PULLUP);
   }
 
-  rawKeyLast    = KEY_NONE;
-  rawChangeMs   = 0;
-  stableKey     = KEY_NONE;
-  lastReported  = KEY_NONE;
-  pendingEvent  = KEY_NONE;
+  rawKeyLast   = KEY_NONE;
+  rawChangeMs  = 0;
+  stableKey    = KEY_NONE;
+  pendingEvent = KEY_NONE;
 }
 
-static KeyCode lastStableKey = KEY_NONE;
-
 void keypad_update(uint32_t nowMs) {
-  (void)nowMs; // non usato
+  // 1) Legge il valore raw.
+  const KeyCode raw = keypad_scan_once();
 
-  KeyCode k = keypad_scan_once();
+  // 2) Traccia l'istante dell'ultimo cambiamento raw.
+  if (raw != rawKeyLast) {
+    rawKeyLast = raw;
+    rawChangeMs = nowMs;
+  }
 
-  if (k != lastStableKey) {
-    if (k != KEY_NONE) {
-      // genera evento quando passa da NONE -> tasto
-      pendingEvent = k;
+  // 3) Promuove a "stabile" solo se è rimasto uguale per DEBOUNCE_MS.
+  if (raw != stableKey && (uint32_t)(nowMs - rawChangeMs) >= DEBOUNCE_MS) {
+    const KeyCode prev = stableKey;
+    stableKey = raw;
+
+    // Evento one-shot: solo su pressione (NONE -> KEY).
+    if (prev == KEY_NONE && stableKey != KEY_NONE) {
+      pendingEvent = stableKey;
     }
-    lastStableKey = k;
   }
 }
 
