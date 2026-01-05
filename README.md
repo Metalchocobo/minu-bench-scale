@@ -324,6 +324,8 @@ Metti i file in **SD:/MP3/** con nome a 4 cifre (es. `0001.mp3`).
 ### Debug seriale HX711 (opzionale)
 Di default il log continuo del sensore è disattivato.
 
+Nota: il parser comandi seriali è **non bloccante** (nessun timeout/attesa). I comandi vengono eseguiti solo quando invii una riga completa (terminata da invio). 
+
 Comandi:
 - `hxlog on` / `hxlog off`
 - `hxlog ?`

@@ -800,10 +800,214 @@ void printHelp(){
   Serial.println(F("  zt on/off/reset/? -> zero-tracking (near-zero + snap)"));
   Serial.println(F("  mp3 <n> [capSec] -> suona /MP3/000n.mp3 (capSec opzionale, paracadute)"));
   Serial.println(F("  mp3 ? / mp3 status -> stato DFPlayer/BUSY"));
-  Serial.println(F("  stop             -> stop + spegne DFPlayer"));
+  Serial.println(F("  stop             -> stop audio (DFPlayer resta ON finché operativo)"));
   Serial.println(F("  vol <0..30>       -> volume DFPlayer"));
 
   Serial.println();
+}
+
+// ========================= SERIAL (non-bloccante) =========================
+// Bufferizza i caratteri e processa solo a newline, evitando timeout/attese.
+// Questo evita freeze quando arrivano byte "sporchi" (rumore/EMI) mentre DFPlayer o WiFi sono attivi.
+static char     g_serialLine[160] = {0};
+static uint16_t g_serialLen       = 0;
+static bool     g_serialOverflow  = false;
+
+static void handleSerialCommand(String cmd) {
+  cmd.trim();
+
+  auto isDigitsOnly = [](const String& s) -> bool {
+    if (s.length() == 0) return false;
+    for (size_t i = 0; i < s.length(); i++) {
+      if (!isDigit((unsigned char)s[i])) return false;
+    }
+    return true;
+  };
+
+  if (cmd.length() == 0) {
+    // no-op
+  }
+  else if (cmd.equalsIgnoreCase("t")) {
+    doTare();
+  }
+  else if (cmd.startsWith("c") || cmd.startsWith("C")){
+    long ref = REF_G;
+    int sp = cmd.indexOf(' ');
+    if (sp > 0){
+      long v = cmd.substring(sp+1).toInt();
+      if (v > 0) ref = v;
+    }
+    REF_G = ref;
+    Serial.print(F("[CAL] Riferimento: "));
+    Serial.print(ref);
+    Serial.println(F(" g (fai TARE, metti il peso noto, poi c)"));
+    doCal(ref);
+  }
+  else if (cmd.equalsIgnoreCase("p")){
+    float zt_g = (SCALE_CPG>0.01f) ? (float)zero_track_counts / SCALE_CPG : 0.0f;
+    Serial.print(F("[INFO] OFFSET_RAW=")); Serial.print(OFFSET_RAW);
+    Serial.print(F("  SCALE_CPG="));       Serial.print(SCALE_CPG,6);
+    Serial.print(F("  REF_G="));           Serial.print(REF_G);
+    Serial.print(F("  MA="));              Serial.print(maN);
+    Serial.print(F("  DB_UNSTABLE="));     Serial.print(deadbandUnstable,2);
+    Serial.print(F("  ST="));              Serial.print(stEnable?"on ":"off");
+    Serial.print(F("  ZT="));              Serial.print(ztEnable?"on ":"off");
+    Serial.print(F("  zt_cnt="));          Serial.print(zero_track_counts);
+    Serial.print(F(" (≈"));                Serial.print(zt_g,2); Serial.println(F(" g)"));
+  }
+  else if (cmd.equalsIgnoreCase("s")){
+    saveToNVS();
+  }
+  else if (cmd.startsWith("m ")){
+    String m = cmd.substring(2);
+    m.trim();
+    setMode(m);
+  }
+  else if (cmd.equalsIgnoreCase("stop") || cmd.equalsIgnoreCase("mp3 stop")) {
+    Serial.println(F("[MP3] stop"));
+    audio_stopNow();
+  }
+  else if (cmd.equalsIgnoreCase("mp3 ?") || cmd.equalsIgnoreCase("mp3 status") || cmd.equalsIgnoreCase("audio ?")) {
+    audio_debugStatus();
+  }
+  else if (cmd.startsWith("vol")) {
+    // "vol <0..30>" set volume
+    int sp = cmd.indexOf(' ');
+    if (sp > 0) {
+      int v = cmd.substring(sp + 1).toInt();
+      if (v < 0) v = 0;
+      if (v > 30) v = 30;
+      audio_setVolume((uint8_t)v);
+      Serial.print(F("[MP3] volume=")); Serial.println(v);
+    } else {
+      Serial.println(F("[MP3] uso: vol <0..30>"));
+    }
+  }
+  
+  else if (cmd.startsWith("hxlog")) {
+    // hxlog on|off|?  ; hxlog rate <ms>
+    if (cmd.equalsIgnoreCase("hxlog on")) {
+      g_hxLogEnabled = true;
+      Serial.println(F("[HXLOG] on"));
+    } else if (cmd.equalsIgnoreCase("hxlog off")) {
+      g_hxLogEnabled = false;
+      Serial.println(F("[HXLOG] off"));
+    } else if (cmd.equalsIgnoreCase("hxlog ?") || cmd.equalsIgnoreCase("hxlog")) {
+      Serial.print(F("[HXLOG] "));
+      Serial.print(g_hxLogEnabled ? "on" : "off");
+      Serial.print(F("  rate="));
+      Serial.print(g_hxLogPeriodMs);
+      Serial.println(F("ms"));
+    } else if (cmd.startsWith("hxlog rate")) {
+      int sp = cmd.lastIndexOf(' ');
+      if (sp > 0) {
+        long ms = cmd.substring(sp + 1).toInt();
+        if (ms < 50) ms = 50;
+        if (ms > 5000) ms = 5000;
+        g_hxLogPeriodMs = (uint32_t)ms;
+        Serial.print(F("[HXLOG] rate="));
+        Serial.print(g_hxLogPeriodMs);
+        Serial.println(F("ms"));
+      } else {
+        Serial.println(F("[HXLOG] uso: hxlog rate <ms>  (50..5000)"));
+      }
+    } else {
+      Serial.println(F("[HXLOG] comandi: hxlog on | hxlog off | hxlog ? | hxlog rate <ms>"));
+    }
+  }
+else if (cmd.startsWith("mp3")) {
+    // "mp3 <n> [capSec]" -> suona /MP3/000n.mp3
+    int sp = cmd.indexOf(' ');
+    if (sp > 0) {
+      String rest = cmd.substring(sp + 1);
+      rest.trim();
+      int sp2 = rest.indexOf(' ');
+      String sTrack = (sp2 > 0) ? rest.substring(0, sp2) : rest;
+      String sCap   = (sp2 > 0) ? rest.substring(sp2 + 1) : String();
+      sTrack.trim();
+      sCap.trim();
+
+      long n = sTrack.toInt();
+      uint16_t track = (n <= 0) ? 1 : (uint16_t)n;
+      uint32_t capSec = 0;
+      if (sCap.length() > 0) {
+        long cap = sCap.toInt();
+        if (cap > 0) capSec = (uint32_t)cap;
+      }
+
+      audio_requestPlayMp3(track, capSec);
+    } else {
+      Serial.println(F("[MP3] uso: mp3 <n> [capSec]   (es: mp3 1, mp3 1 8)"));
+    }
+  }
+  else if (cmd.equalsIgnoreCase("st on")){
+    stEnable = true;
+    resetFiltersAndState();
+    Serial.println(F("[ST] on"));
+  }
+  else if (cmd.equalsIgnoreCase("st off")){
+    stEnable = false;
+    resetFiltersAndState();
+    Serial.println(F("[ST] off (LIVE)"));
+  }
+  else if (cmd.equalsIgnoreCase("st ?")){
+    Serial.print(F("[ST] ")); Serial.println(stEnable?"on":"off");
+  }
+  else if (cmd.equalsIgnoreCase("zt on")){
+    ztEnable = true;
+    Serial.println(F("[ZT] on"));
+  }
+  else if (cmd.equalsIgnoreCase("zt off")){
+    ztEnable = false;
+    Serial.println(F("[ZT] off"));
+  }
+  else if (cmd.equalsIgnoreCase("zt reset")){
+    zero_track_counts = 0;
+    Serial.println(F("[ZT] accumulatore azzerato."));
+  }
+  else if (cmd.equalsIgnoreCase("zt ?")){
+    float zt_g = (SCALE_CPG>0.01f) ? (float)zero_track_counts / SCALE_CPG : 0.0f;
+    Serial.print(F("[ZT] ")); Serial.print(ztEnable?"on ":"off");
+    Serial.print(F("  accum=")); Serial.print(zero_track_counts);
+    Serial.print(F(" counts (≈")); Serial.print(zt_g,2); Serial.println(F(" g)"));
+  }
+  else if (isDigitsOnly(cmd)) {
+    uint16_t t = (uint16_t)cmd.toInt();
+    if (t == 0) t = 1;
+    audio_requestPlayMp3(t);
+  }
+  else {
+    printHelp();
+  }
+}
+
+static void serial_task() {
+  while (Serial.available() > 0) {
+    char ch = (char)Serial.read();
+    if (ch == '\r') continue;
+
+    if (ch == '\n') {
+      if (!g_serialOverflow) {
+        String cmd = String(g_serialLine);
+        handleSerialCommand(cmd);
+      } else {
+        Serial.println(F("[SER] linea troppo lunga, scartata"));
+      }
+      g_serialLen = 0;
+      g_serialOverflow = false;
+      g_serialLine[0] = '\0';
+      continue;
+    }
+
+    if (!g_serialOverflow) {
+      if (g_serialLen < (sizeof(g_serialLine) - 1)) {
+        g_serialLine[g_serialLen++] = ch;
+        g_serialLine[g_serialLen] = '\0';
+      } else {
+        g_serialOverflow = true; // scarta fino al prossimo newline
+      }
+    }
+  }
 }
 
 void loadFromNVS(){
@@ -1490,176 +1694,9 @@ void loop(){
 
 
   // --- Comandi seriale ---
-  if (Serial.available()){
-    String cmd = Serial.readStringUntil('\n');
-    cmd.trim();
+  serial_task();
 
-    auto isDigitsOnly = [](const String& s) -> bool {
-      if (s.length() == 0) return false;
-      for (size_t i = 0; i < s.length(); i++) {
-        if (!isDigit((unsigned char)s[i])) return false;
-      }
-      return true;
-    };
-
-    if (cmd.length() == 0) {
-      // no-op
-    }
-    else if (cmd.equalsIgnoreCase("t")) {
-      doTare();
-    }
-    else if (cmd.startsWith("c") || cmd.startsWith("C")){
-      long ref = REF_G;
-      int sp = cmd.indexOf(' ');
-      if (sp > 0){
-        long v = cmd.substring(sp+1).toInt();
-        if (v > 0) ref = v;
-      }
-      REF_G = ref;
-      Serial.print(F("[CAL] Riferimento: "));
-      Serial.print(ref);
-      Serial.println(F(" g (fai TARE, metti il peso noto, poi c)"));
-      doCal(ref);
-    }
-    else if (cmd.equalsIgnoreCase("p")){
-      float zt_g = (SCALE_CPG>0.01f) ? (float)zero_track_counts / SCALE_CPG : 0.0f;
-      Serial.print(F("[INFO] OFFSET_RAW=")); Serial.print(OFFSET_RAW);
-      Serial.print(F("  SCALE_CPG="));       Serial.print(SCALE_CPG,6);
-      Serial.print(F("  REF_G="));           Serial.print(REF_G);
-      Serial.print(F("  MA="));              Serial.print(maN);
-      Serial.print(F("  DB_UNSTABLE="));     Serial.print(deadbandUnstable,2);
-      Serial.print(F("  ST="));              Serial.print(stEnable?"on ":"off");
-      Serial.print(F("  ZT="));              Serial.print(ztEnable?"on ":"off");
-      Serial.print(F("  zt_cnt="));          Serial.print(zero_track_counts);
-      Serial.print(F(" (≈"));                Serial.print(zt_g,2); Serial.println(F(" g)"));
-    }
-    else if (cmd.equalsIgnoreCase("s")){
-      saveToNVS();
-    }
-    else if (cmd.startsWith("m ")){
-      String m = cmd.substring(2);
-      m.trim();
-      setMode(m);
-    }
-    else if (cmd.equalsIgnoreCase("stop") || cmd.equalsIgnoreCase("mp3 stop")) {
-      Serial.println(F("[MP3] stop"));
-      audio_stopNow();
-    }
-    else if (cmd.equalsIgnoreCase("mp3 ?") || cmd.equalsIgnoreCase("mp3 status") || cmd.equalsIgnoreCase("audio ?")) {
-      audio_debugStatus();
-    }
-    else if (cmd.startsWith("vol")) {
-      // "vol <0..30>" set volume
-      int sp = cmd.indexOf(' ');
-      if (sp > 0) {
-        int v = cmd.substring(sp + 1).toInt();
-        if (v < 0) v = 0;
-        if (v > 30) v = 30;
-        audio_setVolume((uint8_t)v);
-        Serial.print(F("[MP3] volume=")); Serial.println(v);
-      } else {
-        Serial.println(F("[MP3] uso: vol <0..30>"));
-      }
-    }
-    
-    else if (cmd.startsWith("hxlog")) {
-      // hxlog on|off|?  ; hxlog rate <ms>
-      if (cmd.equalsIgnoreCase("hxlog on")) {
-        g_hxLogEnabled = true;
-        Serial.println(F("[HXLOG] on"));
-      } else if (cmd.equalsIgnoreCase("hxlog off")) {
-        g_hxLogEnabled = false;
-        Serial.println(F("[HXLOG] off"));
-      } else if (cmd.equalsIgnoreCase("hxlog ?") || cmd.equalsIgnoreCase("hxlog")) {
-        Serial.print(F("[HXLOG] "));
-        Serial.print(g_hxLogEnabled ? "on" : "off");
-        Serial.print(F("  rate="));
-        Serial.print(g_hxLogPeriodMs);
-        Serial.println(F("ms"));
-      } else if (cmd.startsWith("hxlog rate")) {
-        int sp = cmd.lastIndexOf(' ');
-        if (sp > 0) {
-          long ms = cmd.substring(sp + 1).toInt();
-          if (ms < 50) ms = 50;
-          if (ms > 5000) ms = 5000;
-          g_hxLogPeriodMs = (uint32_t)ms;
-          Serial.print(F("[HXLOG] rate="));
-          Serial.print(g_hxLogPeriodMs);
-          Serial.println(F("ms"));
-        } else {
-          Serial.println(F("[HXLOG] uso: hxlog rate <ms>  (50..5000)"));
-        }
-      } else {
-        Serial.println(F("[HXLOG] comandi: hxlog on | hxlog off | hxlog ? | hxlog rate <ms>"));
-      }
-    }
-else if (cmd.startsWith("mp3")) {
-      // "mp3 <n> [capSec]" -> suona /MP3/000n.mp3
-      int sp = cmd.indexOf(' ');
-      if (sp > 0) {
-        String rest = cmd.substring(sp + 1);
-        rest.trim();
-        int sp2 = rest.indexOf(' ');
-        String sTrack = (sp2 > 0) ? rest.substring(0, sp2) : rest;
-        String sCap   = (sp2 > 0) ? rest.substring(sp2 + 1) : String();
-        sTrack.trim();
-        sCap.trim();
-
-        long n = sTrack.toInt();
-        uint16_t track = (n <= 0) ? 1 : (uint16_t)n;
-        uint32_t capSec = 0;
-        if (sCap.length() > 0) {
-          long cap = sCap.toInt();
-          if (cap > 0) capSec = (uint32_t)cap;
-        }
-
-        audio_requestPlayMp3(track, capSec);
-      } else {
-        Serial.println(F("[MP3] uso: mp3 <n> [capSec]   (es: mp3 1, mp3 1 8)"));
-      }
-    }
-    else if (cmd.equalsIgnoreCase("st on")){
-      stEnable = true;
-      resetFiltersAndState();
-      Serial.println(F("[ST] on"));
-    }
-    else if (cmd.equalsIgnoreCase("st off")){
-      stEnable = false;
-      resetFiltersAndState();
-      Serial.println(F("[ST] off (LIVE)"));
-    }
-    else if (cmd.equalsIgnoreCase("st ?")){
-      Serial.print(F("[ST] ")); Serial.println(stEnable?"on":"off");
-    }
-    else if (cmd.equalsIgnoreCase("zt on")){
-      ztEnable = true;
-      Serial.println(F("[ZT] on"));
-    }
-    else if (cmd.equalsIgnoreCase("zt off")){
-      ztEnable = false;
-      Serial.println(F("[ZT] off"));
-    }
-    else if (cmd.equalsIgnoreCase("zt reset")){
-      zero_track_counts = 0;
-      Serial.println(F("[ZT] accumulatore azzerato."));
-    }
-    else if (cmd.equalsIgnoreCase("zt ?")){
-      float zt_g = (SCALE_CPG>0.01f) ? (float)zero_track_counts / SCALE_CPG : 0.0f;
-      Serial.print(F("[ZT] ")); Serial.print(ztEnable?"on ":"off");
-      Serial.print(F("  accum=")); Serial.print(zero_track_counts);
-      Serial.print(F(" counts (≈")); Serial.print(zt_g,2); Serial.println(F(" g)"));
-    }
-    else if (isDigitsOnly(cmd)) {
-      uint16_t t = (uint16_t)cmd.toInt();
-      if (t == 0) t = 1;
-      audio_requestPlayMp3(t);
-    }
-    else {
-      printHelp();
-    }
-  }
-
-  // --- Cadenzamento letture + tastiera ---
+// --- Cadenzamento letture + tastiera ---
   unsigned long now = millis();
 
   // Audio DFPlayer state-machine (non blocca la pesata)
