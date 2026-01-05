@@ -803,6 +803,7 @@ void printHelp(){
   Serial.println(F("  stop             -> stop + spegne DFPlayer"));
   Serial.println(F("  vol <0..30>       -> volume DFPlayer"));
 
+  Serial.println();
 }
 
 void loadFromNVS(){
@@ -1713,6 +1714,7 @@ else if (cmd.startsWith("mp3")) {
         return;
       }
     }
+	}
 // Ogni 3 secondi stampa lo stato batteria
   if (now - lastBattDebug > 3000) {
     lastBattDebug = now;
@@ -1935,4 +1937,4 @@ if (now - lastOledMs >= OLED_UPDATE_MS) {
 
 }
 
-}
+

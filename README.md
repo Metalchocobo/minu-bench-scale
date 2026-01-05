@@ -264,6 +264,7 @@ Il firmware può suonare file MP3 (es. avviso sleep). Per evitare click e stati 
 
 Comportamento attuale:
 - DFPlayer viene portato in stato **pronto** automaticamente **all’avvio** e a ogni **wake** (alimentazione ON + UART init + volume), così un suono può partire subito.
+- La riproduzione MP3 è progettata per essere **non bloccante**: mentre l’audio suona, la bilancia continua a leggere HX711 e ad aggiornare UI/log.
 - Durante l’uso resta alimentato.
 - Viene spento **quando la bilancia entra in standby/light-sleep per inattività** e anche **prima del light-sleep per batteria scarica**.
 
