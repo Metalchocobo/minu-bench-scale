@@ -65,6 +65,11 @@ bool hxHealth_popEnterErrorBeep(HxHealth* h);
 // In ERROR (soft) mostra lastValid solo se presente e recente
 bool hxHealth_canShowLastValueSoft(const HxHealth* h, uint32_t nowMs);
 
+// Alias compatibilità: usato dallo sketch (nome più descrittivo lato UI)
+inline bool hxHealth_shouldShowLastValue(const HxHealth* h, uint32_t nowMs) {
+  return hxHealth_canShowLastValueSoft(h, nowMs);
+}
+
 inline float hxHealth_lastValueG(const HxHealth* h) { return h ? h->lastValidG : 0.0f; }
 inline uint32_t hxHealth_lastValueAgeMs(const HxHealth* h, uint32_t nowMs) {
   if (!h || !h->hadValidEver) return 0xFFFFFFFFu;
