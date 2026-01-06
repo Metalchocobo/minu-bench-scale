@@ -92,6 +92,35 @@ static void drawCenteredTextUTF8(const char *str, int16_t y) {
 }
 
 // -----------------------------------------------------------------------------
+// HX WARN ICON (triangolino) - in alto a destra
+// -----------------------------------------------------------------------------
+static bool g_hxWarnIcon = false;
+
+void ui_setHxWarn(bool enable) {
+  g_hxWarnIcon = enable;
+}
+
+static void drawWarnTriangleIconTopRight() {
+  if (!g_hxWarnIcon) return;
+
+  // Area simile all'icona batteria: ~21x10 px
+  const int w = 21;
+  const int h = 10;
+  const int x0 = 256 - w - 2;
+  const int y0 = 2;
+
+  // Triangolo vuoto + "!" stilizzato
+  oled.drawTriangle(x0 + w / 2, y0,
+                    x0,         y0 + h - 1,
+                    x0 + w - 1, y0 + h - 1);
+
+  // "!" semplice
+  const int cx = x0 + w / 2;
+  oled.drawLine(cx, y0 + 3, cx, y0 + 6);
+  oled.drawPixel(cx, y0 + 8);
+}
+
+// -----------------------------------------------------------------------------
 // ICONA BATTERIA
 // -----------------------------------------------------------------------------
 static void drawBatteryIcon(int x, int y, uint8_t level, bool charging) {
@@ -412,6 +441,7 @@ void ui_renderWeight(long gDisp, const char* stateLabel) {
 
   drawBatteryIcon(2, 2, batteryLevel, isCharging);
   drawNetIcon(30, 3, netConnected);
+  drawWarnTriangleIconTopRight();
 
   // ------- Info Mode / State (allineate) -------
   oled.setFont(u8g2_font_6x12_tr);
@@ -485,6 +515,7 @@ void ui_renderTareProgress(uint8_t progressPct) {
 
   drawBatteryIcon(2, 2, batteryLevel, isCharging);
   drawNetIcon(30, 3, netConnected);
+  drawWarnTriangleIconTopRight();
 
   
 
@@ -524,6 +555,42 @@ void ui_renderTareProgress(uint8_t progressPct) {
   if (fillW < 0) fillW = 0;
   if (fillW > (BAR_W - 2)) fillW = BAR_W - 2;
   if (fillW > 0) oled.drawBox(BAR_X + 1, BAR_Y + 1, fillW, BAR_H - 2);
+
+  oled.sendBuffer();
+}
+
+
+void ui_renderHxError(bool hard, bool showLast, long lastG) {
+  oled.clearBuffer();
+
+  oled.setFont(u8g2_font_6x12_tr);
+
+  // Titolo
+  drawCenteredTextUTF8("ERRORE SENSORE PESO", 14);
+  drawCenteredTextUTF8(hard ? "HX711: ERROR HARD" : "HX711: ERROR", 28);
+
+  if (showLast) {
+    // Riga descrittiva
+    oled.drawUTF8(2, 44, "Ultimo valore valido:");
+
+    char v[16];
+    formatGramsWithDot(lastG, v, sizeof(v));
+
+    // Valore ben leggibile
+    oled.setFont(u8g2_font_logisoso24_tf);
+    int16_t w = oled.getStrWidth(v);
+    int16_t x = (256 - w) / 2;
+    oled.drawStr(x, 62, v);
+
+    oled.setFont(u8g2_font_6x12_tr);
+    // "g" a destra del valore
+    int16_t gx = x + w + 4;
+    if (gx < 250) {
+      oled.drawStr(gx, 62, "g");
+    }
+  } else {
+    drawCenteredTextUTF8("Nessun dato valido", 56);
+  }
 
   oled.sendBuffer();
 }

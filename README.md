@@ -24,6 +24,29 @@ Funzioni principali (firmware HX711):
 - **TARA** con UI dedicata (testo + barra), blocco pesata durante l’operazione
 - Monitor batteria con **tacche** + stato **charging** (stabilizzato)
 - Protezione “batteria scarica” con **avviso + beep + light-sleep**
+- **HX health** runtime: stati **OK / WARN / ERROR / ERROR HARD**, triangolo warning, schermata error bloccante, blocco tara/calib, audio 0015.mp3 una sola volta all’ingresso in ERROR
+
+### HX health (runtime, HX711)
+
+Scopo: gestire errori runtime dell’HX711 **senza blocchi in loop** (logica solo a timestamp) e senza impattare feature non correlate.
+
+**Soglie (ms)**
+- WARN se nessun campione valido per **≥ 500 ms**
+- ERROR se nessun campione valido per **≥ 3.000 ms**
+- ERROR HARD se nessun campione valido per **≥ 30.000 ms** oppure **mai** registrato un valore valido
+- Ritorno a OK solo dopo campioni validi “OK stabile” per **≥ 800 ms**
+
+**Cosa conta come “campione valido”**
+- `hx711_is_ready() == true` e lettura `hx711_read()` completata nel normale loop (niente medie bloccanti).
+
+**Stati e comportamento**
+
+| Stato | Quando | UI | Audio | Azioni |
+|---|---|---|---|---|
+| OK | campioni regolari | UI normale | nessuno | tara/calib abilitate |
+| WARN | assenza campioni ≥ 500 ms | triangolino warning alto a destra | nessuno | nessun blocco UI/tasti |
+| ERROR | assenza campioni ≥ 3.000 ms | schermata ERROR bloccante, mostra “Ultimo valore valido” se non più vecchio di 30 s | 0015.mp3 **una sola volta** all’ingresso | **tara/calib disabilitate** |
+| ERROR HARD | assenza campioni ≥ 30.000 ms o nessun valore valido mai registrato | schermata ERROR bloccante, **non** mostra valore | 0015.mp3 una sola volta all’ingresso | **tara/calib disabilitate** |
 
 ---
 

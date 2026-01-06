@@ -19,6 +19,9 @@ void ui_showBatteryShutdown(float voltage_V);
 // Abilita/disabilita power-save del display (riduce consumi)
 void ui_powerSave(bool enable);
 
+// Abilita/disabilita icona triangolo warning (HX WARN) in alto a destra
+void ui_setHxWarn(bool enable);
+
 // Render principale del layout peso
 //  - gDisp: peso da mostrare (grammi, intero)
 //  - stateLabel: "STABLE", "UNSTABLE" o "LIVE"
@@ -26,5 +29,15 @@ void ui_renderWeight(long gDisp, const char* stateLabel);
 
 // Overlay TARA: mostra testo + barra (0..100)
 void ui_renderTareProgress(uint8_t progressPct);
+
+// Schermata ERROR runtime HX711 (bloccante)
+// - hard=true  -> non fidarsi del valore (non mostra last)
+// - showLast=true -> mostra lastG come "Ultimo valore valido"
+void ui_renderHxError(bool hard, bool showLast, long lastG);
 // Schermata transizione standby (Zzz...)
 void ui_renderSleepZzz();
+
+// Schermata di errore runtime HX711 (bloccante)
+// hard=true: ERROR HARD (non mostra ultimo valore)
+// showLast=true: mostra "Ultimo valore valido: X g"
+void ui_renderHxRuntimeError(bool hard, bool showLast, long lastValueG);

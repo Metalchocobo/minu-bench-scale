@@ -15,6 +15,7 @@
 #include <U8g2lib.h>
 #include "battery_monitor.h"
 #include "hx711_driver.h"
+#include "hx_health.h"
 #include "ui_display.h"
 #include "keypad.h"
 #include "scale_core.h"
@@ -53,6 +54,17 @@ static uint32_t g_hxLogPeriodMs  = 250;        // rate log quando ON
 static uint32_t g_hxLogLastMs    = 0;
 
 static bool     g_inactivitySleepArmed = true;
+
+// ========================= HX711 HEALTH (runtime) =========================
+// Stato sensore HX711: OK / WARN / ERROR / ERROR HARD
+static HxHealth g_hxHealth;
+static const HxHealthConfig HX_HEALTH_CFG = {
+  .warnAfterMs       = 500,
+  .errorAfterMs      = 3000,
+  .hardAfterMs       = 30000,
+  .okStableMs        = 800,
+  .lastValidMaxAgeMs = 30000,
+};
 
 // forward decl: lastOledMs viene definito più sotto (serve per forzare refresh post-wake)
 extern unsigned long lastOledMs;
@@ -1102,11 +1114,21 @@ bool trySnapOnUnload(float gNow, float slope_now, bool quietNow){
 
 // ========================= TARE / CAL / MODALITÀ =========================
 void doTare(){
+  // In HX ERROR: disabilita tara (azione potenzialmente pericolosa)
+  if (hxHealth_isError(&g_hxHealth)) {
+    Serial.println(F("[HX] TARE bloccata: HX711 in ERROR"));
+    return;
+  }
   // Avvia la tara non bloccante: UI clamp 1.5s + raccolta campioni per OFFSET_RAW
   if (gTareUiActive) return;
   tareStart(millis());
 }
 void doCal(long ref_g){
+  // In HX ERROR: disabilita calibrazione
+  if (hxHealth_isError(&g_hxHealth)) {
+    Serial.println(F("[HX] CAL bloccata: HX711 in ERROR"));
+    return;
+  }
   long rawRef = readRawHXAvg(15);
   long delta  = rawRef - OFFSET_RAW;
   if (delta == 0) delta = 1;
@@ -1499,6 +1521,9 @@ void setup(){
   audio_requestPlayMp3(2);
   g_isBooting = false;
 
+  // Arm HX health monitor (runtime)
+  hxHealth_init(&g_hxHealth, HX_HEALTH_CFG);
+
   lastOledMs = millis();
 
 }
@@ -1783,6 +1808,9 @@ long raw = 0;
 if (hx711_is_ready()) {
   raw = hx711_read();
 
+  // HX health: campione RAW valido letto (hx711_is_ready + hx711_read completata)
+  hxHealth_noteRaw(&g_hxHealth, now);
+
   // Mediana veloce su stream raw (aiuta contro spike)
   long rawMed = pushMedian3(raw);
 
@@ -1817,6 +1845,11 @@ if (hx711_is_ready()) {
       if (gFast >= upTh || gFast <= dnTh) {
         gDispLiveLast = rounded;
       }
+    }
+
+    // HX health: in modalità LIVE lo schermo usa gDispLiveLast.
+    if (!stEnable) {
+      hxHealth_noteValid(&g_hxHealth, now, (float)gDispLiveLast);
     }
   }
 
@@ -1943,15 +1976,39 @@ if (haveNewWork) {
     // Pubblico i valori WORK per OLED (modalità WORK)
     gDispWorkLast = gDisp;
     gStateLabelWorkLast = modeLabel;
+
+    // HX health: in modalità WORK lo schermo usa gDispWorkLast.
+    if (stEnable) {
+      hxHealth_noteValid(&g_hxHealth, now, (float)gDispWorkLast);
+    }
 }
 
 
 // Applica OFFSET_RAW della tara appena terminata la raccolta campioni
   tareMaybeApply(now);
 
+  // ====================== HX health (runtime) ======================
+  // Aggiorna lo stato in modo timestamp-based (no blocchi)
+  hxHealth_update(&g_hxHealth, now);
+  ui_setHxWarn(hxHealth_isWarn(&g_hxHealth));
+
+  // Audio: 0015.mp3 una sola volta all'ingresso in ERROR (soft o hard)
+  if (hxHealth_popEnterErrorBeep(&g_hxHealth)) {
+    audio_requestPlayMp3(15);
+  }
+
 // ====================== OLED update cadenzato (sempre) ======================
 if (now - lastOledMs >= OLED_UPDATE_MS) {
   lastOledMs = now;
+
+  // PRIORITÀ: schermata ERROR runtime HX711 (bloccante)
+  if (hxHealth_isError(&g_hxHealth)) {
+    const bool hard = hxHealth_isHard(&g_hxHealth);
+    const bool showLast = hxHealth_shouldShowLastValue(&g_hxHealth, now);
+    const long lastG = (long)lroundf(hxHealth_lastValueG(&g_hxHealth));
+    ui_renderHxError(hard, showLast, lastG);
+    return; // non disegnare la UI normale
+  }
 
   // Standby transition: schermata Zzz... per 5s (prima del light-sleep)
   if (g_inactivitySleepStage == INACT_ZZZ) {
