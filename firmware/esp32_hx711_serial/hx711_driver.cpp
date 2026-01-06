@@ -22,6 +22,9 @@ void hx711_begin(int doutPin, int sckPin, HX711Gain gain, uint8_t pulseUs){
   hx711_set_gain(gain);
 
   pinMode(g_sck, OUTPUT);
+  // DOUT is sampled by the ESP32 as a digital input.
+  // NOTE: on ESP32, GPIO34-39 (e.g. GPIO35) do NOT support internal pullups/pulldowns,
+  // so INPUT_PULLUP would be a no-op and can be misleading.
   pinMode(g_dout, INPUT);
 
   // IMPORTANT: SCK LOW = attivo. SCK HIGH > 60us => power down.

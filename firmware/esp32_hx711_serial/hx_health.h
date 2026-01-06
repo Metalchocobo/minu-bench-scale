@@ -47,6 +47,7 @@ void hxHealth_init(HxHealth* h, const HxHealthConfig& cfg);
 
 // Nota un RAW valido letto dall'HX711 (hx711_is_ready=true + hx711_read completata)
 void hxHealth_noteRaw(HxHealth* h, uint32_t nowMs);
+void hxHealth_backdateLastRaw(HxHealth* h, uint32_t lastRawMs);
 
 // Nota il valore in grammi effettivamente "accettato" per la visualizzazione
 void hxHealth_noteValid(HxHealth* h, uint32_t nowMs, float grams);

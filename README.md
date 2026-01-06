@@ -24,7 +24,7 @@ Funzioni principali (firmware HX711):
 - **TARA** con UI dedicata (testo + barra), blocco pesata durante l’operazione
 - Monitor batteria con **tacche** + stato **charging** (stabilizzato)
 - Protezione “batteria scarica” con **avviso + beep + light-sleep**
-- **HX health** runtime: stati **OK / WARN / ERROR / ERROR HARD**, triangolo warning, schermata error bloccante, blocco tara/calib, audio 0015.mp3 una sola volta all’ingresso in ERROR
+- **HX health** runtime: stati **OK / WARN / ERROR / ERROR HARD**, badge **"Errore Cella"** (testo piccolo + triangolino) in alto a destra in WARN, schermata error bloccante (senza mostrare l'ultimo peso), blocco tara/calib, audio 0015.mp3 una sola volta all’ingresso in ERROR
 
 ### HX health (runtime, HX711)
 
@@ -37,7 +37,14 @@ Scopo: gestire errori runtime dell’HX711 **senza blocchi in loop** (logica sol
 - Ritorno a OK solo dopo campioni validi “OK stabile” per **≥ 800 ms**
 
 **Cosa conta come “campione valido”**
+- Valido quando nel loop: `hx711_is_ready()` è true e `hx711_read()` completa.
+- Mitigazione “DOUT mascherato” (es. partitore/pull-down): se il raw resta inchiodato (±1 count) per **> 1500 ms**, quei campioni vengono trattati come **non validi** per HX health (non aggiornano `lastRawMs`). Le soglie WARN/ERROR si conteggiano dall’inizio della flatline.
 - `hx711_is_ready() == true` e lettura `hx711_read()` completata nel normale loop (niente medie bloccanti).
+
+**Nota importante (cablaggio DOUT su ESP32)**
+- Se **DOUT è su GPIO34..39** (es. **GPIO35**), l’ESP32 **non ha pull-up interni**: a modulo scollegato il pin può fluttuare e risultare “ready” a caso.
+- In quel caso la rilevazione “modulo non trovato” non è affidabile solo via firmware.
+- Soluzioni robuste: spostare DOUT su un GPIO con pull-up (es. GPIO22) oppure aggiungere una pull-up esterna verso 3V3.
 
 **Stati e comportamento**
 
@@ -340,6 +347,7 @@ Metti i file in **SD:/MP3/** con nome a 4 cifre (es. `0001.mp3`).
 | 0013.mp3 | Standby pre‑sleep per batteria scarica (schermata Zzz... 5s prima del light-sleep) |
 | 0014.mp3 | Errore lettura batteria (INA) |
 | 0015.mp3 | Errore sensore peso (HX) |
+| 0016.mp3 | Errore TARA al boot (Auto‑TARE fallita, richiede ACK) |
 | 0017.mp3 | Modalità WORK |
 | 0018.mp3 | Modalità LIVE |
 

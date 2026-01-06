@@ -24,6 +24,16 @@ void hxHealth_noteRaw(HxHealth* h, uint32_t nowMs) {
   h->lastRawMs = nowMs;
 }
 
+void hxHealth_backdateLastRaw(HxHealth* h, uint32_t lastRawMs) {
+  if (!h) return;
+  if (lastRawMs == 0) return;
+  // Permettiamo solo di 'spostare indietro' lastRawMs (mai avanti) per mantenere coerenti le soglie.
+  if (h->lastRawMs == 0 || lastRawMs < h->lastRawMs) {
+    h->lastRawMs = lastRawMs;
+  }
+}
+
+
 void hxHealth_noteValid(HxHealth* h, uint32_t nowMs, float grams) {
   if (!h) return;
   h->lastValidMs = nowMs;

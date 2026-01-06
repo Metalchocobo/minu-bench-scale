@@ -1501,6 +1501,8 @@ void setup(){
     bool tareOk = autoTareOnBoot(AUTO_TARE_SAMPLES);
     if (!tareOk) {
       ui_showError("Auto-TARE", "Timeout/FAIL", "Premi TARA per continuare");
+      // 0016.mp3 = Errore TARA al boot
+      audio_requestPlayMp3(16);
       bootWaitTare();
     }
   }
@@ -1805,11 +1807,50 @@ bool haveNewWork = false;
 long rawAvg = 0; // per log/debug (WORK)
 long raw = 0;
 
+// HX health: rilevazione 'RAW flatline' per beccare il caso DOUT mascherato (es. partitore/pull-down).
+// Se hx711_is_ready() è true e hx711_read() riesce, ma il raw resta identico (±1 count) per >1500 ms,
+// trattiamo quei campioni come NON validi per HX health (non aggiorniamo lastRawMs).
+static long     s_hxRawFlatLast = 0;
+static bool     s_hxRawFlatHas = false;
+static uint32_t s_hxRawFlatStartMs = 0;
+static bool     s_hxRawFlatLatched = false;
+
+
 if (hx711_is_ready()) {
   raw = hx711_read();
 
   // HX health: campione RAW valido letto (hx711_is_ready + hx711_read completata)
-  hxHealth_noteRaw(&g_hxHealth, now);
+  // + filtro 'flatline': se il raw resta inchiodato (±1 count) per >1500 ms, non aggiorniamo lastRawMs.
+  bool rawOkForHealth = true;
+  if (!s_hxRawFlatHas) {
+    s_hxRawFlatHas = true;
+    s_hxRawFlatLast = raw;
+    s_hxRawFlatStartMs = 0;
+    s_hxRawFlatLatched = false;
+  } else {
+    long d = raw - s_hxRawFlatLast;
+    if (d < 0) d = -d;
+    if (d <= 1) {
+      if (s_hxRawFlatStartMs == 0) s_hxRawFlatStartMs = now;
+      if ((uint32_t)(now - s_hxRawFlatStartMs) > 1500) {
+        rawOkForHealth = false;
+        // Backdate una volta sola: così le soglie WARN/ERROR contano dall'inizio della flatline.
+        if (!s_hxRawFlatLatched) {
+          hxHealth_backdateLastRaw(&g_hxHealth, s_hxRawFlatStartMs);
+          s_hxRawFlatLatched = true;
+        }
+      }
+    } else {
+      // raw si muove: reset finestra flatline
+      s_hxRawFlatStartMs = 0;
+      s_hxRawFlatLatched = false;
+    }
+    s_hxRawFlatLast = raw;
+  }
+
+  if (rawOkForHealth) {
+    hxHealth_noteRaw(&g_hxHealth, now);
+  }
 
   // Mediana veloce su stream raw (aiuta contro spike)
   long rawMed = pushMedian3(raw);
@@ -2004,9 +2045,8 @@ if (now - lastOledMs >= OLED_UPDATE_MS) {
   // PRIORITÀ: schermata ERROR runtime HX711 (bloccante)
   if (hxHealth_isError(&g_hxHealth)) {
     const bool hard = hxHealth_isHard(&g_hxHealth);
-    const bool showLast = hxHealth_shouldShowLastValue(&g_hxHealth, now);
-    const long lastG = (long)lroundf(hxHealth_lastValueG(&g_hxHealth));
-    ui_renderHxError(hard, showLast, lastG);
+    // Richiesta: in schermata ERRORE non mostrare l'ultimo peso rilevato.
+    ui_renderHxError(hard, false, 0);
     return; // non disegnare la UI normale
   }
 
@@ -2042,5 +2082,4 @@ if (now - lastOledMs >= OLED_UPDATE_MS) {
 
 
 }
-
 

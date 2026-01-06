@@ -103,22 +103,23 @@ void ui_setHxWarn(bool enable) {
 static void drawWarnTriangleIconTopRight() {
   if (!g_hxWarnIcon) return;
 
-  // Area simile all'icona batteria: ~21x10 px
-  const int w = 21;
-  const int h = 10;
-  const int x0 = 256 - w - 2;
-  const int y0 = 2;
+  // Badge HX WARN in alto a destra: testo piccolo con simbolo ASCII.
+  // Richiesta: togliere il triangolino grafico; usare un triangolo ASCII nel testo.
+  // Nota: ASCII è sempre disponibile; usiamo "/!\\" (fallback implicito: si può sostituire con "!" se preferito).
 
-  // Triangolo vuoto + "!" stilizzato
-  oled.drawTriangle(x0 + w / 2, y0,
-                    x0,         y0 + h - 1,
-                    x0 + w - 1, y0 + h - 1);
+  oled.setFont(u8g2_font_4x6_tr);
 
-  // "!" semplice
-  const int cx = x0 + w / 2;
-  oled.drawLine(cx, y0 + 3, cx, y0 + 6);
-  oled.drawPixel(cx, y0 + 8);
+  const char* label = "Errore Cella /!\\";
+  const int labelW = oled.getStrWidth(label);
+
+  const int margin = 2;
+  int labelX = 256 - margin - labelW;
+  if (labelX < 0) labelX = 0;
+
+  const int labelY = 8; // baseline: dentro la barra alta
+  oled.drawStr(labelX, labelY, label);
 }
+
 
 // -----------------------------------------------------------------------------
 // ICONA BATTERIA
@@ -569,28 +570,10 @@ void ui_renderHxError(bool hard, bool showLast, long lastG) {
   drawCenteredTextUTF8("ERRORE SENSORE PESO", 14);
   drawCenteredTextUTF8(hard ? "HX711: ERROR HARD" : "HX711: ERROR", 28);
 
-  if (showLast) {
-    // Riga descrittiva
-    oled.drawUTF8(2, 44, "Ultimo valore valido:");
-
-    char v[16];
-    formatGramsWithDot(lastG, v, sizeof(v));
-
-    // Valore ben leggibile
-    oled.setFont(u8g2_font_logisoso24_tf);
-    int16_t w = oled.getStrWidth(v);
-    int16_t x = (256 - w) / 2;
-    oled.drawStr(x, 62, v);
-
-    oled.setFont(u8g2_font_6x12_tr);
-    // "g" a destra del valore
-    int16_t gx = x + w + 4;
-    if (gx < 250) {
-      oled.drawStr(gx, 62, "g");
-    }
-  } else {
-    drawCenteredTextUTF8("Nessun dato valido", 56);
-  }
+  // Richiesta: in schermata ERRORE non mostrare l'ultimo peso rilevato.
+  (void)showLast;
+  (void)lastG;
+  drawCenteredTextUTF8("Nessun dato valido", 56);
 
   oled.sendBuffer();
 }
