@@ -5,11 +5,11 @@ enum KeyCode {
   KEY_NONE = 0,
   KEY_TARE,
   KEY_ENTER,
-  KEY_ZERO,
-  KEY_UP,
-  KEY_UNIT,
-  KEY_SET,
-  KEY_CALI,
+  KEY_WIFI,
+  KEY_SLEEP,
+  KEY_SKIP,
+  KEY_TOTAL,
+  KEY_CLEAR,
   KEY_MODE
 };
 

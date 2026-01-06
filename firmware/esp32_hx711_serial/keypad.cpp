@@ -17,10 +17,10 @@ static const int colPins[2] = {
 // Mappa riga/colonna -> tasto
 static KeyCode keyMap[4][2] = {
   // C1 (filo 5)     C2 (filo 6)
-  {KEY_TARE,   KEY_ENTER}, // R1 (filo 1)
-  {KEY_ZERO,   KEY_UP},    // R2 (filo 2)
-  {KEY_UNIT,   KEY_SET},   // R3 (filo 3)
-  {KEY_CALI,   KEY_MODE}   // R4 (filo 4)
+  {KEY_SKIP,   KEY_ENTER}, // R1 (filo 1)
+  {KEY_WIFI,   KEY_SLEEP},    // R2 (filo 2)
+  {KEY_CLEAR,   KEY_TOTAL},   // R3 (filo 3)
+  {KEY_MODE,   KEY_TARE}   // R4 (filo 4)
 };
 
 // Stato interno tastiera.
