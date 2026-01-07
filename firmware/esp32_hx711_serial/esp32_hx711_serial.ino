@@ -27,6 +27,74 @@
 #include <esp_sleep.h>
 #include <driver/gpio.h>
 
+Preferences prefs;
+
+// ========================= WIFI (preferenza utente persistente) =========================
+// g_wifiUserEnabled = scelta dell'utente (memorizzata in NVS), NON lo stato momentaneo (es. WiFi spento in sleep).
+static bool g_wifiUserEnabled = true;
+static bool g_wifiSetupDone   = false;
+static const char* NVS_NS_SYS       = "minu_sys";
+static const char* NVS_KEY_WIFI_USER = "wifi_user";
+
+// Audio eventi WiFi (annunci connessione). Alcune condizioni richiedono soppressione:
+// - dopo il wake da sleep (prima non partiva alcun annuncio)
+// - mai interrompere altri MP3 (WiFi = bassa priorità)
+static bool     g_wifiPrevConnected = false;
+static uint32_t g_wifiErrLastMs = 0;
+static const uint32_t WIFI_ERR_COOLDOWN_MS = 60000;
+static bool     g_wifiSuppressNextConnectAnnounce = false;
+static uint32_t g_wifiAudioSuppressUntilMs = 0;
+
+static bool loadWifiUserEnabledFromNVS() {
+  prefs.begin(NVS_NS_SYS, true);
+  bool v = prefs.getBool(NVS_KEY_WIFI_USER, true);
+  prefs.end();
+  return v;
+}
+
+static void saveWifiUserEnabledToNVS(bool v) {
+  prefs.begin(NVS_NS_SYS, false);
+  prefs.putBool(NVS_KEY_WIFI_USER, v);
+  prefs.end();
+  Serial.print(F("[NVS] WiFi preferenza utente = "));
+  Serial.println(v ? F("ON") : F("OFF"));
+}
+
+static void wifiApplyUserSetting(bool enable) {
+#if ENABLE_WIFI_OTA
+  if (enable) {
+    if (!g_wifiSetupDone) {
+      Net::wifiSetup();
+      g_wifiSetupDone = true;
+    } else {
+      Net::wifiResume();
+    }
+  } else {
+    if (g_wifiSetupDone) {
+      Net::wifiSuspend();
+    } else {
+      WiFi.disconnect(true);
+      WiFi.mode(WIFI_OFF);
+    }
+  }
+#elif ENABLE_ARDUINO_CLOUD
+  // Cloud richiede WiFi: se un domani abiliti ENABLE_ARDUINO_CLOUD, gestisci qui la preferenza utente.
+  (void)enable;
+#endif
+}
+
+static void wifiToggleUserSetting() {
+  // Se l'utente tocca il tasto WiFi, consideriamo l'azione "volontaria":
+  // sblocchiamo eventuali soppressioni post-wake.
+  g_wifiAudioSuppressUntilMs = 0;
+  g_wifiSuppressNextConnectAnnounce = false;
+  g_wifiPrevConnected = WiFi.isConnected();
+
+  g_wifiUserEnabled = !g_wifiUserEnabled;
+  saveWifiUserEnabledToNVS(g_wifiUserEnabled);
+  wifiApplyUserSetting(g_wifiUserEnabled);
+}
+
 // ========================= POWER SAVE (inattività) =========================
 // Dopo N ms senza tasti, entra in light-sleep; wake su qualunque tasto.
 // Requisiti: nessun reset di stato/pesata.
@@ -206,6 +274,8 @@ static bool audio_isActive() {
   return g_audioState != AUDIO_IDLE;
 }
 
+
+
 static void audio_requestPlayMp3(uint16_t track, uint32_t capSeconds = 0) {
   if (track < 1) track = 1;
 
@@ -265,6 +335,15 @@ static void audio_requestPlayMp3(uint16_t track, uint32_t capSeconds = 0) {
   pinMode(DFPLAYER_PINS.tx, OUTPUT);
   digitalWrite(DFPLAYER_PINS.tx, LOW);
 }
+
+// Richiesta MP3 a bassa priorità: non interrompe audio in corso.
+// Usato per annunci "di contorno" (es. WiFi), così non troncano audio più importanti.
+static void audio_requestPlayMp3_low(uint16_t track, uint32_t capSeconds = 0) {
+  if (audio_isActive()) return;
+  audio_requestPlayMp3(track, capSeconds);
+}
+
+
 
 static void audio_setVolume(uint8_t vol) {
   if (vol > 30) vol = 30;
@@ -410,7 +489,10 @@ static void enterInactivityLightSleep() {
   audio_powerOffNow();
 
 #if ENABLE_WIFI_OTA
-  Net::wifiSuspend();
+  // In sleep spegniamo il WiFi, ma NON tocchiamo la preferenza utente.
+  if (g_wifiUserEnabled) {
+    Net::wifiSuspend();
+  }
 #elif ENABLE_ARDUINO_CLOUD
   WiFi.disconnect(true);
   WiFi.mode(WIFI_OFF);
@@ -440,8 +522,17 @@ static void enterInactivityLightSleep() {
   keypad_init();
 
 #if ENABLE_WIFI_OTA
-  Net::wifiResume();
+  // Ripristina WiFi solo se l'utente lo aveva lasciato ON.
+  if (g_wifiUserEnabled) {
+    Net::wifiResume();
+  }
 #endif
+
+  // WiFi audio: al wake NON vogliamo annunciare la riconnessione (prima non partiva)
+  // e soprattutto non deve troncare 0004.mp3.
+  g_wifiPrevConnected = WiFi.isConnected();
+  g_wifiSuppressNextConnectAnnounce = g_wifiUserEnabled;
+  g_wifiAudioSuppressUntilMs = millis() + 8000; // finestra prudente per evitare sovrapposizioni
 
   // Evita rientro immediato in sleep
   g_lastKeyPressMs = millis();
@@ -452,7 +543,7 @@ static void enterInactivityLightSleep() {
   // 0004.mp3 = Uscita risparmio energetico
   audio_requestPlayMp3(4);
 }
-Preferences prefs;
+
 
 // Stato boot (true finché non finisce setup)
 static bool g_isBooting = true;
@@ -464,10 +555,7 @@ static InactivitySleepStage g_inactivitySleepStage = INACT_NONE;
 static uint32_t g_inactivityStageStartMs = 0;
 static const uint32_t INACTIVITY_ZZZ_MS = 5000; // schermata Zzz... (5s)
 
-// Audio eventi WiFi (cooldown errore connessione)
-static bool     g_wifiPrevConnected = false;
-static uint32_t g_wifiErrLastMs = 0;
-static const uint32_t WIFI_ERR_COOLDOWN_MS = 60000;
+// (WiFi audio state spostato vicino alla sezione WiFi preferenza utente)
  
 // Stato boot (per gestire errori "hard" vs "ack")
 static bool g_hxBeginOk = false;
@@ -1197,34 +1285,60 @@ void handleKeyEvent(KeyCode key){
 
     case KEY_MODE:
       Serial.println(F("[KEYPAD] MODE pressed"));
+      // Feedback immediato al tasto (il cambio modalità è annunciato anche via MP3 0017/0018)
+      buzzerKeyClick();
       toggleModeFromKeypad();
-      // Niente beep buzzer: usiamo 0017/0018.mp3
-
       break;
 
-    // Tasti ancora non utilizzati, lasciati intenzionalmente liberi:
+    case KEY_WIFI:
+      Serial.println(F("[KEYPAD] WIFI toggle"));
+      // Feedback immediato al tasto: la connessione/disconnessione reale avviene in differita (background)
+      buzzerKeyClick();
+      wifiToggleUserSetting();
+      // Audio 0005/0006 viene gestito da wifiAudioUpdate() quando cambia lo stato di connessione.
+      lastOledMs = 0;
+      break;
+
+    case KEY_SLEEP: {
+      Serial.println(F("[KEYPAD] SLEEP pressed"));
+#if ENABLE_WIFI_OTA
+      // Safety: durante OTA non andare in sleep.
+      if (Net::isOtaInProgress()) {
+        Serial.println(F("[SLEEP] bloccato: OTA in corso"));
+        buzzerWarn();
+        break;
+      }
+#endif
+      // Forza la stessa sequenza di standby dell'inattività: schermata Zzz... 5s + 0003.mp3,
+      // poi light-sleep (wake da tastiera). Qualsiasi tasto durante i 5s annulla.
+      ui_renderSleepZzz();
+      audio_requestPlayMp3(3);
+      g_inactivitySleepStage = INACT_ZZZ;
+      // IMPORTANTISSIMO: usa lo stesso timestamp della loop (g_lastKeyPressMs) per evitare underflow
+      // (se usiamo millis() qui, può risultare > 'now' e la sottrazione unsigned fa entrare in sleep subito).
+      g_inactivityStageStartMs = g_lastKeyPressMs;
+      lastOledMs = 0;
+      break;
+    }
+
     case KEY_ENTER:
       Serial.println(F("[KEYPAD] ENTER pressed"));
+      buzzerKeyClick();
       break;
 
-    case KEY_ZERO:
-      Serial.println(F("[KEYPAD] ZERO pressed"));
+    case KEY_SKIP:
+      Serial.println(F("[KEYPAD] SKIP pressed"));
+      buzzerKeyClick();
       break;
 
-    case KEY_UP:
-      Serial.println(F("[KEYPAD] UP pressed"));
+    case KEY_TOTAL:
+      Serial.println(F("[KEYPAD] TOTAL pressed"));
+      buzzerKeyClick();
       break;
 
-    case KEY_UNIT:
-      Serial.println(F("[KEYPAD] UNIT pressed"));
-      break;
-
-    case KEY_SET:
-      Serial.println(F("[KEYPAD] SET pressed"));
-      break;
-
-    case KEY_CALI:
-      Serial.println(F("[KEYPAD] CALI pressed"));
+    case KEY_CLEAR:
+      Serial.println(F("[KEYPAD] CLEAR pressed"));
+      buzzerKeyClick();
       break;
 
     case KEY_NONE:
@@ -1349,11 +1463,29 @@ static void wifiAudioUpdate(uint32_t now) {
     return;
   }
 
+  // Silenzio post-wake: evita che l'audio WiFi parta subito dopo lo sleep
+  // (es. durante 0004.mp3) e replica il comportamento precedente (niente annuncio al wake).
+  if (g_wifiAudioSuppressUntilMs != 0 && (int32_t)(now - g_wifiAudioSuppressUntilMs) < 0) {
+    const bool c = WiFi.isConnected();
+    g_wifiPrevConnected = c;
+    if (c && g_wifiSuppressNextConnectAnnounce) {
+      g_wifiSuppressNextConnectAnnounce = false;
+    }
+    return;
+  }
+  if (g_wifiAudioSuppressUntilMs != 0) g_wifiAudioSuppressUntilMs = 0; // finestra scaduta
+
   const bool connectedNow = WiFi.isConnected();
   if (connectedNow != g_wifiPrevConnected) {
     g_wifiPrevConnected = connectedNow;
     // 0005=connesso, 0006=disconnesso
-    audio_requestPlayMp3(connectedNow ? 5 : 6);
+    // - Al wake: non annunciamo la riconnessione.
+    // - In generale: audio WiFi NON deve troncare altri MP3.
+    if (connectedNow && g_wifiSuppressNextConnectAnnounce) {
+      g_wifiSuppressNextConnectAnnounce = false;
+    } else {
+      audio_requestPlayMp3_low(connectedNow ? 5 : 6);
+    }
   }
 
   // 0007=errore connessione (cooldown)
@@ -1361,7 +1493,7 @@ static void wifiAudioUpdate(uint32_t now) {
     wl_status_t st = WiFi.status();
     if (st == WL_CONNECT_FAILED || st == WL_NO_SSID_AVAIL) {
       if (g_wifiErrLastMs == 0 || (now - g_wifiErrLastMs) >= WIFI_ERR_COOLDOWN_MS) {
-        audio_requestPlayMp3(7);
+        audio_requestPlayMp3_low(7);
         g_wifiErrLastMs = now;
       }
     }
@@ -1447,8 +1579,23 @@ void setup(){
 
 
 #if ENABLE_WIFI_OTA
-  Net::wifiSetup();
+  // Preferenza utente WiFi (persistente in NVS):
+  // - ON  => abilita WiFi background (OTA disponibile)
+  // - OFF => WiFi resta spento finché l'utente non lo riattiva dal tasto
+  g_wifiUserEnabled = loadWifiUserEnabledFromNVS();
+
+  // OTA handlers si configurano sempre: si attivano quando il WiFi risulta connesso.
   Net::otaSetup("minu-bench-scale");
+
+  if (g_wifiUserEnabled) {
+    Net::wifiSetup();
+    g_wifiSetupDone = true;
+  } else {
+    WiFi.disconnect(true);
+    WiFi.mode(WIFI_OFF);
+    g_wifiSetupDone = false;
+    Serial.println(F("[NET] WiFi OFF (preferenza utente)"));
+  }
 #endif
 
 #if ENABLE_ARDUINO_CLOUD

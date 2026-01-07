@@ -12,7 +12,6 @@
 
 #if ENABLE_WIFI_OTA
   #include <WiFi.h>
-  #include <WiFiMulti.h>
   #include <ESPmDNS.h>
   #include <WiFiUdp.h>
   #include <ArduinoOTA.h>
@@ -27,14 +26,22 @@
 namespace Net {
 
 #if ENABLE_WIFI_OTA
-  // Gestore multi-SSID
-  static WiFiMulti wifiMulti;
-
-  // Stato interno (WiFi non bloccante)
+  // Stato interno WiFi (non bloccante)
   static bool     wifiConfigured = false;
   static bool     wifiPaused     = false;
   static uint32_t wifiLastRunMs  = 0;
   static bool     wifiWasConnected = false;
+
+  // Connessione non bloccante (senza WiFiMulti.run, che su ESP32 può bloccare per secondi)
+  // Strategia: tentativi sequenziali su una lista di SSID, con timeout e backoff.
+  static uint8_t  wifiTriedThisRound = 0;   // quanti SSID provati in questo giro
+  static uint8_t  wifiAttemptIdx     = 0;   // SSID attuale
+  static uint32_t wifiAttemptStartMs = 0;   // 0 = nessun tentativo in corso
+  static uint32_t wifiRetryAtMs      = 0;   // backoff prima di riprovare da capo
+
+  static const uint32_t WIFI_TICK_MS             = 200;   // polling leggero
+  static const uint32_t WIFI_CONNECT_TIMEOUT_MS  = 8000;  // timeout per singolo SSID
+  static const uint32_t WIFI_BACKOFF_MS          = 3000;  // pausa dopo aver provato tutti gli SSID
 
   // OTA non bloccante: config (handler) e begin quando WiFi è connesso
   static bool     otaConfigured  = false;
@@ -48,21 +55,43 @@ namespace Net {
   static const char* WIFI_SSID_2 = "Laboratorio di Minu'";
   static const char* WIFI_PASS_2 = "questa dannata rete";
 
+  struct WifiCred { const char* ssid; const char* pass; };
+  static const WifiCred WIFI_CREDS[] = {
+    { WIFI_SSID_1, WIFI_PASS_1 },
+    { WIFI_SSID_2, WIFI_PASS_2 },
+  };
+  static const uint8_t WIFI_CREDS_N = (uint8_t)(sizeof(WIFI_CREDS) / sizeof(WIFI_CREDS[0]));
+
+  inline void wifiKickAttempt(uint8_t idx) {
+    if (WIFI_CREDS_N == 0) return;
+    wifiAttemptIdx = idx % WIFI_CREDS_N;
+    wifiAttemptStartMs = millis();
+    wifiTriedThisRound = (wifiTriedThisRound < WIFI_CREDS_N) ? (wifiTriedThisRound + 1) : WIFI_CREDS_N;
+
+    // WiFi.begin() su ESP32 è asincrona: ritorna subito, la connessione avviene in background.
+    WiFi.begin(WIFI_CREDS[wifiAttemptIdx].ssid, WIFI_CREDS[wifiAttemptIdx].pass);
+    Serial.print(F("[NET] WiFi: tentativo connessione a: "));
+    Serial.println(WIFI_CREDS[wifiAttemptIdx].ssid);
+  }
+
   // Inizializza WiFi STA (NON BLOCCANTE): la connessione avviene in background dentro Net::update()
   inline void wifiSetup() {
     WiFi.mode(WIFI_STA);
     WiFi.setAutoReconnect(true);
     WiFi.persistent(false);
 
-    // Aggiungi qui le reti disponibili (puoi aggiungerne altre se vuoi)
-    wifiMulti.addAP(WIFI_SSID_1, WIFI_PASS_1);
-    wifiMulti.addAP(WIFI_SSID_2, WIFI_PASS_2);
-
     wifiConfigured = true;
     wifiPaused     = false;
     wifiLastRunMs  = 0;
     wifiWasConnected = false;
+    wifiTriedThisRound = 0;
+    wifiAttemptIdx = 0;
+    wifiAttemptStartMs = 0;
+    wifiRetryAtMs = 0;
     Serial.println(F("[NET] WiFi avviato (background)."));
+
+    // Avvia subito il primo tentativo (non blocca)
+    wifiKickAttempt(0);
   }
 
   // Sospende WiFi/OTA (utile prima di andare in light-sleep)
@@ -72,6 +101,9 @@ namespace Net {
     otaBegun = false;
     otaInProgress = false;
     wifiWasConnected = false;
+    wifiAttemptStartMs = 0;
+    wifiRetryAtMs = 0;
+    wifiTriedThisRound = 0;
     WiFi.disconnect(true);
     WiFi.mode(WIFI_OFF);
   }
@@ -85,7 +117,13 @@ namespace Net {
     WiFi.persistent(false);
     wifiLastRunMs = 0;
     wifiWasConnected = false;
+    wifiAttemptStartMs = 0;
+    wifiRetryAtMs = 0;
+    wifiTriedThisRound = 0;
     // OTA verrà ri-abilitato automaticamente quando torni connesso (dentro update())
+
+    // Riparti subito con un tentativo (non blocca)
+    wifiKickAttempt(0);
   }
 
   inline bool isOtaInProgress() { return otaInProgress; }
@@ -141,12 +179,11 @@ namespace Net {
   // Da chiamare nel loop principale
   inline void update() {
   #if ENABLE_WIFI_OTA
-    // Tick WiFi (ogni ~1s) per tentare/ri-tentare la connessione
+    // Tick WiFi (non bloccante): niente WiFiMulti.run(), che può bloccare display e HX.
     if (wifiConfigured && !wifiPaused) {
       uint32_t now = millis();
-      if (now - wifiLastRunMs >= 1000) {
+      if (now - wifiLastRunMs >= WIFI_TICK_MS) {
         wifiLastRunMs = now;
-        wifiMulti.run();
 
         // Log transizioni
         bool connectedNow = WiFi.isConnected();
@@ -166,6 +203,43 @@ namespace Net {
           ArduinoOTA.begin();
           otaBegun = true;
           Serial.println(F("[OTA] Pronto (WiFi connesso). In Arduino IDE seleziona la porta di rete dell'ESP32."));
+        }
+
+        // Se non siamo connessi, gestiamo tentativi / timeout / backoff in modo non bloccante.
+        if (!connectedNow) {
+          // Se siamo in backoff, aspetta.
+          if (wifiRetryAtMs != 0 && (int32_t)(now - wifiRetryAtMs) < 0) {
+            // ancora in backoff
+          } else {
+            if (wifiRetryAtMs != 0 && (int32_t)(now - wifiRetryAtMs) >= 0) {
+              // backoff finito: riparti da capo
+              wifiRetryAtMs = 0;
+              wifiTriedThisRound = 0;
+              wifiAttemptStartMs = 0;
+            }
+
+            // Se non c'è un tentativo in corso, avvialo.
+            if (wifiAttemptStartMs == 0) {
+              wifiKickAttempt(0);
+            } else {
+              // Timeout del tentativo attuale
+              if ((now - wifiAttemptStartMs) >= WIFI_CONNECT_TIMEOUT_MS) {
+                if (wifiTriedThisRound < WIFI_CREDS_N) {
+                  wifiKickAttempt(wifiTriedThisRound);
+                } else {
+                  // Provati tutti: backoff e poi riparti
+                  wifiAttemptStartMs = 0;
+                  wifiRetryAtMs = now + WIFI_BACKOFF_MS;
+                  wifiTriedThisRound = 0;
+                }
+              }
+            }
+          }
+        } else {
+          // Connesso: reset tentativi
+          wifiAttemptStartMs = 0;
+          wifiRetryAtMs = 0;
+          wifiTriedThisRound = 0;
         }
       }
     }

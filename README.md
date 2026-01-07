@@ -239,7 +239,8 @@ Se per **5 minuti** non viene premuto alcun tasto, la bilancia entra in **LIGHT-
 Caratteristiche:
 - Wake: **qualsiasi tasto**.
 - **Nessun reset** dello stato/pesata: riprende esattamente dove era.
-- WiFi/OTA vengono sospesi prima dello sleep e riattivati dopo il wake.
+- WiFi/OTA vengono sospesi prima dello sleep e riattivati dopo il wake **solo se l'utente ha lasciato il WiFi ON**.
+- **Tasto SLEEP**: forza la sequenza di standby (schermata **Zzz...** per ~5 s + audio 0003), poi light-sleep.
 
 ### Indicatore esterno sleep (LED)
 Quando il display è spento, per capire che la bilancia è in sleep, usa un LED su:
@@ -258,6 +259,17 @@ Note pratiche:
 - di default è attivo **ENABLE_WIFI_OTA = 1**
 - devi sostituire SSID/PASS con quelli reali
 - l’icona WiFi sul display segue lo stato di connessione (se WiFi è abilitato a compile-time)
+
+Tasti:
+- **WIFI**: abilita/disabilita il WiFi in modo **persistente** (salvato in NVS).
+  - Feedback immediato al tasto: **bip** (buzzer). La connessione vera e propria avviene in background.
+  - All’avvio il WiFi segue la preferenza utente, non l’ultimo stato momentaneo (es. WiFi spento in sleep).
+  - Durante il light-sleep per inattività il WiFi viene comunque spento per consumi, ma al wake viene riattivato **solo** se la preferenza è ON.
+  - Audio: **0005.mp3** quando si connette, **0006.mp3** quando si disconnette.
+    - Dopo un wake da light-sleep la riconnessione **non** viene annunciata (evita sovrapposizioni, comportamento come prima).
+    - Gli annunci WiFi sono a **bassa priorità**: non interrompono altri MP3.
+
+- **MODE**: cambio modalità WORK/LIVE con **bip** immediato (buzzer) + audio **0017/0018.mp3**.
 
 Se non ti serve OTA/WiFi:
 - imposta `#define ENABLE_WIFI_OTA 0` per ridurre consumi e complessità
