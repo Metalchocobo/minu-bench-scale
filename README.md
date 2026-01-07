@@ -253,12 +253,24 @@ Il firmware HX711 supporta:
 - OTA via Arduino IDE (porta di rete)
 
 Dove si configura:
-- `firmware/esp32_hx711_serial/net_ota_cloud.h`
+- Le credenziali **non** stanno nel codice e **non** vanno versionate.
+- Si impostano via **seriale** e vengono salvate in **NVS** (persistono tra aggiornamenti firmware).
 
 Note pratiche:
 - di default è attivo **ENABLE_WIFI_OTA = 1**
-- devi sostituire SSID/PASS con quelli reali
 - l’icona WiFi sul display segue lo stato di connessione (se WiFi è abilitato a compile-time)
+
+Configurazione credenziali (max 2 reti, via seriale):
+- `wifi set 1 "SSID" "PASS"`
+- `wifi set 2 "SSID" "PASS"`
+- `wifi creds` (lista SSID con password mascherata)
+- `wifi creds showpass 1` / `wifi creds showpass 2` (recupero: stampa password in chiaro)
+- `wifi clear 1` / `wifi clear 2` / `wifi clear all`
+- `wifi apply` (ricarica credenziali e riavvia i tentativi senza reboot)
+
+Persistenza:
+- le credenziali restano in NVS anche dopo OTA/upload standard.
+- si perdono solo con un **erase flash** completo o modifiche invasive alle partizioni.
 
 Tasti:
 - **WIFI**: abilita/disabilita il WiFi in modo **persistente** (salvato in NVS).

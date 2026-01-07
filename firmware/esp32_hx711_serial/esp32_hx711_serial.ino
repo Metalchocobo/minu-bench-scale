@@ -1044,7 +1044,107 @@ void printHelp(){
   Serial.println(F("  stop             -> stop audio (DFPlayer resta ON finché operativo)"));
   Serial.println(F("  vol <0..30>       -> volume DFPlayer"));
 
+  Serial.println(F("  wifi ?                     -> help WiFi credenziali"));
+  Serial.println(F("  wifi status                -> stato WiFi + reti configurate"));
+  Serial.println(F("  wifi creds                 -> lista SSID (password mascherata)"));
+  Serial.println(F("  wifi creds showpass <1..2> -> stampa password in chiaro (recupero)"));
+  Serial.println(F("  wifi set <1..2> \"SSID\" \"PASS\" -> imposta rete (max 2), salva in NVS"));
+  Serial.println(F("  wifi clear <1..2|all>      -> cancella credenziali da NVS"));
+  Serial.println(F("  wifi apply                 -> ricarica credenziali e riavvia tentativi"));
+
   Serial.println();
+}
+
+// ========================= SERIAL: tokenizer con virgolette =========================
+// Supporta: wifi set 1 "SSID con spazi" "PASS con spazi"
+static int tokenizeQuoted(const String& line, String* out, int maxOut) {
+  int n = 0;
+  int i = 0;
+  const int L = (int)line.length();
+  while (i < L && n < maxOut) {
+    // skip spaces
+    while (i < L && isspace((unsigned char)line[i])) i++;
+    if (i >= L) break;
+
+    String tok;
+    if (line[i] == '"') {
+      i++; // skip opening quote
+      while (i < L && line[i] != '"') {
+        tok += line[i++];
+      }
+      if (i < L && line[i] == '"') i++; // skip closing quote
+    } else {
+      while (i < L && !isspace((unsigned char)line[i])) {
+        tok += line[i++];
+      }
+    }
+
+    if (tok.length() > 0) {
+      out[n++] = tok;
+    }
+  }
+  return n;
+}
+
+static void wifiPrintHelp() {
+  Serial.println(F("\nWiFi (credenziali in NVS, max 2):"));
+  Serial.println(F("  wifi status"));
+  Serial.println(F("  wifi creds"));
+  Serial.println(F("  wifi creds showpass <1..2>"));
+  Serial.println(F("  wifi set <1..2> \"SSID\" \"PASS\""));
+  Serial.println(F("  wifi clear <1..2|all>"));
+  Serial.println(F("  wifi apply"));
+  Serial.println(F("Nota: se SSID contiene spazi, usa le virgolette doppie."));
+}
+
+static void wifiPrintCreds(bool showPass) {
+  char ssid1[WifiStore::SSID_MAX_LEN + 1] = {0};
+  char pass1[WifiStore::PASS_MAX_LEN + 1] = {0};
+  char ssid2[WifiStore::SSID_MAX_LEN + 1] = {0};
+  char pass2[WifiStore::PASS_MAX_LEN + 1] = {0};
+  WifiStore::loadSlot(1, ssid1, sizeof(ssid1), pass1, sizeof(pass1));
+  WifiStore::loadSlot(2, ssid2, sizeof(ssid2), pass2, sizeof(pass2));
+
+  Serial.println(F("\n[WIFI] Credenziali salvate (NVS):"));
+  for (int slot = 1; slot <= 2; slot++) {
+    const char* ssid = (slot == 1) ? ssid1 : ssid2;
+    const char* pass = (slot == 1) ? pass1 : pass2;
+    Serial.print(F("  slot "));
+    Serial.print(slot);
+    Serial.print(F(": "));
+    if (!WifiStore::isConfiguredSsid(ssid)) {
+      Serial.println(F("(vuoto)"));
+      continue;
+    }
+    Serial.print(F("SSID=\""));
+    Serial.print(ssid);
+    Serial.print(F("\"  PASS="));
+    if (showPass) {
+      Serial.println(pass);
+    } else {
+      char masked[12] = {0};
+      WifiStore::maskPassword(pass, masked, sizeof(masked));
+      Serial.println(masked);
+    }
+  }
+}
+
+static void wifiPrintStatus() {
+  Serial.println();
+  Serial.print(F("[WIFI] preferenza utente: "));
+  Serial.println(g_wifiUserEnabled ? F("ON") : F("OFF"));
+
+#if ENABLE_WIFI_OTA
+  Serial.print(F("[WIFI] stato connessione: "));
+  Serial.println(WiFi.isConnected() ? F("CONNECTED") : F("DISCONNECTED"));
+  if (WiFi.isConnected()) {
+    Serial.print(F("[WIFI] SSID: "));
+    Serial.println(WiFi.SSID());
+    Serial.print(F("[WIFI] IP: "));
+    Serial.println(WiFi.localIP());
+  }
+#endif
+  wifiPrintCreds(false);
 }
 
 // ========================= SERIAL (non-bloccante) =========================
@@ -1179,6 +1279,113 @@ else if (cmd.startsWith("mp3")) {
       audio_requestPlayMp3(track, capSec);
     } else {
       Serial.println(F("[MP3] uso: mp3 <n> [capSec]   (es: mp3 1, mp3 1 8)"));
+    }
+  }
+  else if (cmd.equalsIgnoreCase("wifi") || cmd.startsWith("wifi ") || cmd.equalsIgnoreCase("wifi?") || cmd.equalsIgnoreCase("wifi ?")) {
+    String t[8];
+    int n = tokenizeQuoted(cmd, t, 8);
+    // t[0] = wifi
+    if (n <= 1) {
+      wifiPrintStatus();
+    } else {
+      String sub = t[1];
+      sub.toLowerCase();
+
+      if (sub == "?" || sub == "help") {
+        wifiPrintHelp();
+      }
+      else if (sub == "status") {
+        wifiPrintStatus();
+      }
+      else if (sub == "creds") {
+        if (n == 2) {
+          wifiPrintCreds(false);
+        } else {
+          String sub2 = t[2];
+          sub2.toLowerCase();
+          if (sub2 == "showpass" && n >= 4) {
+            int slot = t[3].toInt();
+            if (slot == 1 || slot == 2) {
+              Serial.println(F("[WIFI] ATTENZIONE: stampa password in chiaro."));
+              if (slot == 1) {
+                char ssid[WifiStore::SSID_MAX_LEN + 1] = {0};
+                char pass[WifiStore::PASS_MAX_LEN + 1] = {0};
+                WifiStore::loadSlot(1, ssid, sizeof(ssid), pass, sizeof(pass));
+                Serial.print(F("slot 1 SSID=\"")); Serial.print(ssid); Serial.print(F("\" PASS=")); Serial.println(pass);
+              } else {
+                char ssid[WifiStore::SSID_MAX_LEN + 1] = {0};
+                char pass[WifiStore::PASS_MAX_LEN + 1] = {0};
+                WifiStore::loadSlot(2, ssid, sizeof(ssid), pass, sizeof(pass));
+                Serial.print(F("slot 2 SSID=\"")); Serial.print(ssid); Serial.print(F("\" PASS=")); Serial.println(pass);
+              }
+            } else {
+              Serial.println(F("[WIFI] uso: wifi creds showpass <1..2>"));
+            }
+          } else {
+            wifiPrintHelp();
+          }
+        }
+      }
+      else if (sub == "set") {
+        // wifi set <1..2> "SSID" "PASS"
+        if (n >= 5) {
+          int slot = t[2].toInt();
+          if (slot != 1 && slot != 2) {
+            Serial.println(F("[WIFI] slot non valido (usa 1 o 2)"));
+          } else {
+            bool ok = WifiStore::saveSlot((uint8_t)slot, t[3].c_str(), t[4].c_str());
+            Serial.print(F("[WIFI] set slot "));
+            Serial.print(slot);
+            Serial.println(ok ? F(" OK") : F(" FAIL"));
+#if ENABLE_WIFI_OTA
+            // Se il WiFi è già configurato, ricarica e riprova senza reboot.
+            if (g_wifiSetupDone) {
+              Net::wifiReloadCredsAndRestart();
+            }
+#endif
+          }
+        } else {
+          Serial.println(F("[WIFI] uso: wifi set <1..2> \"SSID\" \"PASS\""));
+        }
+      }
+      else if (sub == "clear") {
+        // wifi clear <1..2|all>
+        if (n >= 3) {
+          String which = t[2];
+          which.toLowerCase();
+          bool ok = false;
+          if (which == "all") {
+            ok = WifiStore::clearAll();
+          } else {
+            int slot = which.toInt();
+            ok = (slot == 1 || slot == 2) ? WifiStore::clearSlot((uint8_t)slot) : false;
+          }
+          Serial.print(F("[WIFI] clear "));
+          Serial.print(t[2]);
+          Serial.println(ok ? F(" OK") : F(" FAIL"));
+#if ENABLE_WIFI_OTA
+          if (g_wifiSetupDone) {
+            Net::wifiReloadCredsAndRestart();
+          }
+#endif
+        } else {
+          Serial.println(F("[WIFI] uso: wifi clear <1..2|all>"));
+        }
+      }
+      else if (sub == "apply") {
+#if ENABLE_WIFI_OTA
+        if (g_wifiSetupDone) {
+          Net::wifiReloadCredsAndRestart();
+        } else {
+          Serial.println(F("[WIFI] WiFi non inizializzato (preferenza OFF o ENABLE_WIFI_OTA=0)."));
+        }
+#else
+        Serial.println(F("[WIFI] ENABLE_WIFI_OTA=0"));
+#endif
+      }
+      else {
+        wifiPrintHelp();
+      }
     }
   }
   else if (cmd.equalsIgnoreCase("st on")){

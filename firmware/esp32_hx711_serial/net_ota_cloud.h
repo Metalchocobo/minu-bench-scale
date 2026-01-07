@@ -15,6 +15,7 @@
   #include <ESPmDNS.h>
   #include <WiFiUdp.h>
   #include <ArduinoOTA.h>
+  #include "wifi_store.h"
 #endif
 
 #if ENABLE_ARDUINO_CLOUD
@@ -49,29 +50,54 @@ namespace Net {
   static bool     otaInProgress  = false;
   static const char* otaHostname = "minu-bench-scale";
 
-  // Due reti fittizie da sostituire con i tuoi dati reali
-  static const char* WIFI_SSID_1 = "Shadowfiend";
-  static const char* WIFI_PASS_1 = "questa dannata rete";
-  static const char* WIFI_SSID_2 = "Laboratorio di Minu'";
-  static const char* WIFI_PASS_2 = "questa dannata rete";
-
+  // Credenziali WiFi (max 2) caricate da NVS (Preferences).
+  // NOTA: non vanno mai hardcodate / versionate nel repo.
   struct WifiCred { const char* ssid; const char* pass; };
-  static const WifiCred WIFI_CREDS[] = {
-    { WIFI_SSID_1, WIFI_PASS_1 },
-    { WIFI_SSID_2, WIFI_PASS_2 },
-  };
-  static const uint8_t WIFI_CREDS_N = (uint8_t)(sizeof(WIFI_CREDS) / sizeof(WIFI_CREDS[0]));
+
+  static char wifiSsid1[WifiStore::SSID_MAX_LEN + 1] = {0};
+  static char wifiPass1[WifiStore::PASS_MAX_LEN + 1] = {0};
+  static char wifiSsid2[WifiStore::SSID_MAX_LEN + 1] = {0};
+  static char wifiPass2[WifiStore::PASS_MAX_LEN + 1] = {0};
+
+  static WifiCred wifiCreds[2];
+  static uint8_t  wifiCredsN = 0;
+
+  inline void wifiRebuildCredList() {
+    wifiCredsN = 0;
+    if (WifiStore::isConfiguredSsid(wifiSsid1)) {
+      wifiCreds[wifiCredsN++] = { wifiSsid1, wifiPass1 };
+    }
+    if (WifiStore::isConfiguredSsid(wifiSsid2)) {
+      wifiCreds[wifiCredsN++] = { wifiSsid2, wifiPass2 };
+    }
+  }
+
+  inline void wifiLoadCredsFromNVS(bool log = false) {
+    WifiStore::loadSlot(1, wifiSsid1, sizeof(wifiSsid1), wifiPass1, sizeof(wifiPass1));
+    WifiStore::loadSlot(2, wifiSsid2, sizeof(wifiSsid2), wifiPass2, sizeof(wifiPass2));
+    wifiRebuildCredList();
+    if (log) {
+      Serial.print(F("[NET] WiFi creds: "));
+      Serial.print(wifiCredsN);
+      Serial.println(F(" rete/i configurata/e."));
+    }
+  }
+
+  inline uint8_t wifiCredCount() { return wifiCredsN; }
 
   inline void wifiKickAttempt(uint8_t idx) {
-    if (WIFI_CREDS_N == 0) return;
-    wifiAttemptIdx = idx % WIFI_CREDS_N;
+    if (wifiCredsN == 0) {
+      // Nessuna credenziale configurata: niente tentativi.
+      return;
+    }
+    wifiAttemptIdx = idx % wifiCredsN;
     wifiAttemptStartMs = millis();
-    wifiTriedThisRound = (wifiTriedThisRound < WIFI_CREDS_N) ? (wifiTriedThisRound + 1) : WIFI_CREDS_N;
+    wifiTriedThisRound = (wifiTriedThisRound < wifiCredsN) ? (wifiTriedThisRound + 1) : wifiCredsN;
 
     // WiFi.begin() su ESP32 è asincrona: ritorna subito, la connessione avviene in background.
-    WiFi.begin(WIFI_CREDS[wifiAttemptIdx].ssid, WIFI_CREDS[wifiAttemptIdx].pass);
+    WiFi.begin(wifiCreds[wifiAttemptIdx].ssid, wifiCreds[wifiAttemptIdx].pass);
     Serial.print(F("[NET] WiFi: tentativo connessione a: "));
-    Serial.println(WIFI_CREDS[wifiAttemptIdx].ssid);
+    Serial.println(wifiCreds[wifiAttemptIdx].ssid);
   }
 
   // Inizializza WiFi STA (NON BLOCCANTE): la connessione avviene in background dentro Net::update()
@@ -88,10 +114,14 @@ namespace Net {
     wifiAttemptIdx = 0;
     wifiAttemptStartMs = 0;
     wifiRetryAtMs = 0;
-    Serial.println(F("[NET] WiFi avviato (background)."));
-
-    // Avvia subito il primo tentativo (non blocca)
-    wifiKickAttempt(0);
+    wifiLoadCredsFromNVS(true);
+    if (wifiCredsN > 0) {
+      Serial.println(F("[NET] WiFi avviato (background)."));
+      // Avvia subito il primo tentativo (non blocca)
+      wifiKickAttempt(0);
+    } else {
+      Serial.println(F("[NET] WiFi ON ma nessuna credenziale configurata. Usa la seriale per impostarle."));
+    }
   }
 
   // Sospende WiFi/OTA (utile prima di andare in light-sleep)
@@ -122,8 +152,34 @@ namespace Net {
     wifiTriedThisRound = 0;
     // OTA verrà ri-abilitato automaticamente quando torni connesso (dentro update())
 
-    // Riparti subito con un tentativo (non blocca)
-    wifiKickAttempt(0);
+    wifiLoadCredsFromNVS(false);
+    if (wifiCredsN > 0) {
+      // Riparti subito con un tentativo (non blocca)
+      wifiKickAttempt(0);
+    }
+  }
+
+  // Ricarica le credenziali da NVS e riavvia i tentativi (senza reboot).
+  inline void wifiReloadCredsAndRestart() {
+    if (!wifiConfigured || wifiPaused) {
+      wifiLoadCredsFromNVS(true);
+      return;
+    }
+
+    wifiLoadCredsFromNVS(true);
+    otaBegun = false;
+    otaInProgress = false;
+    wifiWasConnected = false;
+    wifiAttemptStartMs = 0;
+    wifiRetryAtMs = 0;
+    wifiTriedThisRound = 0;
+
+    WiFi.disconnect(false);
+    if (wifiCredsN > 0) {
+      wifiKickAttempt(0);
+    } else {
+      Serial.println(F("[NET] Nessuna credenziale configurata: tentativi sospesi."));
+    }
   }
 
   inline bool isOtaInProgress() { return otaInProgress; }
@@ -207,6 +263,12 @@ namespace Net {
 
         // Se non siamo connessi, gestiamo tentativi / timeout / backoff in modo non bloccante.
         if (!connectedNow) {
+          // Nessuna credenziale configurata: non spammare tentativi.
+          if (wifiCredsN == 0) {
+            wifiAttemptStartMs = 0;
+            wifiRetryAtMs = 0;
+            wifiTriedThisRound = 0;
+          } else {
           // Se siamo in backoff, aspetta.
           if (wifiRetryAtMs != 0 && (int32_t)(now - wifiRetryAtMs) < 0) {
             // ancora in backoff
@@ -224,7 +286,7 @@ namespace Net {
             } else {
               // Timeout del tentativo attuale
               if ((now - wifiAttemptStartMs) >= WIFI_CONNECT_TIMEOUT_MS) {
-                if (wifiTriedThisRound < WIFI_CREDS_N) {
+                if (wifiTriedThisRound < wifiCredsN) {
                   wifiKickAttempt(wifiTriedThisRound);
                 } else {
                   // Provati tutti: backoff e poi riparti
@@ -234,6 +296,7 @@ namespace Net {
                 }
               }
             }
+          }
           }
         } else {
           // Connesso: reset tentativi
