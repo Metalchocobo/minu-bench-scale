@@ -265,9 +265,12 @@ Tasti:
   - Feedback immediato al tasto: **bip** (buzzer). La connessione vera e propria avviene in background.
   - All’avvio il WiFi segue la preferenza utente, non l’ultimo stato momentaneo (es. WiFi spento in sleep).
   - Durante il light-sleep per inattività il WiFi viene comunque spento per consumi, ma al wake viene riattivato **solo** se la preferenza è ON.
-  - Audio: **0005.mp3** quando si connette, **0006.mp3** quando si disconnette.
-    - Dopo un wake da light-sleep la riconnessione **non** viene annunciata (evita sovrapposizioni, comportamento come prima).
-    - Gli annunci WiFi sono a **bassa priorità**: non interrompono altri MP3.
+  - Audio:
+    - **0005.mp3**: Wi‑Fi modulo ON (toggle manuale)
+    - **0006.mp3**: Wi‑Fi modulo OFF (toggle manuale)
+    - **0008.mp3**: connessione Wi‑Fi avvenuta (anche in background)
+    - **0007.mp3**: errore connessione Wi‑Fi (connect failed / SSID non disponibile, con cooldown)
+    - Dopo un wake da light-sleep la riconnessione **non** viene annunciata (comportamento come prima).
 
 - **MODE**: cambio modalità WORK/LIVE con **bip** immediato (buzzer) + audio **0017/0018.mp3**.
 
@@ -307,6 +310,8 @@ Il firmware può suonare file MP3 (es. avviso sleep). Per evitare click e stati 
 Comportamento attuale:
 - DFPlayer viene portato in stato **pronto** automaticamente **all’avvio** e a ogni **wake** (alimentazione ON + UART init + volume), così un suono può partire subito.
 - La riproduzione MP3 è progettata per essere **non bloccante**: mentre l’audio suona, la bilancia continua a leggere HX711 e ad aggiornare UI/log.
+- **Gestione priorità audio**: alcuni MP3 sono **non interrompibili** e, se richiesti mentre un altro non interrompibile sta suonando, vengono messi in **coda FIFO** (solo fra loro). Tutti gli altri MP3 sono **interrompibili**: interrompono l’audio interrompibile in corso e ripartono subito, **senza accodarsi**. Se è in corso un non interrompibile, le richieste interrompibili vengono ignorate (resta il **bip** del buzzer sui tasti).
+  - Non interrompibili: **0002, 0007, 0008, 0012, 0013, 0014, 0015, 0016**.
 - Durante l’uso resta alimentato.
 - Viene spento **quando la bilancia entra in standby/light-sleep per inattività** e anche **prima del light-sleep per batteria scarica**.
 
@@ -351,9 +356,10 @@ Metti i file in **SD:/MP3/** con nome a 4 cifre (es. `0001.mp3`).
 | 0002.mp3 | Boot completato |
 | 0003.mp3 | Entrata risparmio energetico (inattività: schermata Zzz... 5s prima del light-sleep) |
 | 0004.mp3 | Uscita risparmio energetico (wake) |
-| 0005.mp3 | Wi‑Fi connesso |
-| 0006.mp3 | Wi‑Fi disconnesso |
+| 0005.mp3 | Wi‑Fi **modulo ON** (toggle manuale) |
+| 0006.mp3 | Wi‑Fi **modulo OFF** (toggle manuale) |
 | 0007.mp3 | Errore connessione Wi‑Fi (connect failed / SSID non disponibile, con cooldown) |
+| 0008.mp3 | Connessione Wi‑Fi avvenuta (anche in background) |
 | 0011.mp3 | Batteria bassa (una sola volta all'ingresso in 0 tacche, beep resta attivo) |
 | 0012.mp3 | Batteria critica (una sola volta all'ingresso fase critica, beep resta attivo) |
 | 0013.mp3 | Standby pre‑sleep per batteria scarica (schermata Zzz... 5s prima del light-sleep) |

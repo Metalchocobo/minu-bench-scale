@@ -196,6 +196,20 @@ static int        g_busyPlaying = -1;
 static bool       g_busyPolarityKnown = false;
 static uint32_t   g_busyIdleSinceMs = 0;
 
+// Coda MP3 (FIFO): nessun MP3 interrompe l'altro.
+// Nota: evitiamo di usare una struct nei parametri delle funzioni della coda,
+// perché l'auto-prototyping dell'IDE Arduino può generare prototipi prima della
+// definizione del tipo e rompere la compilazione.
+static const uint8_t AUDIO_Q_MAX = 16;
+static uint16_t g_audioQ_track[AUDIO_Q_MAX];
+static uint32_t g_audioQ_capSec[AUDIO_Q_MAX];
+static bool     g_audioQ_low[AUDIO_Q_MAX];
+static uint8_t  g_audioQCount = 0;
+
+static inline bool audio_isMustPlayTrack(uint16_t t) {
+  return (t == 2 || t == 7 || t == 8 || t == 12 || t == 13 || t == 14 || t == 15 || t == 16);
+}
+
 // Stato alimentazione DFPlayer (power-gating)
 static bool       g_dfpPowered   = false;
 static bool       g_dfpUartReady = false;
@@ -217,7 +231,7 @@ static int dfpBusyReadStable() {
   return (digitalRead(DFPLAYER_BUSY_PIN) != 0) ? 1 : 0;
 }
 
-static void audio_stopNow();
+static void audio_stopNow(bool clearQueue = false);
 
 static void audio_begin() {
   pinMode(DFPLAYER_EN_PIN, OUTPUT);
@@ -270,31 +284,67 @@ static void audio_primeReady() {
   g_busyIdle = dfpBusyReadStable();
 }
 
-static bool audio_isActive() {
-  return g_audioState != AUDIO_IDLE;
+static inline bool audio_isActive() {
+  return (g_audioState != AUDIO_IDLE) || (g_audioQCount > 0);
 }
 
+static inline void audio_queueClear() {
+  g_audioQCount = 0;
+}
 
-
-static void audio_requestPlayMp3(uint16_t track, uint32_t capSeconds = 0) {
+static bool audio_queuePush(uint16_t track, uint32_t capSeconds, bool low) {
   if (track < 1) track = 1;
 
-  // Guard anti-retrigger: evita di rilanciare lo stesso MP3 in raffica (rimbalzi tasto, eventi duplicati).
-  // Side effect: lo stesso track richiesto più volte entro la finestra viene ignorato.
-  static uint16_t s_lastReqTrack = 0;
-  static uint32_t s_lastReqMs = 0;
-  const uint32_t nowReq = millis();
-  const uint32_t REQ_GUARD_MS = 250;
-  if (track == s_lastReqTrack && (uint32_t)(nowReq - s_lastReqMs) < REQ_GUARD_MS) {
-    return;
-  }
-  s_lastReqTrack = track;
-  s_lastReqMs = nowReq;
+  if (g_audioQCount >= AUDIO_Q_MAX) {
+    // Se è un annuncio low, lo scartiamo.
+    if (low) return false;
 
-  // Se stava già suonando, tronca e riparti.
-  if (audio_isActive()) {
-    audio_stopNow();
+    // Se è un brano "must-play", proviamo a fare spazio togliendo un low in coda.
+    if (audio_isMustPlayTrack(track)) {
+      for (int i = (int)g_audioQCount - 1; i >= 0; i--) {
+        if (g_audioQ_low[i]) {
+          for (int j = i; j < (int)g_audioQCount - 1; j++) {
+            g_audioQ_track[j] = g_audioQ_track[j + 1];
+            g_audioQ_capSec[j] = g_audioQ_capSec[j + 1];
+            g_audioQ_low[j]   = g_audioQ_low[j + 1];
+          }
+          g_audioQCount--;
+          break;
+        }
+      }
+      if (g_audioQCount >= AUDIO_Q_MAX) {
+        // Ancora pieno: scarta l'ultimo (più recente) per preservare l'ordine già in coda.
+        g_audioQCount--;
+      }
+    } else {
+      // Non must-play e coda piena: scarta la richiesta.
+      return false;
+    }
   }
+
+  g_audioQ_track[g_audioQCount] = track;
+  g_audioQ_capSec[g_audioQCount] = capSeconds;
+  g_audioQ_low[g_audioQCount] = low;
+  g_audioQCount++;
+  return true;
+}
+
+static bool audio_queuePop(uint16_t* outTrack, uint32_t* outCapSeconds, bool* outLow) {
+  if (g_audioQCount == 0) return false;
+  if (outTrack) *outTrack = g_audioQ_track[0];
+  if (outCapSeconds) *outCapSeconds = g_audioQ_capSec[0];
+  if (outLow) *outLow = g_audioQ_low[0];
+  for (uint8_t i = 0; i + 1 < g_audioQCount; i++) {
+    g_audioQ_track[i] = g_audioQ_track[i + 1];
+    g_audioQ_capSec[i] = g_audioQ_capSec[i + 1];
+    g_audioQ_low[i] = g_audioQ_low[i + 1];
+  }
+  g_audioQCount--;
+  return true;
+}
+
+static void audio_startNow(uint16_t track, uint32_t capSeconds) {
+  if (track < 1) track = 1;
 
   g_audioTrack = track;
   g_audioTimeoutMs = (capSeconds > 0) ? (capSeconds * 1000UL) : DFP_PLAY_TIMEOUT_MS;
@@ -303,14 +353,14 @@ static void audio_requestPlayMp3(uint16_t track, uint32_t capSeconds = 0) {
   g_busyPolarityKnown = false;
   g_busyIdleSinceMs = 0;
 
-  Serial.print(F("[MP3] richiesto /MP3/"));
+  Serial.print(F("[MP3] play /MP3/"));
   if (track < 10) Serial.print('0');
   if (track < 100) Serial.print('0');
   if (track < 1000) Serial.print('0');
   Serial.print(track);
   Serial.println(F(".mp3"));
 
-  const uint32_t now = nowReq;
+  const uint32_t now = millis();
 
   // Se il DFPlayer è già alimentato e UART pronta, non fare power-cycle: play diretto.
   if (g_dfpPowered && g_dfpUartReady) {
@@ -336,11 +386,81 @@ static void audio_requestPlayMp3(uint16_t track, uint32_t capSeconds = 0) {
   digitalWrite(DFPLAYER_PINS.tx, LOW);
 }
 
-// Richiesta MP3 a bassa priorità: non interrompe audio in corso.
-// Usato per annunci "di contorno" (es. WiFi), così non troncano audio più importanti.
+static void audio_kickIfIdle() {
+  if (g_audioState != AUDIO_IDLE) return;
+  uint16_t t = 0;
+  uint32_t cap = 0;
+  bool low = false;
+  if (audio_queuePop(&t, &cap, &low)) {
+    (void)low; // attualmente non serve: è già stata gestita in push
+    audio_startNow(t, cap);
+  }
+}
+
+static void audio_requestPlayMp3(uint16_t track, uint32_t capSeconds = 0) {
+  if (track < 1) track = 1;
+
+  // Guard anti-retrigger: evita di rilanciare lo stesso MP3 in raffica (rimbalzi tasto, eventi duplicati).
+  // Side effect: lo stesso track richiesto più volte entro la finestra viene ignorato.
+  static uint16_t s_lastReqTrack = 0;
+  static uint32_t s_lastReqMs = 0;
+  const uint32_t nowReq = millis();
+  const uint32_t REQ_GUARD_MS = 250;
+  if (track == s_lastReqTrack && (uint32_t)(nowReq - s_lastReqMs) < REQ_GUARD_MS) {
+    return;
+  }
+  s_lastReqTrack = track;
+  s_lastReqMs = nowReq;
+
+  const bool mustPlay = audio_isMustPlayTrack(track);
+  const bool playing = (g_audioState != AUDIO_IDLE);
+  const bool curMustPlay = playing && audio_isMustPlayTrack(g_audioTrack);
+
+  if (mustPlay) {
+    // Must-play: NON interrompibile. Può però interrompere un audio interrompibile in corso.
+    if (playing && !curMustPlay) {
+      audio_stopNow(false);
+    }
+
+    // Se possiamo partire subito, fallo.
+    if (g_audioState == AUDIO_IDLE && g_audioQCount == 0) {
+      audio_startNow(track, capSeconds);
+      return;
+    }
+
+    // Altrimenti, metti in coda FIFO (solo per must-play) e parti appena possibile.
+    (void)audio_queuePush(track, capSeconds, false);
+    audio_kickIfIdle();
+    return;
+  }
+
+  // Interrompibile:
+  // - se è in corso un must-play, NON mettiamo in coda (verrebbe riprodotto in ritardo)
+  if (curMustPlay) {
+    return;
+  }
+
+  // - se ci sono must-play in coda, non disturbare: facciamo passare prima quelli
+  if (g_audioQCount > 0) {
+    audio_kickIfIdle();
+    return;
+  }
+
+  // - se stiamo suonando un audio interrompibile, interrompilo e riparti subito
+  if (playing) {
+    audio_stopNow(false);
+  }
+  audio_startNow(track, capSeconds);
+}
+
+
+// Richiesta MP3 a bassa priorità: non deve disturbare la UX.
+// Strategia: se c'è già qualcosa in riproduzione o in coda, scarta.
 static void audio_requestPlayMp3_low(uint16_t track, uint32_t capSeconds = 0) {
-  if (audio_isActive()) return;
-  audio_requestPlayMp3(track, capSeconds);
+  if (g_audioState != AUDIO_IDLE) return;
+  if (g_audioQCount > 0) return;
+  (void)audio_queuePush(track, capSeconds, true);
+  audio_kickIfIdle();
 }
 
 
@@ -355,12 +475,16 @@ static void audio_setVolume(uint8_t vol) {
   }
 }
 
-static void audio_stopNow() {
+static void audio_stopNow(bool clearQueue) {
   // Stop riproduzione, ma NON tagliare l'alimentazione.
   // L'idea è: DFPlayer resta acceso durante l'uso; lo spegniamo solo entrando in standby/light-sleep.
   if (g_dfpUartReady) {
     DFPlayer::stop();
     delay(30);
+  }
+
+  if (clearQueue) {
+    audio_queueClear();
   }
 
   g_audioState = AUDIO_IDLE;
@@ -371,6 +495,9 @@ static void audio_stopNow() {
 }
 
 static void audio_powerOffNow() {
+  // Spegnendo l'audio, svuotiamo la coda: al wake riparte pulito.
+  audio_queueClear();
+
   // Spegne davvero DFPlayer (MOSFET high-side) + mette UART in Hi-Z per evitare back-powering.
   if (g_dfpUartReady) {
     DFPlayer::stop();
@@ -395,6 +522,8 @@ static void audio_powerOffNow() {
 static void audio_task(uint32_t now) {
   switch (g_audioState) {
     case AUDIO_IDLE:
+      // Se c'è qualcosa in coda, parti subito (senza bloccare la loop).
+      audio_kickIfIdle();
       return;
 
     case AUDIO_POWERING:
@@ -977,7 +1106,7 @@ static void handleSerialCommand(String cmd) {
   }
   else if (cmd.equalsIgnoreCase("stop") || cmd.equalsIgnoreCase("mp3 stop")) {
     Serial.println(F("[MP3] stop"));
-    audio_stopNow();
+    audio_stopNow(true);
   }
   else if (cmd.equalsIgnoreCase("mp3 ?") || cmd.equalsIgnoreCase("mp3 status") || cmd.equalsIgnoreCase("audio ?")) {
     audio_debugStatus();
@@ -1295,7 +1424,9 @@ void handleKeyEvent(KeyCode key){
       // Feedback immediato al tasto: la connessione/disconnessione reale avviene in differita (background)
       buzzerKeyClick();
       wifiToggleUserSetting();
-      // Audio 0005/0006 viene gestito da wifiAudioUpdate() quando cambia lo stato di connessione.
+      // Audio: 0005=attivazione modulo WiFi (da tasto), 0006=disattivazione modulo WiFi (da tasto).
+      // Nota: la connessione reale (quando avviene) viene annunciata da wifiAudioUpdate() con 0008.
+      audio_requestPlayMp3(g_wifiUserEnabled ? 5 : 6);
       lastOledMs = 0;
       break;
 
@@ -1324,21 +1455,33 @@ void handleKeyEvent(KeyCode key){
     case KEY_ENTER:
       Serial.println(F("[KEYPAD] ENTER pressed"));
       buzzerKeyClick();
+      // Placeholder: registrazione peso (vuota per ora)
+      // Audio 0009
+      audio_requestPlayMp3(9);
       break;
 
     case KEY_SKIP:
       Serial.println(F("[KEYPAD] SKIP pressed"));
       buzzerKeyClick();
+      // Placeholder: salto ingrediente (vuota per ora)
+      // Audio 0010
+      audio_requestPlayMp3(10);
       break;
 
     case KEY_TOTAL:
       Serial.println(F("[KEYPAD] TOTAL pressed"));
       buzzerKeyClick();
+      // Placeholder: mostra peso totale registrato (vuota per ora)
+      // Audio 0020
+      audio_requestPlayMp3(20);
       break;
 
     case KEY_CLEAR:
       Serial.println(F("[KEYPAD] CLEAR pressed"));
       buzzerKeyClick();
+      // Placeholder: libera memoria (vuota per ora)
+      // Audio 0021
+      audio_requestPlayMp3(21);
       break;
 
     case KEY_NONE:
@@ -1463,6 +1606,12 @@ static void wifiAudioUpdate(uint32_t now) {
     return;
   }
 
+  // Se l'utente ha disattivato il WiFi, non fare annunci (né errori).
+  if (!g_wifiUserEnabled) {
+    g_wifiPrevConnected = false;
+    return;
+  }
+
   // Silenzio post-wake: evita che l'audio WiFi parta subito dopo lo sleep
   // (es. durante 0004.mp3) e replica il comportamento precedente (niente annuncio al wake).
   if (g_wifiAudioSuppressUntilMs != 0 && (int32_t)(now - g_wifiAudioSuppressUntilMs) < 0) {
@@ -1478,13 +1627,14 @@ static void wifiAudioUpdate(uint32_t now) {
   const bool connectedNow = WiFi.isConnected();
   if (connectedNow != g_wifiPrevConnected) {
     g_wifiPrevConnected = connectedNow;
-    // 0005=connesso, 0006=disconnesso
+    // 0008 = connessione avvenuta.
     // - Al wake: non annunciamo la riconnessione.
-    // - In generale: audio WiFi NON deve troncare altri MP3.
-    if (connectedNow && g_wifiSuppressNextConnectAnnounce) {
-      g_wifiSuppressNextConnectAnnounce = false;
-    } else {
-      audio_requestPlayMp3_low(connectedNow ? 5 : 6);
+    if (connectedNow) {
+      if (g_wifiSuppressNextConnectAnnounce) {
+        g_wifiSuppressNextConnectAnnounce = false;
+      } else {
+        audio_requestPlayMp3(8);
+      }
     }
   }
 
@@ -1493,7 +1643,7 @@ static void wifiAudioUpdate(uint32_t now) {
     wl_status_t st = WiFi.status();
     if (st == WL_CONNECT_FAILED || st == WL_NO_SSID_AVAIL) {
       if (g_wifiErrLastMs == 0 || (now - g_wifiErrLastMs) >= WIFI_ERR_COOLDOWN_MS) {
-        audio_requestPlayMp3_low(7);
+        audio_requestPlayMp3(7);
         g_wifiErrLastMs = now;
       }
     }
@@ -1897,7 +2047,7 @@ void loop(){
       // Se l'utente preme un tasto mentre stiamo per andare in standby, annulla la sequenza.
       g_inactivitySleepStage = INACT_NONE;
       g_inactivityStageStartMs = 0;
-      audio_stopNow();
+      audio_stopNow(true);
       lastOledMs = 0; // ripristina UI normale subito
     }
     handleKeyEvent(key);
