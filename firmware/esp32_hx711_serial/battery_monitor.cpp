@@ -34,14 +34,14 @@ static const uint32_t CHARGE_MIN_ON_MS = 20000; // 20s
 // Nota: la tensione dipende molto dal carico e dalla fase di carica; queste soglie sono
 // una mappa "pratica" per UI (tacche) e non una misura precisa di SoC.
 //
-// FULL: tipicamente ~6.35-6.40 V a riposo; in carica può salire oltre.
-static const float V_FULL_MIN      = 6.35f;
+// FULL: tipicamente ~6.35-6.40 V  in carica può salire oltre o i 6.35
+static const float V_FULL_MIN      = 6.20f;
 // GOOD: batteria ancora "comoda" sotto carico leggero.
-static const float V_GOOD_MIN      = 6.20f;
+static const float V_GOOD_MIN      = 6.08f;
 // LOW: zona medio-bassa.
-static const float V_LOW_MIN       = 6.05f;
+static const float V_LOW_MIN       = 5.96f;
 // CRITICAL: vicino a scarica (sotto carico può oscillare).
-static const float V_CRITICAL_MIN  = 5.90f;
+static const float V_CRITICAL_MIN  = 5.85f;
 // Sotto V_CRITICAL_MIN => LEVEL_EMPTY
 
 // -----------------------------------------------------------------------------

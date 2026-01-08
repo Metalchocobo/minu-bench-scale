@@ -23,7 +23,7 @@ Funzioni principali (firmware HX711):
 - **Zero-tracking** vicino allo zero + **snap-to-zero** allo scarico
 - **TARA** con UI dedicata (testo + barra), blocco pesata durante l’operazione
 - Monitor batteria con **tacche** + stato **charging** (stabilizzato)
-- Protezione “batteria scarica” con **avviso + beep + light-sleep**
+- Protezione “batteria scarica” con **avviso + beep + light-sleep**, anti-flapping (debounce 10 s, recovery stabile 30 s) e cooldown avvisi 5 min
 - **HX health** runtime: stati **OK / WARN / ERROR / ERROR HARD**, badge **"Errore Cella"** (testo piccolo + triangolino) in alto a destra in WARN, schermata error bloccante (senza mostrare l'ultimo peso), blocco tara/calib, audio 0015.mp3 una sola volta all’ingresso in ERROR
 
 ### HX health (runtime, HX711)

@@ -2040,7 +2040,7 @@ static uint32_t lastBattDebug = 0;
 // ========================= BATTERIA SLA 6V: sicurezza ESP =========================
 // Sotto certe tensioni (filtrate) il buck a 5V può perdere margine -> latenze/reset.
 // Strategia:
-//  - 0 tacche (EMPTY): beep di avviso ogni 60s (ma UI normale)
+//  - 0 tacche (EMPTY): beep di avviso ogni 5 min (ma UI normale)
 //  - "fase di stacco" (<= V_SAFE_SHUTDOWN_MIN_V): mostra solo avviso + beep ogni 10s per 60s, poi LIGHT-SLEEP
 //  - Wake SOLO da tastiera (qualsiasi tasto). Niente wake automatico.
 
@@ -2049,18 +2049,33 @@ static const float    V_SAFE_SHUTDOWN_CLEAR_V   = 5.90f;   // isteresi: annulla 
 static const float    V_HARD_SLEEP_MIN_V        = 5.70f;   // troppo bassa: vai a sleep subito
 static const uint32_t SAFE_SHUTDOWN_DEBOUNCE_MS = 5000;    // deve restare sotto soglia per 5s
 
-static const uint32_t PRE_SLEEP_COUNTDOWN_MS    = 60000;   // 60s avviso prima dello sleep
-static const uint32_t BEEP_EMPTY_MS             = 60000;   // beep ogni 60s (0 tacche)
-static const uint32_t BEEP_COUNTDOWN_MS         = 10000;   // beep ogni 10s durante countdown
+static const uint32_t PRE_SLEEP_COUNTDOWN_MS    = 60000;    // 60s avviso prima dello sleep
+static const uint32_t BEEP_EMPTY_MS             = 300000;   // beep ogni 5 min (0 tacche)
+static const uint32_t BEEP_COUNTDOWN_MS         = 10000;    // beep ogni 10s durante countdown
+
+// Robustezza anti-flapping:
+// - ingresso stato '0 tacche': deve restare sotto clear per un po'
+// - uscita (recupero): deve restare sopra clear per un po'
+// - avvisi sonori (mp3) non si ripetono prima di 5 minuti
+static const uint32_t BATT_EMPTY_DEBOUNCE_MS    = 10000;    // sotto clear per 10s prima di avviso '0 tacche'
+static const uint32_t BATT_RECOVERY_STABLE_MS   = 30000;    // sopra clear per 30s prima di resettare gli avvisi
+static const uint32_t BATT_ALERT_COOLDOWN_MS    = 300000;   // 5 min
 
 static uint32_t g_lowBattSinceMs      = 0;
 static uint32_t g_preSleepStartMs     = 0;
 static uint32_t g_lastEmptyBeepMs     = 0;
 static uint32_t g_lastCountdownBeepMs = 0;
 
-// Audio batteria (una sola volta all'ingresso dello stato)
-static bool g_mp3BattLowPlayed  = false; // 0011
-static bool g_mp3BattCritPlayed = false; // 0012
+// Anti-flapping stato '0 tacche'
+static uint32_t g_emptyCandidateSinceMs = 0;
+static bool     g_emptyWarnActive       = false;
+
+// Recupero stabile sopra soglia clear
+static uint32_t g_recoverySinceMs = 0;
+
+// Cooldown mp3 batteria
+static uint32_t g_lastMp3BattLowMs  = 0; // 0011
+static uint32_t g_lastMp3BattCritMs = 0; // 0012
 
 // Pre-sleep "Zzz..." per batteria scarica (prima del light-sleep): 5s + 0013
 enum BattSleepStage : uint8_t { BATT_SLEEP_NONE = 0, BATT_SLEEP_ZZZ = 1 };
@@ -2127,18 +2142,57 @@ static bool maybeEnterSafeShutdown(uint32_t nowMs) {
   if (!battery_is_available()) return false;
   BatteryStatus st = battery_get_status();
 
-  // Se è in carica o risalito sopra clear: azzera tutto
-  if (st.charging || st.voltage_V >= V_SAFE_SHUTDOWN_CLEAR_V) {
+  // In carica: azzera subito tutta la logica di safety e avvisi.
+  if (st.charging) {
     g_lowBattSinceMs = 0;
     g_preSleepStartMs = 0;
     g_lastEmptyBeepMs = 0;
     g_lastCountdownBeepMs = 0;
-    g_mp3BattLowPlayed = false;
-    g_mp3BattCritPlayed = false;
+
+    g_emptyCandidateSinceMs = 0;
+    g_emptyWarnActive = false;
+
+    g_recoverySinceMs = 0;
+
+    g_lastMp3BattLowMs = 0;
+    g_lastMp3BattCritMs = 0;
+
     g_battSleepStage = BATT_SLEEP_NONE;
     g_battStageStartMs = 0;
     return false;
   }
+
+  // Sopra soglia clear: annulla subito countdown/stacco.
+  // Gli avvisi si riarmeranno solo dopo un recupero stabile, per evitare flapping.
+  if (st.voltage_V >= V_SAFE_SHUTDOWN_CLEAR_V) {
+    // Stop countdown e pre-sleep.
+    g_lowBattSinceMs = 0;
+    g_preSleepStartMs = 0;
+    g_lastCountdownBeepMs = 0;
+
+    // Fuori dalla zona EMPTY: stop avviso 0 tacche.
+    g_emptyCandidateSinceMs = 0;
+    g_emptyWarnActive = false;
+
+    // Se eravamo nella schermata pre-sleep, annulla.
+    g_battSleepStage = BATT_SLEEP_NONE;
+    g_battStageStartMs = 0;
+
+    // Recovery stabile: dopo X secondi sopra clear, possiamo riazzerare i cooldown
+    // così al prossimo vero episodio avvisiamo subito.
+    if (g_recoverySinceMs == 0) g_recoverySinceMs = nowMs;
+    if ((nowMs - g_recoverySinceMs) >= BATT_RECOVERY_STABLE_MS) {
+      g_lastEmptyBeepMs = 0;
+      g_lastMp3BattLowMs = 0;
+      g_lastMp3BattCritMs = 0;
+      g_recoverySinceMs = 0;
+    }
+
+    return false;
+  }
+
+  // Sotto clear: non siamo in recupero.
+  g_recoverySinceMs = 0;
 
   // Se siamo nella fase "Zzz" pre-sleep per batteria (0013):
   // mostra Z Z Z per 5s, poi vai in light-sleep.
@@ -2150,27 +2204,43 @@ static bool maybeEnterSafeShutdown(uint32_t nowMs) {
     return true; // oscuriamo la pesata
   }
 
-  // Stato "0 tacche": beep ogni minuto, UI normale
-  if (st.level == BATT_LEVEL_EMPTY && st.voltage_V > V_SAFE_SHUTDOWN_MIN_V) {
-    if (!g_mp3BattLowPlayed) {
-      // 0011.mp3 = Batteria bassa (una sola volta all'ingresso)
+  // Zona "0 tacche" (flapping intorno a 5.90): ingresso debounced.
+  const bool inEmptyZone = (st.voltage_V > V_SAFE_SHUTDOWN_MIN_V) && (st.voltage_V < V_SAFE_SHUTDOWN_CLEAR_V);
+  if (inEmptyZone) {
+    if (!g_emptyWarnActive) {
+      if (g_emptyCandidateSinceMs == 0) g_emptyCandidateSinceMs = nowMs;
+      if ((nowMs - g_emptyCandidateSinceMs) >= BATT_EMPTY_DEBOUNCE_MS) {
+        g_emptyWarnActive = true;
+      }
+    }
+  } else {
+    g_emptyCandidateSinceMs = 0;
+    g_emptyWarnActive = false;
+  }
+
+  // Stato "0 tacche": beep raro, UI normale
+  if (g_emptyWarnActive) {
+    // 0011.mp3 = Batteria bassa (non ripetere prima di 5 minuti)
+    if (g_lastMp3BattLowMs == 0 || (nowMs - g_lastMp3BattLowMs) >= BATT_ALERT_COOLDOWN_MS) {
       audio_requestPlayMp3(11);
-      g_mp3BattLowPlayed = true;
+      g_lastMp3BattLowMs = nowMs;
     }
 
+    // Buzzer: non ripetere troppo spesso
     if (g_lastEmptyBeepMs == 0 || (nowMs - g_lastEmptyBeepMs) >= BEEP_EMPTY_MS) {
       buzzerWarn();
       g_lastEmptyBeepMs = nowMs;
     }
+
     return false; // non oscurare la pesata
   }
 
   // Sotto hard-min: sleep immediato (dopo una schermata)
   if (st.voltage_V <= V_HARD_SLEEP_MIN_V) {
-    if (!g_mp3BattCritPlayed) {
-      // 0012.mp3 = Batteria critica
+    // 0012.mp3 = Batteria critica (non ripetere prima di 5 minuti)
+    if (g_lastMp3BattCritMs == 0 || (nowMs - g_lastMp3BattCritMs) >= BATT_ALERT_COOLDOWN_MS) {
       audio_requestPlayMp3(12);
-      g_mp3BattCritPlayed = true;
+      g_lastMp3BattCritMs = nowMs;
     }
     buzzerWarn();
     enterLowBatteryLightSleep(); // non ritorna
@@ -2191,10 +2261,10 @@ static bool maybeEnterSafeShutdown(uint32_t nowMs) {
       g_preSleepStartMs = nowMs;
       g_lastCountdownBeepMs = 0;
 
-      if (!g_mp3BattCritPlayed) {
-        // 0012.mp3 = Batteria critica (una sola volta all'ingresso fase stacco)
+      // 0012.mp3 = Batteria critica (non ripetere prima di 5 minuti)
+      if (g_lastMp3BattCritMs == 0 || (nowMs - g_lastMp3BattCritMs) >= BATT_ALERT_COOLDOWN_MS) {
         audio_requestPlayMp3(12);
-        g_mp3BattCritPlayed = true;
+        g_lastMp3BattCritMs = nowMs;
       }
     }
 
@@ -2207,7 +2277,7 @@ static bool maybeEnterSafeShutdown(uint32_t nowMs) {
     }
 
     if ((nowMs - g_preSleepStartMs) >= PRE_SLEEP_COUNTDOWN_MS) {
-      // Prima di andare in sleep per batteria: schermata Zzz... 5s + 0013.mp3 (una sola volta)
+      // Prima di andare in sleep per batteria: schermata Zzz... 5s + 0013.mp3
       if (g_battSleepStage == BATT_SLEEP_NONE) {
         ui_renderSleepZzz();
         audio_requestPlayMp3(13);
@@ -2219,7 +2289,7 @@ static bool maybeEnterSafeShutdown(uint32_t nowMs) {
     return true; // oscuriamo la pesata mentre siamo in countdown
   }
 
-  // Qualsiasi altra condizione: reset dei timer "low"
+  // Qualsiasi altra condizione: reset dei timer di countdown
   g_lowBattSinceMs = 0;
   g_preSleepStartMs = 0;
   g_lastCountdownBeepMs = 0;
