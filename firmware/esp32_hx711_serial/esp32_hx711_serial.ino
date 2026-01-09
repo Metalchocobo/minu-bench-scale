@@ -23,6 +23,7 @@
 #include <math.h>
 #include "buzzer.h"
 #include "net_ota_cloud.h"
+#include "ota_store.h"
 #include "dfplayer_driver.h"
 #include <esp_sleep.h>
 #include <driver/gpio.h>
@@ -185,12 +186,16 @@ static void sleepPrepareWakeFromKeypad() {
 //   in quel caso aggiungi un pull-up esterno verso 3V3 (10k..47k). Evita il pulldown a GND.
 // - GPIO4: TX DFPlayer. GPIO15: LED sleep (dedicato).
 
-enum AudioState : uint8_t { AUDIO_IDLE = 0, AUDIO_POWERING, AUDIO_STARTING, AUDIO_PLAYING, AUDIO_TAILING };
+enum AudioState : uint8_t { AUDIO_IDLE = 0, AUDIO_GAP, AUDIO_POWERING, AUDIO_STARTING, AUDIO_PLAYING, AUDIO_TAILING };
 static AudioState g_audioState = AUDIO_IDLE;
 static uint16_t   g_audioTrack = 0;
 static uint32_t   g_audioStateMs = 0;
 static uint32_t   g_audioStartMs = 0;
 static uint32_t   g_audioTimeoutMs = 0;
+static uint32_t   g_audioLastStopMs = 0;
+static uint16_t   g_audioGapTrack = 0;
+static uint32_t   g_audioGapCapSec = 0;
+static uint32_t   g_audioGapUntilMs = 0;
 static int        g_busyIdle = -1;
 static int        g_busyPlaying = -1;
 static bool       g_busyPolarityKnown = false;
@@ -218,6 +223,9 @@ static const uint32_t DFP_POWERUP_MS      = 250;   // tempo minimo dopo power-on
 static const uint32_t DFP_BUSY_DETECT_MS  = 800;   // finestra per auto-detect polarità BUSY
 static const uint32_t DFP_END_STABLE_MS   = 250;   // quanto deve restare "idle" per considerare finito
 static const uint32_t DFP_TAIL_OFF_MS     = 150;   // evita click tagliando subito dopo stop
+
+static const uint32_t DFP_RESTART_GAP_MS  = 200;   // gap minimo tra stop -> play (anti-troncamento)
+static const uint32_t DFP_MIN_PLAY_MS     = 300;   // ignora BUSY=idle nei primissimi ms (glitch BUSY)
 static const uint32_t DFP_PLAY_TIMEOUT_MS = 30000; // paracadute: se BUSY non funziona
 
 static inline void dfpPowerSet(bool on) {
@@ -248,6 +256,11 @@ static void audio_begin() {
   }
 
   DFPlayer::end();
+  // Cancella eventuale play deferito (gap)
+  g_audioGapTrack = 0;
+  g_audioGapCapSec = 0;
+  g_audioGapUntilMs = 0;
+
   g_audioState = AUDIO_IDLE;
   g_busyIdle = -1;
   g_busyPlaying = -1;
@@ -361,6 +374,16 @@ static void audio_startNow(uint16_t track, uint32_t capSeconds) {
   Serial.println(F(".mp3"));
 
   const uint32_t now = millis();
+
+  // Anti-troncamento: evita stop->play troppo ravvicinati (DFPlayer può tagliare il secondo MP3)
+  if (g_audioLastStopMs != 0 && (now - g_audioLastStopMs) < DFP_RESTART_GAP_MS) {
+    g_audioGapTrack = track;
+    g_audioGapCapSec = capSeconds;
+    g_audioGapUntilMs = g_audioLastStopMs + DFP_RESTART_GAP_MS;
+    g_audioState = AUDIO_GAP;
+    g_audioStateMs = now;
+    return;
+  }
 
   // Se il DFPlayer è già alimentato e UART pronta, non fare power-cycle: play diretto.
   if (g_dfpPowered && g_dfpUartReady) {
@@ -478,14 +501,23 @@ static void audio_setVolume(uint8_t vol) {
 static void audio_stopNow(bool clearQueue) {
   // Stop riproduzione, ma NON tagliare l'alimentazione.
   // L'idea è: DFPlayer resta acceso durante l'uso; lo spegniamo solo entrando in standby/light-sleep.
-  if (g_dfpUartReady) {
+  const bool wasTailing = (g_audioState == AUDIO_TAILING);
+
+  // Se stiamo chiudendo un brano già stoppato (TAILING), evitare stop ridondanti e soprattutto
+  // non aggiornare lastStopMs (altrimenti aggiungiamo un gap extra tra i brani in coda).
+  if (g_dfpUartReady && !wasTailing) {
     DFPlayer::stop();
-    delay(30);
+    g_audioLastStopMs = millis();
   }
 
   if (clearQueue) {
     audio_queueClear();
   }
+
+  // Cancella eventuale play deferito (gap)
+  g_audioGapTrack = 0;
+  g_audioGapCapSec = 0;
+  g_audioGapUntilMs = 0;
 
   g_audioState = AUDIO_IDLE;
   g_busyIdle = -1;
@@ -493,6 +525,7 @@ static void audio_stopNow(bool clearQueue) {
   g_busyPolarityKnown = false;
   g_busyIdleSinceMs = 0;
 }
+
 
 static void audio_powerOffNow() {
   // Spegnendo l'audio, svuotiamo la coda: al wake riparte pulito.
@@ -526,7 +559,15 @@ static void audio_task(uint32_t now) {
       audio_kickIfIdle();
       return;
 
-    case AUDIO_POWERING:
+    
+    case AUDIO_GAP:
+      if (now < g_audioGapUntilMs) return;
+      // Scaduto il gap: avvia il track deferito
+      g_audioState = AUDIO_IDLE;
+      audio_startNow(g_audioGapTrack, g_audioGapCapSec);
+      return;
+
+case AUDIO_POWERING:
       if ((now - g_audioStateMs) < DFP_POWERUP_MS) return;
 
       // Attiva UART solo quando serve suonare
@@ -572,6 +613,7 @@ static void audio_task(uint32_t now) {
       if (g_audioStartMs != 0 && (now - g_audioStartMs) >= g_audioTimeoutMs) {
         Serial.println(F("[MP3] timeout (BUSY non affidabile?) -> stop"));
         DFPlayer::stop();
+        g_audioLastStopMs = now;
         g_audioState = AUDIO_TAILING;
         g_audioStateMs = now;
         return;
@@ -581,10 +623,16 @@ static void audio_task(uint32_t now) {
 
       // Se BUSY è tornato al livello "idle" in modo stabile, consideriamo finito.
       if (b == g_busyIdle) {
+        // Evita glitch BUSY: nei primissimi ms dopo il play, ignoriamo un idle "falso".
+        if (g_audioStartMs != 0 && (now - g_audioStartMs) < DFP_MIN_PLAY_MS) {
+          g_busyIdleSinceMs = 0;
+          return;
+        }
         if (g_busyIdleSinceMs == 0) g_busyIdleSinceMs = now;
         if ((now - g_busyIdleSinceMs) >= DFP_END_STABLE_MS) {
           Serial.println(F("[MP3] fine"));
           DFPlayer::stop();
+          g_audioLastStopMs = now;
           g_audioState = AUDIO_TAILING;
           g_audioStateMs = now;
         }
@@ -1001,6 +1049,35 @@ static uint8_t gWorkCnt = 0;
 static bool gLiveStickyInit = false;
 
 
+static const long INACTIVITY_WEIGHT_DELTA_G = 5; // ±5 g considerati "fermo" per lo standby (reset solo se >5 g)
+static long g_inactDispRef = 0;
+static bool g_inactDispRefInit = false;
+
+// Considera l'utente "attivo" quando il peso visualizzato si muove di più di ±INACTIVITY_WEIGHT_DELTA_G.
+// Input: now = millis()
+// Side effects: aggiorna g_lastKeyPressMs e, se stiamo entrando in standby (INACT_ZZZ), annulla la sequenza.
+static void inactivity_noteWeightActivity(uint32_t now) {
+  long cur = stEnable ? gDispWorkLast : gDispLiveLast;
+  if (!g_inactDispRefInit) {
+    g_inactDispRefInit = true;
+    g_inactDispRef = cur;
+    return;
+  }
+  long d = cur - g_inactDispRef;
+  if (d < 0) d = -d;
+  if (d > INACTIVITY_WEIGHT_DELTA_G) {
+    g_lastKeyPressMs = now;
+    g_inactDispRef = cur;
+    if (g_inactivitySleepStage != INACT_NONE) {
+      g_inactivitySleepStage = INACT_NONE;
+      g_inactivityStageStartMs = 0;
+      audio_stopNow(true);
+      lastOledMs = 0; // ripristina UI normale subito
+    }
+  }
+}
+
+
 // ========================= UTILITY =========================
 inline long effectiveOffsetCounts(){
   return OFFSET_RAW + zero_track_counts;
@@ -1052,6 +1129,12 @@ void printHelp(){
   Serial.println(F("  wifi clear <1..2|all>      -> cancella credenziali da NVS"));
   Serial.println(F("  wifi apply                 -> ricarica credenziali e riavvia tentativi"));
 
+  Serial.println(F("  ota ? / ota help            -> help password OTA"));
+  Serial.println(F("  ota status                 -> stato password OTA"));
+  Serial.println(F("  ota set \"PASS\" [reboot]      -> imposta password OTA (salvata in NVS)"));
+  Serial.println(F("  ota clear [reboot]          -> cancella password OTA"));
+  Serial.println(F("  ota reboot                 -> reboot ESP32 (applica set/clear)"));
+
   Serial.println();
 }
 
@@ -1096,6 +1179,23 @@ static void wifiPrintHelp() {
   Serial.println(F("  wifi apply"));
   Serial.println(F("Nota: se SSID contiene spazi, usa le virgolette doppie."));
 }
+
+static void otaPrintHelp() {
+  Serial.println(F("\nOTA (password in NVS, MD5 hash):"));
+  Serial.println(F("  ota status"));
+  Serial.println(F("  ota set \"PASS\" [reboot]"));
+  Serial.println(F("  ota clear [reboot]"));
+  Serial.println(F("  ota reboot"));
+  Serial.println(F("Nota: set/clear diventano effettivi dopo reboot."));
+}
+
+static void otaPrintStatus() {
+  bool on = OtaStore::isConfigured();
+  Serial.print(F("[OTA] Password: ") );
+  Serial.println(on ? F("ON (hash in NVS)") : F("OFF"));
+  Serial.println(F("[OTA] Per applicare set/clear: ota reboot (o reset)."));
+}
+
 
 static void wifiPrintCreds(bool showPass) {
   char ssid1[WifiStore::SSID_MAX_LEN + 1] = {0};
@@ -1385,6 +1485,56 @@ else if (cmd.startsWith("mp3")) {
       }
       else {
         wifiPrintHelp();
+      }
+    }
+  }
+  else if (cmd == "ota" || cmd.startsWith("ota ") || cmd.startsWith("OTA ") ) {
+    String t[8];
+    int n = tokenizeQuoted(cmd, t, 8);
+    if (n <= 1) {
+      otaPrintHelp();
+    } else {
+      String sub = t[1];
+      sub.toLowerCase();
+      bool doReboot = false;
+      if (n >= 3) {
+        String last = t[n-1];
+        last.toLowerCase();
+        if (last == "reboot") doReboot = true;
+      }
+
+      if (sub == "?" || sub == "help") {
+        otaPrintHelp();
+      } else if (sub == "status") {
+        otaPrintStatus();
+      } else if (sub == "set") {
+        // ota set "PASS" [reboot]
+        if (n >= 3) {
+          bool ok = OtaStore::savePassword(t[2].c_str());
+          Serial.println(ok ? F("[OTA] set OK (hash salvato).") : F("[OTA] set FAIL"));
+          if (ok) Serial.println(F("[OTA] Ora fai: ota reboot (serve reboot per applicare)."));
+          if (ok && doReboot) {
+            delay(100);
+            ESP.restart();
+          }
+        } else {
+          Serial.println(F("[OTA] uso: ota set \"PASS\" [reboot]"));
+        }
+      } else if (sub == "clear") {
+        // ota clear [reboot]
+        bool ok = OtaStore::clear();
+        Serial.println(ok ? F("[OTA] clear OK") : F("[OTA] clear FAIL"));
+        Serial.println(F("[OTA] Ora fai: ota reboot (serve reboot per applicare)."));
+        if (ok && doReboot) {
+          delay(100);
+          ESP.restart();
+        }
+      } else if (sub == "reboot") {
+        Serial.println(F("[OTA] reboot..."));
+        delay(100);
+        ESP.restart();
+      } else {
+        otaPrintHelp();
       }
     }
   }
@@ -2040,31 +2190,41 @@ static uint32_t lastBattDebug = 0;
 // ========================= BATTERIA SLA 6V: sicurezza ESP =========================
 // Sotto certe tensioni (filtrate) il buck a 5V può perdere margine -> latenze/reset.
 // Strategia:
-//  - 0 tacche (EMPTY): beep di avviso ogni 5 min (ma UI normale)
-//  - "fase di stacco" (<= V_SAFE_SHUTDOWN_MIN_V): mostra solo avviso + beep ogni 10s per 60s, poi LIGHT-SLEEP
+//  - 0 tacche (EMPTY): icona batteria lampeggiante + 0011.mp3 + beep (cooldown 5 min)
+//  - "fase di stacco" (<= V_SAFE_SHUTDOWN_MIN_V): mostra solo avviso + 0012.mp3 (all'ingresso e a metà) + beep ogni 10s per 120s, poi LIGHT-SLEEP
 //  - Wake SOLO da tastiera (qualsiasi tasto). Niente wake automatico.
 
 static const float    V_SAFE_SHUTDOWN_MIN_V     = 5.80f;   // inizia countdown per sleep (V)
 static const float    V_SAFE_SHUTDOWN_CLEAR_V   = 5.90f;   // isteresi: annulla countdown se risali sopra
+// Uscita "soft" dal countdown: se recuperi stabilmente sopra questa soglia, annulliamo il countdown.
+// Deve stare > V_SAFE_SHUTDOWN_MIN_V, e idealmente coincide con il ritorno a 1 tacca (>= V_CRITICAL_MIN).
+static const float    V_SAFE_SHUTDOWN_EXIT_V    = 5.85f;
 static const float    V_HARD_SLEEP_MIN_V        = 5.70f;   // troppo bassa: vai a sleep subito
 static const uint32_t SAFE_SHUTDOWN_DEBOUNCE_MS = 5000;    // deve restare sotto soglia per 5s
 
-static const uint32_t PRE_SLEEP_COUNTDOWN_MS    = 60000;    // 60s avviso prima dello sleep
+// Deve restare sopra V_SAFE_SHUTDOWN_EXIT_V per un po' prima di annullare il countdown.
+static const uint32_t SAFE_SHUTDOWN_EXIT_STABLE_MS = 15000; // 15s
+
+static const uint32_t PRE_SLEEP_COUNTDOWN_MS    = 120000;   // 120s avviso prima dello sleep
+static const uint32_t PRE_SLEEP_MID_AUDIO_MS    = (PRE_SLEEP_COUNTDOWN_MS / 2); // 0012 anche a metà countdown
 static const uint32_t BEEP_EMPTY_MS             = 300000;   // beep ogni 5 min (0 tacche)
 static const uint32_t BEEP_COUNTDOWN_MS         = 10000;    // beep ogni 10s durante countdown
 
 // Robustezza anti-flapping:
-// - ingresso stato '0 tacche': deve restare sotto clear per un po'
-// - uscita (recupero): deve restare sopra clear per un po'
+// - ingresso stato '0 tacche' (EMPTY): deve restare in EMPTY per un po' (con V > 5.80) prima di avvisare
+// - uscita (recupero): deve restare sopra clear per un po' prima di resettare i cooldown
 // - avvisi sonori (mp3) non si ripetono prima di 5 minuti
-static const uint32_t BATT_EMPTY_DEBOUNCE_MS    = 10000;    // sotto clear per 10s prima di avviso '0 tacche'
+static const uint32_t BATT_EMPTY_DEBOUNCE_MS    = 10000;    // EMPTY stabile per 10s prima di avviso '0 tacche'
 static const uint32_t BATT_RECOVERY_STABLE_MS   = 30000;    // sopra clear per 30s prima di resettare gli avvisi
 static const uint32_t BATT_ALERT_COOLDOWN_MS    = 300000;   // 5 min
 
 static uint32_t g_lowBattSinceMs      = 0;
 static uint32_t g_preSleepStartMs     = 0;
+static uint32_t g_countdownExitSinceMs = 0;
 static uint32_t g_lastEmptyBeepMs     = 0;
 static uint32_t g_lastCountdownBeepMs = 0;
+// Durante countdown: riproduci 0012 anche a metà (una sola volta per episodio)
+static bool     g_countdownMidMp3Played = false;
 
 // Anti-flapping stato '0 tacche'
 static uint32_t g_emptyCandidateSinceMs = 0;
@@ -2148,6 +2308,8 @@ static bool maybeEnterSafeShutdown(uint32_t nowMs) {
     g_preSleepStartMs = 0;
     g_lastEmptyBeepMs = 0;
     g_lastCountdownBeepMs = 0;
+    g_countdownMidMp3Played = false;
+    g_countdownExitSinceMs = 0;
 
     g_emptyCandidateSinceMs = 0;
     g_emptyWarnActive = false;
@@ -2169,6 +2331,8 @@ static bool maybeEnterSafeShutdown(uint32_t nowMs) {
     g_lowBattSinceMs = 0;
     g_preSleepStartMs = 0;
     g_lastCountdownBeepMs = 0;
+    g_countdownMidMp3Played = false;
+    g_countdownExitSinceMs = 0;
 
     // Fuori dalla zona EMPTY: stop avviso 0 tacche.
     g_emptyCandidateSinceMs = 0;
@@ -2204,8 +2368,12 @@ static bool maybeEnterSafeShutdown(uint32_t nowMs) {
     return true; // oscuriamo la pesata
   }
 
-  // Zona "0 tacche" (flapping intorno a 5.90): ingresso debounced.
-  const bool inEmptyZone = (st.voltage_V > V_SAFE_SHUTDOWN_MIN_V) && (st.voltage_V < V_SAFE_SHUTDOWN_CLEAR_V);
+  // Zona "0 tacche" (UI = EMPTY): ingresso debounced.
+  // Importante: l'avviso 0011 deve essere coerente con la UI, quindi qui guardiamo
+  // direttamente lo stato calcolato dal battery_monitor (st.level) e NON la finestra
+  // di tensione del countdown.
+  // Inoltre limitiamo la zona "0 tacche" al cuscinetto prima del countdown: sopra 5.80 V.
+  const bool inEmptyZone = (st.level == BATT_LEVEL_EMPTY) && (st.voltage_V > V_SAFE_SHUTDOWN_MIN_V);
   if (inEmptyZone) {
     if (!g_emptyWarnActive) {
       if (g_emptyCandidateSinceMs == 0) g_emptyCandidateSinceMs = nowMs;
@@ -2247,29 +2415,37 @@ static bool maybeEnterSafeShutdown(uint32_t nowMs) {
     return true;
   }
 
-  // Sotto soglia: debounce + countdown prima di andare a sleep
-  if (st.voltage_V <= V_SAFE_SHUTDOWN_MIN_V) {
-    if (g_lowBattSinceMs == 0) g_lowBattSinceMs = nowMs;
-
-    // Debounce prima di entrare nella fase "stacco"
-    if ((nowMs - g_lowBattSinceMs) < SAFE_SHUTDOWN_DEBOUNCE_MS) {
-      return false; // ancora nessun avviso bloccante
-    }
-
-    // Avvio countdown
-    if (g_preSleepStartMs == 0) {
-      g_preSleepStartMs = nowMs;
-      g_lastCountdownBeepMs = 0;
-
-      // 0012.mp3 = Batteria critica (non ripetere prima di 5 minuti)
-      if (g_lastMp3BattCritMs == 0 || (nowMs - g_lastMp3BattCritMs) >= BATT_ALERT_COOLDOWN_MS) {
-        audio_requestPlayMp3(12);
-        g_lastMp3BattCritMs = nowMs;
+  // Countdown già avviato: resta stabile anche se la tensione rimbalza appena sopra 5.80.
+  // Uscita solo se recuperi stabilmente sopra V_SAFE_SHUTDOWN_EXIT_V (o sopra CLEAR, gestito sopra).
+  if (g_preSleepStartMs != 0) {
+    if (st.voltage_V >= V_SAFE_SHUTDOWN_EXIT_V) {
+      if (g_countdownExitSinceMs == 0) g_countdownExitSinceMs = nowMs;
+      if ((nowMs - g_countdownExitSinceMs) >= SAFE_SHUTDOWN_EXIT_STABLE_MS) {
+        // Cancella countdown: consideriamo questo un "nuovo episodio" -> riarma anche l'audio 0012.
+        g_lowBattSinceMs = 0;
+        g_preSleepStartMs = 0;
+        g_lastCountdownBeepMs = 0;
+        g_countdownMidMp3Played = false;
+        g_battSleepStage = BATT_SLEEP_NONE;
+        g_battStageStartMs = 0;
+        g_countdownExitSinceMs = 0;
+        g_lastMp3BattCritMs = 0;
+        return false;
       }
+    } else {
+      g_countdownExitSinceMs = 0;
     }
 
     // Durante countdown: mostra SOLO avviso
     ui_showBatteryShutdown(st.voltage_V);
+
+    // 0012 a metà countdown (una sola volta per episodio)
+    const uint32_t elapsedMs = (uint32_t)(nowMs - g_preSleepStartMs);
+    if (!g_countdownMidMp3Played && elapsedMs >= PRE_SLEEP_MID_AUDIO_MS) {
+      audio_requestPlayMp3(12);
+      g_lastMp3BattCritMs = nowMs;
+      g_countdownMidMp3Played = true;
+    }
 
     if (g_lastCountdownBeepMs == 0 || (nowMs - g_lastCountdownBeepMs) >= BEEP_COUNTDOWN_MS) {
       buzzerWarn();
@@ -2289,10 +2465,45 @@ static bool maybeEnterSafeShutdown(uint32_t nowMs) {
     return true; // oscuriamo la pesata mentre siamo in countdown
   }
 
-  // Qualsiasi altra condizione: reset dei timer di countdown
-  g_lowBattSinceMs = 0;
+  // Entrata countdown: una volta che vai sotto 5.80, non resettare subito se rimbalzi dentro il "cuscinetto"
+  // (5.80..5.85). Questo evita oscillazioni e rende l'ingresso più affidabile.
+  const bool wantsCountdown = (st.voltage_V <= V_SAFE_SHUTDOWN_MIN_V) ||
+                             (g_lowBattSinceMs != 0 && st.voltage_V < V_SAFE_SHUTDOWN_EXIT_V);
+
+  if (wantsCountdown) {
+    if (st.voltage_V <= V_SAFE_SHUTDOWN_MIN_V && g_lowBattSinceMs == 0) g_lowBattSinceMs = nowMs;
+
+    // Debounce prima di entrare nella fase "stacco"
+    // Nota: il timer parte al primo "vero" passaggio sotto 5.80; piccoli rimbalzi nel cuscinetto non lo annullano.
+    if ((nowMs - g_lowBattSinceMs) < SAFE_SHUTDOWN_DEBOUNCE_MS) {
+      return false; // ancora nessun avviso bloccante
+    }
+
+    // Avvio countdown
+    if (g_preSleepStartMs == 0) {
+      g_preSleepStartMs = nowMs;
+      g_lastCountdownBeepMs = 0;
+      g_countdownExitSinceMs = 0;
+      g_countdownMidMp3Played = false;
+
+      // 0012.mp3 = Batteria critica: suona subito all'ingresso countdown (poi di nuovo a metà).
+      audio_requestPlayMp3(12);
+      g_lastMp3BattCritMs = nowMs;
+    }
+
+    // Da qui in poi il countdown è gestito dal ramo "g_preSleepStartMs != 0" sopra.
+    // Ma in questo giro di loop possiamo già oscurare la pesata.
+    return true;
+  }
+
+  // Fuori dalla zona countdown (>= 1 tacca): disarma l'ingresso.
+  if (st.voltage_V >= V_SAFE_SHUTDOWN_EXIT_V) {
+    g_lowBattSinceMs = 0;
+  }
   g_preSleepStartMs = 0;
   g_lastCountdownBeepMs = 0;
+  g_countdownMidMp3Played = false;
+  g_countdownExitSinceMs = 0;
   g_battSleepStage = BATT_SLEEP_NONE;
   g_battStageStartMs = 0;
   return false;
@@ -2334,37 +2545,8 @@ void loop(){
   battery_update(now);
   if (maybeEnterSafeShutdown(now)) { return; }
 
-    // Sleep per inattività (5 min senza tasti). Evita di dormire durante OTA.
-  bool allowInactivitySleep = g_inactivitySleepArmed;
-  // Se non è in corso una sequenza standby, evita di dormire mentre è in corso un audio "non-standby".
-  if (g_inactivitySleepStage == INACT_NONE && audio_isActive()) allowInactivitySleep = false;
-#if ENABLE_WIFI_OTA
-  if (Net::isOtaInProgress()) allowInactivitySleep = false;
-#endif
+	
 
-  if (!allowInactivitySleep) {
-    g_inactivitySleepStage = INACT_NONE;
-    g_inactivityStageStartMs = 0;
-  } else {
-    if (g_inactivitySleepStage == INACT_NONE) {
-      if ((now - g_lastKeyPressMs) >= INACTIVITY_SLEEP_MS) {
-        // Transizione risparmio energetico: mostra Zzz... per 5s e durante suona 0003.
-        ui_renderSleepZzz();
-        // 0003.mp3 = Entrata risparmio energetico (inattività)
-        audio_requestPlayMp3(3);
-        g_inactivitySleepStage = INACT_ZZZ;
-        g_inactivityStageStartMs = now;
-        lastOledMs = 0; // forza refresh rapido
-      }
-    } else { // INACT_ZZZ
-      if ((now - g_inactivityStageStartMs) >= INACTIVITY_ZZZ_MS) {
-        g_inactivitySleepStage = INACT_NONE;
-        g_inactivityStageStartMs = 0;
-        enterInactivityLightSleep();
-        return;
-      }
-    }
-	}
 // Ogni 3 secondi stampa lo stato batteria
   if (now - lastBattDebug > 3000) {
     lastBattDebug = now;
@@ -2610,6 +2792,43 @@ if (haveNewWork) {
   // Audio: 0015.mp3 una sola volta all'ingresso in ERROR (soft o hard)
   if (hxHealth_popEnterErrorBeep(&g_hxHealth)) {
     audio_requestPlayMp3(15);
+  }
+
+
+  // Inattività: consideriamo attività anche una variazione "reale" del peso visualizzato.
+  // Se il peso resta in un range ±5 g, per lo standby è come se fosse fermo.
+  inactivity_noteWeightActivity(now);
+
+  // Sleep per inattività (5 min senza tasti/attività). Evita di dormire durante OTA.
+  bool allowInactivitySleep = g_inactivitySleepArmed;
+  // Se non è in corso una sequenza standby, evita di dormire mentre è in corso un audio "non-standby".
+  if (g_inactivitySleepStage == INACT_NONE && audio_isActive()) allowInactivitySleep = false;
+#if ENABLE_WIFI_OTA
+  if (Net::isOtaInProgress()) allowInactivitySleep = false;
+#endif
+
+  if (!allowInactivitySleep) {
+    g_inactivitySleepStage = INACT_NONE;
+    g_inactivityStageStartMs = 0;
+  } else {
+    if (g_inactivitySleepStage == INACT_NONE) {
+      if ((now - g_lastKeyPressMs) >= INACTIVITY_SLEEP_MS) {
+        // Transizione risparmio energetico: mostra Zzz... per 5s e durante suona 0003.
+        ui_renderSleepZzz();
+        // 0003.mp3 = Entrata risparmio energetico (inattività)
+        audio_requestPlayMp3(3);
+        g_inactivitySleepStage = INACT_ZZZ;
+        g_inactivityStageStartMs = now;
+        lastOledMs = 0; // forza refresh rapido
+      }
+    } else { // INACT_ZZZ
+      if ((now - g_inactivityStageStartMs) >= INACTIVITY_ZZZ_MS) {
+        g_inactivitySleepStage = INACT_NONE;
+        g_inactivityStageStartMs = 0;
+        enterInactivityLightSleep();
+        return;
+      }
+    }
   }
 
 // ====================== OLED update cadenzato (sempre) ======================

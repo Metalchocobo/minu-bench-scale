@@ -16,6 +16,7 @@
   #include <WiFiUdp.h>
   #include <ArduinoOTA.h>
   #include "wifi_store.h"
+  #include "ota_store.h"
 #endif
 
 #if ENABLE_ARDUINO_CLOUD
@@ -50,6 +51,10 @@ namespace Net {
   static bool     otaInProgress  = false;
   static const char* otaHostname = "minu-bench-scale";
 
+  // Password OTA: salvata in NVS come MD5 (hex) per ArduinoOTA.setPasswordHash().
+  static bool otaPassConfigured = false;
+  static char otaPassHash[OtaStore::MD5_HEX_LEN + 1] = {0};
+
   // Credenziali WiFi (max 2) caricate da NVS (Preferences).
   // NOTA: non vanno mai hardcodate / versionate nel repo.
   struct WifiCred { const char* ssid; const char* pass; };
@@ -80,6 +85,17 @@ namespace Net {
       Serial.print(F("[NET] WiFi creds: "));
       Serial.print(wifiCredsN);
       Serial.println(F(" rete/i configurata/e."));
+    }
+  }
+
+  inline void otaLoadPasswordHashFromNVS(bool log = false) {
+    otaPassConfigured = OtaStore::loadHash(otaPassHash, sizeof(otaPassHash));
+    if (log) {
+      if (otaPassConfigured) {
+        Serial.println(F("[OTA] Password attiva (salvata in NVS come hash)."));
+      } else {
+        Serial.println(F("[OTA] ATTENZIONE: nessuna password OTA impostata."));
+      }
     }
   }
 
@@ -192,6 +208,11 @@ namespace Net {
     otaBegun      = false;
 
     ArduinoOTA.setHostname(otaHostname);
+
+    otaLoadPasswordHashFromNVS(true);
+    if (otaPassConfigured) {
+      ArduinoOTA.setPasswordHash(otaPassHash);
+    }
 
     ArduinoOTA.onStart([]() {
       Serial.println(F("[OTA] Update iniziato"));

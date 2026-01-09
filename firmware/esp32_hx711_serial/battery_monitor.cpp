@@ -34,15 +34,20 @@ static const uint32_t CHARGE_MIN_ON_MS = 20000; // 20s
 // Nota: la tensione dipende molto dal carico e dalla fase di carica; queste soglie sono
 // una mappa "pratica" per UI (tacche) e non una misura precisa di SoC.
 //
-// FULL: tipicamente ~6.35-6.40 V  in carica può salire oltre o i 6.35
+// Soglie tarate per "usabilità" (tacche) su SLA 6V, basate su tensione filtrata.
+// Non sono una misura precisa di SoC: sotto carico e dopo una carica la tensione
+// può cambiare parecchio a parità di energia reale.
+//
+// FULL: alto, ma ancora realistico anche a riposo (evita che FULL duri 1 minuto).
 static const float V_FULL_MIN      = 6.20f;
 // GOOD: batteria ancora "comoda" sotto carico leggero.
 static const float V_GOOD_MIN      = 6.08f;
 // LOW: zona medio-bassa.
-static const float V_LOW_MIN       = 5.96f;
-// CRITICAL: vicino a scarica (sotto carico può oscillare).
+static const float V_LOW_MIN       = 5.95f;
+// CRITICAL: 1 tacca; sotto questa soglia l'UI mostra 0 tacche (EMPTY).
+// Nota: abbiamo volutamente un "cuscinetto" tra 0 tacche (sotto 5.85) e countdown stacco (5.80).
 static const float V_CRITICAL_MIN  = 5.85f;
-// Sotto V_CRITICAL_MIN => LEVEL_EMPTY
+// Sotto V_CRITICAL_MIN => LEVEL_EMPTY (0 tacche)
 
 // -----------------------------------------------------------------------------
 // STATO INTERNO

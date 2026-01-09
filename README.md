@@ -194,12 +194,14 @@ Se INA non viene trovato:
 - prima cosa: controlla **SDA/SCL non invertiti**.
 
 ### 8.2 Soglie tacche (default firmware, tensione filtrata)
-Soglie “pratiche” (dipendono da carico/temperatura):
-- **4 tacche (FULL)**: ≥ **6.35 V**
-- **3 tacche (GOOD)**: ≥ **6.20 V**
-- **2 tacche (LOW)**:  ≥ **6.05 V**
-- **1 tacca (CRITICAL)**: ≥ **5.90 V**
-- **0 tacche (EMPTY)**: < **5.90 V**
+Soglie “pratiche” (dipendono da carico/temperatura). Sono tarate per **usabilità UI** (tacche), non per SoC perfetto:
+- **4 tacche (FULL)**: ≥ **6.20 V**
+- **3 tacche (GOOD)**: ≥ **6.08 V**
+- **2 tacche (LOW)**:  ≥ **5.95 V**
+- **1 tacca (CRITICAL)**: ≥ **5.85 V**
+- **0 tacche (EMPTY)**: < **5.85 V**
+
+Nota: c'è un **cuscinetto** tra 0 tacche e lo stacco per batteria. La sequenza di countdown parte sotto **5.80 V**.
 
 ### 8.3 Rilevamento “in carica” (stabilizzato)
 L’icona charging è basata sulla **corrente** (negativa = entra in batteria) con:
@@ -220,12 +222,18 @@ Default firmware:
 La protezione qui è pensata per l’ESP32 (evitare latenze/reset quando il buck 5V perde margine).
 
 Comportamento:
-- **0 tacche (EMPTY)**: beep di avviso ogni **60 s**, UI normale
+- **0 tacche (EMPTY)**: icona batteria **lampeggiante** + avviso sonoro
+  - **0011.mp3** (batteria bassa) con **cooldown 5 min**
+  - beep buzzer con **cooldown 5 min**
+  - Nota: l'avviso 0011 è agganciato al livello **EMPTY (0 tacche)**, non a una finestra fissa di volt.
 - Se V scende sotto **5,80 V** per ≥ **5 s**:
   - schermo “batteria scarica, collega alimentatore”
-  - beep ogni **10 s** per **60 s**
+  - **0012.mp3** (batteria critica) **subito all'ingresso countdown** e **di nuovo a metà** (a ~60 s)
+  - beep ogni **10 s** per **120 s**
   - poi entra in **LIGHT-SLEEP**
 - Prima del light-sleep per batteria scarica: DFPlayer viene **spento** via MOSFET (zero consumo audio in sleep).
+- Anti-troncamento audio (DFPlayer): applicato un gap ~200 ms tra stop → play e ignorati i primi ~300 ms di BUSY=idle dopo il play (evita tagli tipo 0001→0002).
+  - Nota HW: BUSY su GPIO39 non ha pull-up interno; se il BUSY resta instabile, aggiungere pull-up esterno verso 3V3 (10k..47k).
 - Wake: premendo un tasto (la tastiera risveglia, poi l’ESP32 riparte con reboot pulito)
 
 ---
@@ -234,10 +242,11 @@ Comportamento:
 ---
 
 ## 10) Risparmio energetico per inattività (5 minuti)
-Se per **5 minuti** non viene premuto alcun tasto, la bilancia entra in **LIGHT-SLEEP**.
+Se per **5 minuti** non viene premuto alcun tasto **e il peso visualizzato resta fermo entro ±5 g**, la bilancia entra in **LIGHT-SLEEP**.
 
 Caratteristiche:
 - Wake: **qualsiasi tasto**.
+- L'inattività viene azzerata anche da una variazione del peso visualizzato **> 5 g** (in LIVE o WORK).
 - **Nessun reset** dello stato/pesata: riprende esattamente dove era.
 - WiFi/OTA vengono sospesi prima dello sleep e riattivati dopo il wake **solo se l'utente ha lasciato il WiFi ON**.
 - **Tasto SLEEP**: forza la sequenza di standby (schermata **Zzz...** per ~5 s + audio 0003), poi light-sleep.
@@ -267,6 +276,14 @@ Configurazione credenziali (max 2 reti, via seriale):
 - `wifi creds showpass 1` / `wifi creds showpass 2` (recupero: stampa password in chiaro)
 - `wifi clear 1` / `wifi clear 2` / `wifi clear all`
 - `wifi apply` (ricarica credenziali e riavvia i tentativi senza reboot)
+
+Password OTA (consigliata):
+- `ota status`
+- `ota set "PASS" [reboot]`
+- `ota clear [reboot]`
+- `ota reboot`
+
+Note: la password non viene salvata in chiaro: in NVS resta solo un hash (MD5). Per rendere effettivi set/clear serve un reboot.
 
 Persistenza:
 - le credenziali restano in NVS anche dopo OTA/upload standard.
