@@ -778,9 +778,9 @@ const float DEFAULT_CPG      = float(DEFAULT_REF_RAW - DEFAULT_ZERO_RAW) / float
 
 // [1] Auto-TARE all’avvio (semplice, niente logiche complicate)
 const bool     AUTO_TARE_ON_BOOT   = true;
-const uint16_t AUTO_TARE_SAMPLES   = 25;
-const uint16_t AUTO_TARE_SETTLE_MS = 800;
-const uint16_t AUTO_TARE_MIN_SAMPLES = 10;    // minimo campioni richiesti
+const uint16_t AUTO_TARE_SAMPLES   = 64;
+const uint16_t AUTO_TARE_SETTLE_MS = 400;  // discard iniziale (assestamento)
+const uint16_t AUTO_TARE_MIN_SAMPLES = 32;    // minimo campioni (≈0.4 s @ 80 SPS)
 const float    AUTO_TARE_RANGE_G    = 0.40f;  // finestra di quiete (range) per fermarsi prima
 const uint32_t AUTO_TARE_QUIET_MS    = 400;    // deve restare in range per questo tempo
 
@@ -815,13 +815,13 @@ float       ZT_MAX_G            = 3.0f;     // cap totale ±3 g
 
 // 5b) Snap-to-zero su scarico
 const bool  UNLOAD_SNAP_ENABLE   = true;
-float       UNLOAD_CROSS_WIN_G   = 6.0f;    // esegui snap se |g| ≤ 6 g
-float       UNLOAD_SLOPE_GPS_NEG = -3.0f;   // pendenza ≤ −3 g/s
+float       UNLOAD_CROSS_WIN_G   = 3.0f;    // esegui snap se |g| ≤ 3 g (meno aggressivo)
+float       UNLOAD_SLOPE_GPS_NEG = -5.0f;   // pendenza ≤ -5 g/s (meno falsi positivi)
 uint32_t    UNLOAD_SLOPE_WIN_MS  = 400;     // finestra per slope scarico
 float       UNLOAD_STABLE_RANGE_G= 0.8f;    // range “quiete” per snap
 uint32_t    UNLOAD_STABLE_MS     = 300;     // ms di quiete
 uint32_t    UNLOAD_COOLDOWN_MS   = 2000;    // minimo tra due snap
-float       UNLOAD_SNAP_MAX_G    = 5.0f;    // correzione max snap (g)
+float       UNLOAD_SNAP_MAX_G    = 2.0f;    // correzione max snap (g)
 
 // [6] Campionamento logica (non il sample rate del sensore)
 const uint32_t SAMPLE_MS = 60; // ~16 Hz logica (HX711 10 Hz o 80 Hz, hardware)
@@ -895,12 +895,21 @@ static void tareMaybeApply(uint32_t nowMs){
   if (gTareOffsetApplied) return;
   if (nowMs < gTareUiEndMs) return; // applica offset solo a fine barra
 
-  long rawZero = 0;
-  if (gTareCnt >= TARE_MIN_SAMPLES) {
-    rawZero = (long)(gTareSum / (int64_t)gTareCnt);
-  } else {
-    // fallback robusto (blocking) se non sono arrivati abbastanza campioni
-    rawZero = readRawHXAvg(40); // ~0.5s @ 80 SPS
+  // Non-bloccante:
+  // Se per qualsiasi motivo non sono arrivati abbastanza campioni (HX non pronto / glitch),
+  // evitiamo un fallback blocking che congelerebbe UI/audio/wifi.
+  if (gTareCnt == 0) {
+    Serial.println(F("[TARE] FAIL: nessun campione raccolto"));
+    gTareOffsetApplied = true;
+    return;
+  }
+
+  long rawZero = (long)(gTareSum / (int64_t)gTareCnt);
+
+  if (gTareCnt < TARE_MIN_SAMPLES) {
+    Serial.print(F("[TARE] WARN: campioni insufficienti ("));
+    Serial.print(gTareCnt);
+    Serial.println(F("). Offset applicato comunque (non-bloccante)."));
   }
 
   OFFSET_RAW = rawZero;
@@ -911,6 +920,7 @@ static void tareMaybeApply(uint32_t nowMs){
 
   gTareOffsetApplied = true;
 }
+
 
 
 
@@ -1029,10 +1039,62 @@ unsigned long lastOledMs    = 0;
 // WORK: usato per logiche STABLE/UNSTABLE, ZT, ecc.  (N più alto)
 // LIVE: usato SOLO per visualizzazione in modalità LIVE (stEnable=false) (N più basso)
 static const uint8_t DECIM_WORK_N = 5;       // ~16 Hz se HX=80 SPS
-static const uint8_t DECIM_LIVE_N = 6;       // ~40 Hz se HX=80 SPS
-// LIVE display: rounding con isteresi (anti-flicker) in grammi.
-// Nota: riguarda solo la visualizzazione in modalità LIVE (stEnable=false).
-static const float LIVE_HYST_G = 0.25f;
+static const uint8_t DECIM_LIVE_N = 2;       // ~40 Hz se HX=80 SPS (solo display in LIVE)
+// Display (solo visualizzazione) con isteresi:
+// - Zero band con soglia di ingresso (enter) e soglia di uscita (exit):
+//   evita che vicino allo zero si accendano/spegnano continuamente ±1 g.
+// - Isteresi sui cambi di intero: riduce il flicker tra N e N+1 mentre pesi.
+//
+// WORK: 0 finché |g| < 1.3 g (simmetrico + / -). Uscita dallo zero più bassa per ridurre flicker.
+static const float DISP_ZERO_ENTER_WORK_G = 1.30f;
+static const float DISP_ZERO_EXIT_WORK_G  = 0.90f;
+static const float DISP_STEP_HYS_WORK_G   = 0.20f;
+
+// LIVE: 0 finché |g| < 1.0 g, ma scatta subito a 1 quando tocchi 1.0.
+// Per ridurre flicker, rientro a 0 solo sotto ~0.7 g.
+static const float DISP_ZERO_ENTER_LIVE_G = 1.00f;
+static const float DISP_ZERO_EXIT_LIVE_G  = 0.70f;
+static const float DISP_STEP_HYS_LIVE_G   = 0.15f;
+
+// Quantizzazione con isteresi (stateful: usa prev).
+// Side effects: nessuno.
+static inline long displayQuantizeHys(float g, float enterZeroAbs, float exitZeroAbs, float stepHysAbs, long prev) {
+  // 1) Banda zero con isteresi
+  if (prev == 0) {
+    if (g >=  enterZeroAbs) return  1;
+    if (g <= -enterZeroAbs) return -1;
+    return 0;
+  }
+
+  // Se cambi segno ma sei ancora nella zona “vicino allo zero”, forza passaggio per 0.
+  const int sPrev = (prev > 0) - (prev < 0);
+  const int sG    = (g > 0.0f) - (g < 0.0f);
+  if (sPrev != 0 && sG != 0 && sPrev != sG && fabsf(g) < enterZeroAbs) {
+    return 0;
+  }
+
+  if (fabsf(g) <= exitZeroAbs) return 0;
+
+  // 2) Isteresi su cambio di intero (anti-flicker)
+  long d = prev;
+  long target = lroundf(g);
+  if (target > d) {
+    const float th = (float)d + 0.5f + stepHysAbs;
+    if (g >= th) d = target;
+  } else if (target < d) {
+    const float th = (float)d - 0.5f - stepHysAbs;
+    if (g <= th) d = target;
+  }
+  return d;
+}
+
+static inline long displayWorkQuant(float g, long prev) {
+  return displayQuantizeHys(g, DISP_ZERO_ENTER_WORK_G, DISP_ZERO_EXIT_WORK_G, DISP_STEP_HYS_WORK_G, prev);
+}
+
+static inline long displayLiveQuant(float g, long prev) {
+  return displayQuantizeHys(g, DISP_ZERO_ENTER_LIVE_G, DISP_ZERO_EXIT_LIVE_G, DISP_STEP_HYS_LIVE_G, prev);
+}
 
 // Ultimi valori "pubblici" per il display
 static long gDispWorkLast = 0;
@@ -1045,8 +1107,6 @@ static uint8_t gLiveCnt = 0;
 static long gWorkSum = 0;
 static uint8_t gWorkCnt = 0;
 
-// Stato display LIVE (isteresi)
-static bool gLiveStickyInit = false;
 
 
 static const long INACTIVITY_WEIGHT_DELTA_G = 5; // ±5 g considerati "fermo" per lo standby (reset solo se >5 g)
@@ -1096,7 +1156,6 @@ void resetFiltersAndState(){
   gLiveCnt = 0;
   gWorkSum = 0;
   gWorkCnt = 0;
-  gLiveStickyInit = false;
 
   gDispWorkLast = 0;
   gDispLiveLast = 0;
@@ -1855,18 +1914,20 @@ bool autoTareOnBoot(uint16_t maxSamples){
     return true;
   }
 
-  // Auto-tare "smart":
-  // - minimo AUTO_TARE_MIN_SAMPLES
-  // - continua finché la finestra (range) rientra sotto soglia per AUTO_TARE_QUIET_MS
-  // - massimo maxSamples (di default AUTO_TARE_SAMPLES = 25)
-  Serial.println(F("[BOOT] Auto-TARE smart..."));
+  // Approccio 1 (robusto ma veloce) @ 80 SPS:
+  // 1) discard iniziale (assestamento)
+  // 2) raccoglie fino a maxSamples (default 64)
+  // 3) se trova una finestra "quiet" (range <= soglia per AUTO_TARE_QUIET_MS) può fermarsi prima
+  // 4) imposta OFFSET_RAW con trimmed-mean sui campioni raccolti (taglia outlier)
+  Serial.println(F("[BOOT] Auto-TARE (robusta) ..."));
   delay(AUTO_TARE_SETTLE_MS);
 
   const uint16_t minSamples = AUTO_TARE_MIN_SAMPLES;
+  const uint16_t MAX_BUF = 64;
   if (maxSamples < minSamples) maxSamples = minSamples;
-  if (maxSamples > 25) maxSamples = 25; // safety: buffer fisso
+  if (maxSamples > MAX_BUF)    maxSamples = MAX_BUF;
 
-  long buf[25];
+  long buf[MAX_BUF];
   uint16_t n = 0;
   uint32_t quietStart = 0;
 
@@ -1905,13 +1966,38 @@ bool autoTareOnBoot(uint16_t maxSamples){
     }
   }
 
-  // Media sugli ultimi minSamples (se disponibili), così ignoriamo eventuali transienti iniziali
-  uint16_t useN = (n >= minSamples) ? minSamples : n;
-  long s = 0;
-  for (uint16_t i = n - useN; i < n; i++){
-    s += buf[i];
+  // Trimmed mean sui campioni raccolti: taglia outlier (10% per lato se possibile).
+  // Così riduci l'effetto di un singolo spike/colpo durante l'avvio.
+  long tmp[MAX_BUF];
+  for (uint16_t i = 0; i < n; i++) tmp[i] = buf[i];
+
+  // insertion sort (n <= 64)
+  for (uint16_t i = 1; i < n; i++){
+    long key = tmp[i];
+    int j = (int)i - 1;
+    while (j >= 0 && tmp[j] > key){
+      tmp[j + 1] = tmp[j];
+      j--;
+    }
+    tmp[j + 1] = key;
   }
-  long rawZero = s / (long)useN;
+
+  uint16_t trim = (n >= 40) ? (uint16_t)(n / 10) : 0; // 10% per lato solo se abbastanza campioni
+  uint16_t i0 = trim;
+  uint16_t i1 = n - trim;
+
+  int64_t s = 0;
+  uint16_t useN = 0;
+  for (uint16_t i = i0; i < i1; i++){
+    s += (int64_t)tmp[i];
+    useN++;
+  }
+  if (useN == 0) { // safety
+    Serial.println(F("[BOOT] Auto-TARE FAIL (useN=0)"));
+    return false;
+  }
+
+  long rawZero = (long)(s / (int64_t)useN);
 
   OFFSET_RAW = rawZero;
   zero_track_counts = 0;
@@ -1919,15 +2005,16 @@ bool autoTareOnBoot(uint16_t maxSamples){
 
   Serial.print(F("[BOOT] Auto-TARE OK. OFFSET_RAW="));
   Serial.print(OFFSET_RAW);
-  Serial.print(F("  n=")); Serial.print(n);
+  Serial.print(F("  n="));    Serial.print(n);
   Serial.print(F("  useN=")); Serial.println(useN);
 
   if (n >= minSamples && quietStart == 0){
-    Serial.println(F("[BOOT] Auto-TARE: non ha trovato una finestra 'quiet' entro il max, ma ha impostato comunque l'offset. Se serve: premi TARA."));
+    Serial.println(F("[BOOT] Auto-TARE: finestra quiet non trovata, ma offset impostato comunque. Se serve: premi TARA."));
   }
 
   return true;
 }
+
 
 // ========================= INIT HX711 =========================
 bool initHX711(){
@@ -2627,22 +2714,9 @@ if (hx711_is_ready()) {
 
     long offEff = effectiveOffsetCounts();
     float gFast = (SCALE_CPG > 0.01f) ? ((float)(rawLive - offEff) / SCALE_CPG) : 0.0f;
-
-    // LIVE: rounding con isteresi (anti-flicker)
-    // - Inizializza al primo valore disponibile.
-    // - Aggiorna solo quando esce dalla finestra di isteresi attorno al valore attuale.
-    //   (solo display: non influenza le logiche WORK)
-    long rounded = lroundf(gFast);
-    if (!gLiveStickyInit) {
-      gDispLiveLast = rounded;
-      gLiveStickyInit = true;
-    } else {
-      const float upTh = (float)gDispLiveLast + 0.5f + LIVE_HYST_G;
-      const float dnTh = (float)gDispLiveLast - 0.5f - LIVE_HYST_G;
-      if (gFast >= upTh || gFast <= dnTh) {
-        gDispLiveLast = rounded;
-      }
-    }
+    // LIVE (solo display): quantizzazione con isteresi.
+    // Requisito: scatta a 1 solo quando tocchi |g| >= 1.0 (entry), ma riduce flicker mentre pesi.
+    gDispLiveLast = displayLiveQuant(gFast, gDispLiveLast);
 
     // HX health: in modalità LIVE lo schermo usa gDispLiveLast.
     if (!stEnable) {
@@ -2692,7 +2766,7 @@ if (haveNewWork) {
     if (fabsf(gLive - dispUnstable) > deadbandUnstable){
       dispUnstable = gLive;
     }
-    gDisp = lroundf(dispUnstable);
+    gDisp = displayLiveQuant(dispUnstable, gDispLiveLast);
   } else {
     if (state == STABLE){
       // lascia STABLE se ti discosti dal latch
@@ -2700,7 +2774,7 @@ if (haveNewWork) {
         state = UNSTABLE;
         dispInit = false;
       }
-      gDisp = lroundf(gLatch);
+      gDisp = displayWorkQuant(gLatch, gDispWorkLast);
     } else {
       // UNSTABLE: approccia il live con deadband
       if (!dispInit){
@@ -2710,7 +2784,7 @@ if (haveNewWork) {
       if (fabsf(gLive - dispUnstable) > deadbandUnstable){
         dispUnstable = gLive;
       }
-      gDisp = lroundf(dispUnstable);
+      gDisp = displayWorkQuant(dispUnstable, gDispWorkLast);
 
       // rientro STABLE se il range in finestra è piccolo
       int   nStab   = constrain((int)ceil((float)ST_TO_STABLE_MS / (float)SAMPLE_MS), 2, MAX_HIST);
@@ -2718,7 +2792,7 @@ if (haveNewWork) {
       if (rngStab < ST_ENTER_RANGE_G){
         state  = STABLE;
         gLatch = gLive;
-        gDisp  = lroundf(gLatch);
+        gDisp  = displayWorkQuant(gLatch, gDispWorkLast);
       }
     }
   }

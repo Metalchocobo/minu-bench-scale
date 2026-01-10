@@ -166,6 +166,22 @@ Concetto:
 - **WORK**: più stabile (decisioni di stato, zero-tracking, ecc.)
 - **LIVE**: più reattivo a display, con anti-flicker
 
+
+### Display: anti-flicker (novità)
+In LIVE e WORK la visualizzazione è **quantizzata a grammo** ma con due accorgimenti per evitare tremolii:
+1) **Banda zero con isteresi** (enter/exit):
+   - **LIVE**: 0 finché `|g| < 1.0 g` (entry). Dopo che sei entrato, torna a 0 solo sotto ~`0.7 g` (exit).
+   - **WORK**: 0 finché `|g| < 1.3 g` (entry). Rientro a 0 solo sotto ~`0.9 g` (exit).
+2) **Isteresi tra interi**: riduce il flicker tra N e N+1 mentre pesi (senza introdurre filtri “lenti” sul segnale).
+
+Nota: è **solo una regola di visualizzazione** (non cambia i conti interni, STABLE/UNSTABLE, ZT, ecc.).
+
+### TARE (novità)
+- Rimossa la fallback **blocking**: se per qualsiasi motivo arrivano pochi campioni, l’offset viene applicato con quelli disponibili senza congelare UI/audio.
+
+### Auto-TARE al boot (novità)
+- Approccio “robusto”: discard iniziale + fino a **64 campioni** e **trimmed-mean** (taglia outlier) per ridurre i casi di “0 → +1 g” dopo l’avvio.
+
 I parametri (N di media, isteresi, ecc.) sono nel firmware e sono pensati per essere ritoccati in base al tuo rumore reale.
 
 ---
