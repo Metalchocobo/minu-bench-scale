@@ -164,7 +164,11 @@ Con HX711 a **80 SPS**:
 
 Concetto:
 - **WORK**: più stabile (decisioni di stato, zero-tracking, ecc.)
-- **LIVE**: più reattivo a display, con anti-flicker
+- **LIVE**: più reattivo a display, con anti-flicker (e smoothing leggero EMA sul float)
+
+Impostazioni attuali (HX711=80 SPS):
+- WORK: decimazione **N=5**
+- LIVE: decimazione **N=3** + **EMA veloce** sul valore in grammi prima della quantizzazione (alpha ~0.45)
 
 
 ### Display: anti-flicker (novità)

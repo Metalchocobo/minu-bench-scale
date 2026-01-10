@@ -1110,7 +1110,12 @@ unsigned long lastOledMs    = 0;
 // WORK: usato per logiche STABLE/UNSTABLE, ZT, ecc.  (N più alto)
 // LIVE: usato SOLO per visualizzazione in modalità LIVE (stEnable=false) (N più basso)
 static const uint8_t DECIM_WORK_N = 5;       // ~16 Hz se HX=80 SPS
-static const uint8_t DECIM_LIVE_N = 3;       // ~40 Hz se HX=80 SPS (solo display in LIVE)
+static const uint8_t DECIM_LIVE_N = 3;       // ~26 Hz se HX=80 SPS (solo display in LIVE)
+
+// LIVE: smoothing leggero sul float (EMA veloce) PRIMA della quantizzazione a grammo.
+// Obiettivo: ridurre la "ballerinità" in LIVE senza l'effetto "ritardo brutto" dei debounce sugli interi.
+// Alpha alto = più reattivo, meno smoothing.
+static const float LIVE_EMA_ALPHA = 0.45f;
 // Display (solo visualizzazione) con isteresi:
 // - Zero band con soglia di ingresso (enter) e soglia di uscita (exit):
 //   evita che vicino allo zero si accendano/spegnano continuamente ±1 g.
@@ -1128,7 +1133,7 @@ static const float DISP_ZERO_EXIT_LIVE_G  = 0.80f;
 // LIVE: deve rimanere reattiva. Usiamo isteresi leggera + un "reversal lock" visivo (vedi displayLiveStable)
 // per tagliare il flicker N<->N+1 senza ritardare l'incremento progressivo mentre versi.
 static const float DISP_STEP_HYS_LIVE_G   = 0.12f;
-static const uint16_t DISP_LIVE_REVERSAL_LOCK_MS = 220;
+static const uint16_t DISP_LIVE_REVERSAL_LOCK_MS = 160;
 
 // Quantizzazione con isteresi (stateful: usa prev).
 // Side effects: nessuno.
@@ -1224,6 +1229,11 @@ static long gDispWorkLast = 0;
 static const char* gStateLabelWorkLast = "----";
 static long gDispLiveLast = 0;
 
+// LIVE: stato EMA veloce (solo visualizzazione)
+static float gLiveEma = 0.0f;
+static bool  gLiveEmaInit = false;
+static bool  gLiveEmaPrevStEnable = true;
+
 // Accumulatori per decimazione
 static long gLiveSum = 0;
 static uint8_t gLiveCnt = 0;
@@ -1283,6 +1293,10 @@ void resetFiltersAndState(){
   gDispWorkLast = 0;
   gDispLiveLast = 0;
   gStateLabelWorkLast = "----";
+
+  // LIVE EMA: re-init (evita memoria residua dopo tara/reset)
+  gLiveEmaInit = false;
+  gLiveEma = 0.0f;
 }
 
 // ========================= NVS / HELP =========================
@@ -2768,7 +2782,7 @@ void loop(){
 // ====================== HX711 @ 80 SPS (o 10 SPS) + decimazione ======================
 // Leggiamo ogni volta che HX711 ha un dato pronto.
 // - WORK (N=5): alimenta stabilità/zero-tracking e quindi "qualità" della pesata.
-// - LIVE (N=2): SOLO per display in modalità LIVE (stEnable=false), con debounce.
+// - LIVE (N=3): SOLO per display in modalità LIVE (stEnable=false).
 bool haveNewWork = false;
 long rawAvg = 0; // per log/debug (WORK)
 long raw = 0;
@@ -2833,7 +2847,7 @@ if (hx711_is_ready()) {
 	    gWorkCnt++;
 	  }
 
-  // ---- LIVE: N=2 (solo display quando stEnable=false) ----
+  // ---- LIVE: N=3 (solo display quando stEnable=false) ----
   if (gLiveCnt >= DECIM_LIVE_N) {
     long rawLive = gLiveSum / (long)DECIM_LIVE_N;
     gLiveSum = 0;
@@ -2841,9 +2855,28 @@ if (hx711_is_ready()) {
 
     long offEff = effectiveOffsetCounts();
     float gFast = (SCALE_CPG > 0.01f) ? ((float)(rawLive - offEff) / SCALE_CPG) : 0.0f;
-    // LIVE (solo display): quantizzazione con isteresi.
+
+    // LIVE: EMA veloce sul float per rendere la lettura meno ballerina senza "lag" percepibile.
+    // Applichiamo l'EMA solo quando siamo in modalità LIVE (stEnable=false).
+    if (gLiveEmaPrevStEnable != stEnable) {
+      // Cambio modalità: re-init per evitare trascinamenti.
+      gLiveEmaInit = false;
+      gLiveEmaPrevStEnable = stEnable;
+    }
+    float gFastDisp = gFast;
+    if (!stEnable) {
+      if (!gLiveEmaInit) {
+        gLiveEma = gFast;
+        gLiveEmaInit = true;
+      } else {
+        gLiveEma = gLiveEma + LIVE_EMA_ALPHA * (gFast - gLiveEma);
+      }
+      gFastDisp = gLiveEma;
+    }
+
+    // LIVE (solo display): quantizzazione con isteresi + reversal lock.
     // Requisito: scatta a 1 solo quando tocchi |g| >= 1.0 (entry), ma riduce flicker mentre pesi.
-    gDispLiveLast = displayLiveStable(gFast, gDispLiveLast, now);
+    gDispLiveLast = displayLiveStable(gFastDisp, gDispLiveLast, now);
 
     // HX health: in modalità LIVE lo schermo usa gDispLiveLast.
     if (!stEnable) {
@@ -3065,7 +3098,7 @@ if (now - lastOledMs >= OLED_UPDATE_MS) {
 
     if (!drewTare) {
       if (!stEnable) {
-        // LIVE: flusso veloce (N=2) + anti-flicker visivo (reversal lock)
+        // LIVE: flusso veloce (N=3) + anti-flicker visivo (reversal lock)
         ui_renderWeight(gDispLiveLast, "LIVE");
       } else {
         ui_renderWeight(gDispWorkLast, gStateLabelWorkLast);
