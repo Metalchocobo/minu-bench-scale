@@ -951,6 +951,77 @@ void resetMedian(){
   medBuf[0]=medBuf[1]=medBuf[2]=0;
 }
 
+// ========================= ANTI-SPIKE GUARD (RAW) =========================
+// Taglia "glitch" singoli (es. salto 219g -> -340g per un istante).
+// Strategia: se un campione fa un salto > soglia, lo consideriamo "suspect" e lo
+// accettiamo solo se il campione successivo conferma (oppure se anche il successivo
+// resta oltre soglia, così non rallentiamo i carichi rapidi).
+//
+// Nota: lavora in grammi usando SCALE_CPG (counts per gram). Se SCALE_CPG non è valido,
+// la guard è disattivata.
+static const float    RAW_SPIKE_JUMP_G       = 150.0f; // salto minimo per attivare la guard
+static const float    RAW_SPIKE_CONFIRM_G    = 80.0f;  // quanto deve essere "vicino" per confermare
+static const uint32_t RAW_SPIKE_TIMEOUT_MS   = 250;    // timeout della pending
+
+static bool rawSpikeGuard(long rawMed, uint32_t nowMs, long* outRaw){
+  if (!outRaw) return true;
+
+  // Se non siamo calibrati, non possiamo stimare in grammi: non blocchiamo.
+  if (SCALE_CPG <= 0.01f) {
+    *outRaw = rawMed;
+    return true;
+  }
+
+  static bool     s_hasLastGood = false;
+  static long     s_lastGood    = 0;
+  static bool     s_pending     = false;
+  static long     s_pendingRaw  = 0;
+  static uint32_t s_pendingMs   = 0;
+
+  if (!s_hasLastGood) {
+    s_hasLastGood = true;
+    s_lastGood = rawMed;
+    s_pending = false;
+    *outRaw = rawMed;
+    return true;
+  }
+
+  // Timeout pending
+  if (s_pending && (uint32_t)(nowMs - s_pendingMs) > RAW_SPIKE_TIMEOUT_MS) {
+    s_pending = false;
+  }
+
+  float dG = fabsf((float)(rawMed - s_lastGood) / SCALE_CPG);
+
+  if (!s_pending) {
+    if (dG >= RAW_SPIKE_JUMP_G) {
+      // Suspect: droppiamo questo frame e aspettiamo conferma.
+      s_pending = true;
+      s_pendingRaw = rawMed;
+      s_pendingMs = nowMs;
+      return false;
+    }
+    s_lastGood = rawMed;
+    *outRaw = rawMed;
+    return true;
+  }
+
+  // Pending: accetta se il nuovo campione conferma, oppure se anche questo resta un salto enorme.
+  float dPendingG = fabsf((float)(rawMed - s_pendingRaw) / SCALE_CPG);
+  if (dPendingG <= RAW_SPIKE_CONFIRM_G || dG >= RAW_SPIKE_JUMP_G) {
+    s_pending = false;
+    s_lastGood = rawMed;
+    *outRaw = rawMed;
+    return true;
+  }
+
+  // Il secondo campione è tornato vicino al lastGood: era un glitch singolo.
+  s_pending = false;
+  s_lastGood = rawMed;
+  *outRaw = rawMed;
+  return true;
+}
+
 long maBuf[8];
 int  maIdx=0, maCount=0, maN=MA_DEFAULT;
 long maSum=0;
@@ -1039,7 +1110,7 @@ unsigned long lastOledMs    = 0;
 // WORK: usato per logiche STABLE/UNSTABLE, ZT, ecc.  (N più alto)
 // LIVE: usato SOLO per visualizzazione in modalità LIVE (stEnable=false) (N più basso)
 static const uint8_t DECIM_WORK_N = 5;       // ~16 Hz se HX=80 SPS
-static const uint8_t DECIM_LIVE_N = 2;       // ~40 Hz se HX=80 SPS (solo display in LIVE)
+static const uint8_t DECIM_LIVE_N = 3;       // ~40 Hz se HX=80 SPS (solo display in LIVE)
 // Display (solo visualizzazione) con isteresi:
 // - Zero band con soglia di ingresso (enter) e soglia di uscita (exit):
 //   evita che vicino allo zero si accendano/spegnano continuamente ±1 g.
@@ -1053,8 +1124,11 @@ static const float DISP_STEP_HYS_WORK_G   = 0.20f;
 // LIVE: 0 finché |g| < 1.0 g, ma scatta subito a 1 quando tocchi 1.0.
 // Per ridurre flicker, rientro a 0 solo sotto ~0.7 g.
 static const float DISP_ZERO_ENTER_LIVE_G = 1.00f;
-static const float DISP_ZERO_EXIT_LIVE_G  = 0.70f;
-static const float DISP_STEP_HYS_LIVE_G   = 0.15f;
+static const float DISP_ZERO_EXIT_LIVE_G  = 0.80f;
+// LIVE: deve rimanere reattiva. Usiamo isteresi leggera + un "reversal lock" visivo (vedi displayLiveStable)
+// per tagliare il flicker N<->N+1 senza ritardare l'incremento progressivo mentre versi.
+static const float DISP_STEP_HYS_LIVE_G   = 0.12f;
+static const uint16_t DISP_LIVE_REVERSAL_LOCK_MS = 220;
 
 // Quantizzazione con isteresi (stateful: usa prev).
 // Side effects: nessuno.
@@ -1094,6 +1168,55 @@ static inline long displayWorkQuant(float g, long prev) {
 
 static inline long displayLiveQuant(float g, long prev) {
   return displayQuantizeHys(g, DISP_ZERO_ENTER_LIVE_G, DISP_ZERO_EXIT_LIVE_G, DISP_STEP_HYS_LIVE_G, prev);
+}
+
+// LIVE: stabilizzazione VISIVA (no filtri sul segnale).
+// Obiettivo: ridurre il flicker tra due interi (N <-> N+1) mentre versi,
+// senza ritardare l'incremento progressivo.
+//
+// Strategia: "reversal lock".
+// - Cambi di valore: immediati (massima reattività).
+// - Se subito dopo (entro una finestra breve) il candidato tenta di tornare
+//   al valore precedente, lo ignoriamo: questo taglia il flicker A<->B.
+//
+// Input: g (grammi "rapidi"), prevShown (ultimo valore mostrato), nowMs.
+// Output: nuovo valore da mostrare.
+// Side effects: piccolo stato statico.
+static inline long displayLiveStable(float g, long prevShown, uint32_t nowMs) {
+  static long s_syncShown = 0;
+  static long s_prevVal   = 0;     // valore precedente a prevShown
+  static uint32_t s_lockUntil = 0; // fino a quando bloccare il revert a s_prevVal
+
+  // Sync in caso di reset / cambio modalità
+  if (s_syncShown != prevShown) {
+    s_syncShown = prevShown;
+    s_prevVal = prevShown;
+    s_lockUntil = 0;
+  }
+
+  long cand = displayLiveQuant(g, prevShown);
+  if (cand == prevShown) return prevShown;
+
+  // Requisito: 0 -> ±1 IMMEDIATO appena tocchi 1 g.
+  if (prevShown == 0 && (cand == 1 || cand == -1)) {
+    s_prevVal = prevShown;
+    s_syncShown = cand;
+    s_lockUntil = nowMs + DISP_LIVE_REVERSAL_LOCK_MS;
+    return cand;
+  }
+
+  // Se siamo nella finestra di lock e il candidato vorrebbe tornare al valore precedente,
+  // ignoralo (anti-flicker). Non blocchiamo invece cambi "nuovi" (es. 219->220->221).
+  if ((int32_t)(nowMs - s_lockUntil) < 0) {
+    // nowMs < s_lockUntil (wrap-safe)
+    if (cand == s_prevVal) return prevShown;
+  }
+
+  // Accetta subito il cambio e attiva lock per bloccare un eventuale rimbalzo indietro.
+  s_prevVal = prevShown;
+  s_syncShown = cand;
+  s_lockUntil = nowMs + DISP_LIVE_REVERSAL_LOCK_MS;
+  return cand;
 }
 
 // Ultimi valori "pubblici" per il display
@@ -2696,15 +2819,19 @@ if (hx711_is_ready()) {
   }
 
   // Mediana veloce su stream raw (aiuta contro spike)
-  long rawMed = pushMedian3(raw);
+	  long rawMed = pushMedian3(raw);
 
-  tareAccumSample(rawMed);
+	  // Anti-spike guard: scarta glitch singoli, senza filtri lenti.
+	  long rawUse = rawMed;
+	  if (rawSpikeGuard(rawMed, now, &rawUse)) {
+	    tareAccumSample(rawUse);
 
-  // Accumulo per LIVE e WORK
-  gLiveSum += rawMed;
-  gLiveCnt++;
-  gWorkSum += rawMed;
-  gWorkCnt++;
+	    // Accumulo per LIVE e WORK
+	    gLiveSum += rawUse;
+	    gLiveCnt++;
+	    gWorkSum += rawUse;
+	    gWorkCnt++;
+	  }
 
   // ---- LIVE: N=2 (solo display quando stEnable=false) ----
   if (gLiveCnt >= DECIM_LIVE_N) {
@@ -2716,7 +2843,7 @@ if (hx711_is_ready()) {
     float gFast = (SCALE_CPG > 0.01f) ? ((float)(rawLive - offEff) / SCALE_CPG) : 0.0f;
     // LIVE (solo display): quantizzazione con isteresi.
     // Requisito: scatta a 1 solo quando tocchi |g| >= 1.0 (entry), ma riduce flicker mentre pesi.
-    gDispLiveLast = displayLiveQuant(gFast, gDispLiveLast);
+    gDispLiveLast = displayLiveStable(gFast, gDispLiveLast, now);
 
     // HX health: in modalità LIVE lo schermo usa gDispLiveLast.
     if (!stEnable) {
@@ -2938,7 +3065,7 @@ if (now - lastOledMs >= OLED_UPDATE_MS) {
 
     if (!drewTare) {
       if (!stEnable) {
-        // LIVE: usa flusso veloce (N=2) + debounce
+        // LIVE: flusso veloce (N=2) + anti-flicker visivo (reversal lock)
         ui_renderWeight(gDispLiveLast, "LIVE");
       } else {
         ui_renderWeight(gDispWorkLast, gStateLabelWorkLast);

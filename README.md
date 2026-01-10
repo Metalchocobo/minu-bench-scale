@@ -170,11 +170,19 @@ Concetto:
 ### Display: anti-flicker (novità)
 In LIVE e WORK la visualizzazione è **quantizzata a grammo** ma con due accorgimenti per evitare tremolii:
 1) **Banda zero con isteresi** (enter/exit):
-   - **LIVE**: 0 finché `|g| < 1.0 g` (entry). Dopo che sei entrato, torna a 0 solo sotto ~`0.7 g` (exit).
+   - **LIVE**: 0 finché `|g| < 1.0 g` (entry). Dopo che sei entrato, torna a 0 solo sotto ~`0.8 g` (exit).
    - **WORK**: 0 finché `|g| < 1.3 g` (entry). Rientro a 0 solo sotto ~`0.9 g` (exit).
 2) **Isteresi tra interi**: riduce il flicker tra N e N+1 mentre pesi (senza introdurre filtri “lenti” sul segnale).
+3) **Reversal lock (solo LIVE)**: quando il display cambia valore, per una finestra breve ignora il rimbalzo immediato al valore precedente.
+   Effetto: elimina il flicker A↔B senza ritardare l’incremento progressivo mentre versi.
+   Eccezione: 0 → ±1 è **immediato** appena tocchi 1 g (anche per un istante).
 
-Nota: è **solo una regola di visualizzazione** (non cambia i conti interni, STABLE/UNSTABLE, ZT, ecc.).
+### Anti-spike guard (RAW, novità)
+Taglia i glitch singoli (es. un salto momentaneo a valori negativi/assurdi): se un campione fa un salto > **150 g**,
+viene scartato e accettato solo se il campione successivo conferma (oppure se anche il successivo resta oltre soglia,
+così non rallentiamo i carichi rapidi).
+
+Nota: la guard scarta solo **frame singoli** (o confermati) e quindi non cambia la logica WORK/zt/stati, se non in presenza di glitch reali.
 
 ### TARE (novità)
 - Rimossa la fallback **blocking**: se per qualsiasi motivo arrivano pochi campioni, l’offset viene applicato con quelli disponibili senza congelare UI/audio.
