@@ -309,7 +309,7 @@ void parseCommand(const char* cmd) {
     }
 
     if (strncmp(arg, "clear", 5) == 0) {
-      OtaStore::clearPassword();
+      OtaStore::clear();
       Serial.println(F("[OTA] Password cancellata (richiede reboot)"));
       if (strstr(arg, "reboot")) {
         delay(500);
@@ -391,7 +391,7 @@ void handleKeyEvent(KeyCode key) {
       saveWifiUserEnabledToNVS(g_wifiUserEnabled);
 
       if (g_wifiUserEnabled) {
-        Audio::requestPlayMp3(Track::WIFI_ON);
+        Audio::requestPlayMp3(Track::WIFI_MODULE_ON);
         Serial.println(F("[WIFI] ON"));
         if (!g_wifiSetupDone) {
           Net::wifiSetup();
@@ -400,7 +400,7 @@ void handleKeyEvent(KeyCode key) {
           Net::wifiResume();
         }
       } else {
-        Audio::requestPlayMp3(Track::WIFI_OFF);
+        Audio::requestPlayMp3(Track::WIFI_MODULE_OFF);
         Serial.println(F("[WIFI] OFF"));
         Net::wifiSuspend();
       }
@@ -1294,8 +1294,8 @@ void loop() {
     }
   }
 
-  // Tara apply
-  ScaleState::tareMaybeApply(now);
+  // Tara apply (usa millis() fresco per evitare problemi di timing)
+  ScaleState::tareMaybeApply(millis());
 
   // HX health update
   hxHealth_update(&g_hxHealth, now);
