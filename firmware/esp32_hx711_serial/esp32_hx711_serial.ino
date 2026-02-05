@@ -309,7 +309,7 @@ void parseCommand(const char* cmd) {
     }
 
     if (strncmp(arg, "clear", 5) == 0) {
-      OtaStore::clearPassword();
+      OtaStore::clear();
       Serial.println(F("[OTA] Password cancellata (richiede reboot)"));
       if (strstr(arg, "reboot")) {
         delay(500);
