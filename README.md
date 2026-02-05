@@ -361,6 +361,37 @@ Archivio (legacy, non mantenuto):
 
 > Nota: la documentazione operativa (cablaggi, comandi seriali, DFPlayer, sleep, debug) è in questo README.
 
+### Architettura modulare
+
+Il firmware è organizzato in moduli con namespace C++ per una migliore manutenibilità:
+
+```
+firmware/esp32_hx711_serial/
+├── esp32_hx711_serial.ino   # Main loop (~1,400 righe)
+├── config/
+│   ├── config_pins.h        # Pin hardware (HX711, I2C, SPI, keypad, buzzer, DFPlayer)
+│   ├── config_audio.h       # AudioConfig:: (volume, timing, tracce MP3)
+│   └── config_scale.h       # ScaleConfig:: (filtri, stati, ZT, display)
+├── audio.h / audio.cpp      # Audio:: (DFPlayer: play, coda, power-gating)
+├── scale_filters.h / .cpp   # ScaleFilters:: (mediana, MA, spike guard, storico)
+├── scale_state.h / .cpp     # ScaleState:: (offset, tara, stati, ZT, display)
+├── dfplayer_driver.h / .cpp # DFPlayer:: (UART, comandi base)
+├── buzzer.h / .cpp          # Buzzer:: (beep, toni)
+├── hx711_driver.h / .cpp    # HX711 low-level (SCK/DOUT, read)
+├── keypad.h / .cpp          # Keypad:: (4x2, debounce, one-shot)
+├── battery_monitor.h / .cpp # BatteryMonitor:: (INA219, tacche, charging)
+├── hx_health.h / .cpp       # HxHealth:: (OK/WARN/ERROR/ERROR_HARD)
+├── ui_display.h / .cpp      # UiDisplay:: (OLED SSD1322, layout, icone)
+├── scale_core.h / .cpp      # ScaleCore:: (calibrazione, NVS)
+└── net_ota_cloud.h          # WiFi/OTA (opzionale)
+```
+
+**Namespace principali:**
+- `Audio::` — gestione DFPlayer (coda FIFO, priorità, power-gating, anti-troncamento)
+- `ScaleFilters::` — filtri segnale (mediana 3, media mobile, spike guard, storico range/slope)
+- `ScaleState::` — macchina a stati (STABLE/UNSTABLE/LIVE), zero-tracking, tara, quantizzazione display
+- `ScaleConfig::` / `AudioConfig::` — parametri configurabili (soglie, timing, tracce)
+
 ### DFPlayer Mini (audio eventi) + power-gating solo in standby
 Il firmware può suonare file MP3 (es. avviso sleep). Per evitare click e stati strani, **non fa power-cycle a fine brano**.
 
