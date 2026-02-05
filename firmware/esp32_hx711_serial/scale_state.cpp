@@ -280,15 +280,31 @@ void tareAccumSample(long rawUse) {
   if ((now - g_tareStartMs) < ScaleConfig::TARE_SETTLE_MS) return;
 
   g_tareSamples[g_tareSampleCount++] = rawUse;
+
+  // Debug: log primo campione
+  if (g_tareSampleCount == 1) {
+    Serial.print(F("[TARE] First sample, now="));
+    Serial.print(now);
+    Serial.print(F(" startMs="));
+    Serial.println(g_tareStartMs);
+  }
 }
 
 void tareStart(uint32_t nowMs) {
+  Serial.print(F("[TARE] tareStart() called, nowMs="));
+  Serial.println(nowMs);
+
   g_tareActive      = true;
   g_tareStartMs     = nowMs;
   g_tareSampleCount = 0;
   g_tareUiActive    = true;
   g_tareUiStartMs   = nowMs;
   g_tareUiEndMs     = nowMs + ScaleConfig::TARE_UI_CLAMP_MS;
+
+  Serial.print(F("[TARE] g_tareActive="));
+  Serial.print(g_tareActive);
+  Serial.print(F(" g_tareStartMs="));
+  Serial.println(g_tareStartMs);
 }
 
 bool tareMaybeApply(uint32_t nowMs) {
