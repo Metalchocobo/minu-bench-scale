@@ -293,9 +293,16 @@ void tareStart(uint32_t nowMs) {
 
 bool tareMaybeApply(uint32_t nowMs) {
   if (!g_tareActive) return false;
-  if ((nowMs - g_tareStartMs) < ScaleConfig::TARE_UI_CLAMP_MS) return false;
+
+  uint32_t elapsed = nowMs - g_tareStartMs;
+  if (elapsed < ScaleConfig::TARE_UI_CLAMP_MS) return false;
 
   g_tareActive = false;
+
+  Serial.print(F("[TARE] Applying. Samples="));
+  Serial.print(g_tareSampleCount);
+  Serial.print(F(" elapsed="));
+  Serial.println(elapsed);
 
   if (g_tareSampleCount < ScaleConfig::TARE_MIN_SAMPLES) {
     Serial.print(F("[TARE] pochi campioni: "));
