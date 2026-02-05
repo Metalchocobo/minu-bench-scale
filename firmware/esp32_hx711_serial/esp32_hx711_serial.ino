@@ -1294,8 +1294,8 @@ void loop() {
     }
   }
 
-  // Tara apply
-  ScaleState::tareMaybeApply(now);
+  // Tara apply (usa millis() fresco per evitare problemi di timing)
+  ScaleState::tareMaybeApply(millis());
 
   // HX health update
   hxHealth_update(&g_hxHealth, now);
