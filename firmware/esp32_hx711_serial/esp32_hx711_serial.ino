@@ -391,7 +391,7 @@ void handleKeyEvent(KeyCode key) {
       saveWifiUserEnabledToNVS(g_wifiUserEnabled);
 
       if (g_wifiUserEnabled) {
-        Audio::requestPlayMp3(Track::WIFI_ON);
+        Audio::requestPlayMp3(Track::WIFI_MODULE_ON);
         Serial.println(F("[WIFI] ON"));
         if (!g_wifiSetupDone) {
           Net::wifiSetup();
@@ -400,7 +400,7 @@ void handleKeyEvent(KeyCode key) {
           Net::wifiResume();
         }
       } else {
-        Audio::requestPlayMp3(Track::WIFI_OFF);
+        Audio::requestPlayMp3(Track::WIFI_MODULE_OFF);
         Serial.println(F("[WIFI] OFF"));
         Net::wifiSuspend();
       }

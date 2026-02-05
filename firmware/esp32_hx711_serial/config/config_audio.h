@@ -54,14 +54,14 @@ inline bool isMustPlayTrack(uint16_t track) {
 // 0018 = Modalità LIVE
 
 namespace Track {
-  static const uint16_t BOOT_START     = 1;
-  static const uint16_t BOOT_COMPLETE  = 2;
-  static const uint16_t SLEEP_ENTER    = 3;
-  static const uint16_t SLEEP_EXIT     = 4;
-  static const uint16_t WIFI_ON        = 5;
-  static const uint16_t WIFI_OFF       = 6;
-  static const uint16_t WIFI_ERROR     = 7;
-  static const uint16_t WIFI_CONNECTED = 8;
+  static const uint16_t BOOT_START      = 1;
+  static const uint16_t BOOT_COMPLETE   = 2;
+  static const uint16_t SLEEP_ENTER     = 3;
+  static const uint16_t SLEEP_EXIT      = 4;
+  static const uint16_t WIFI_MODULE_ON  = 5;   // Rinominato da WIFI_ON (conflitto macro ESP32)
+  static const uint16_t WIFI_MODULE_OFF = 6;   // Rinominato da WIFI_OFF (conflitto macro ESP32)
+  static const uint16_t WIFI_ERROR      = 7;
+  static const uint16_t WIFI_CONNECTED  = 8;
   static const uint16_t ENTER_PRESSED  = 9;
   static const uint16_t SKIP_PRESSED   = 10;
   static const uint16_t BATT_LOW       = 11;
