@@ -26,5 +26,9 @@ void keypad_update(uint32_t nowMs);
 // Se non ci sono eventi nuovi, ritorna KEY_NONE.
 KeyCode keypad_get_event();
 
+// Ritorna true se il tasto specificato è attualmente premuto (stabile).
+// NON consuma l'evento, serve per rilevare long press.
+bool keypad_is_pressed(KeyCode key);
+
 // Utility: espone i pin usati (righe/colonne) per setup wakeup in sleep.
 void keypad_get_pins(const int** rows, int* nRows, const int** cols, int* nCols);

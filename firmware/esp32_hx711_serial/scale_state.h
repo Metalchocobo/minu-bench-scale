@@ -55,6 +55,10 @@ long   getDispLiveLast();
 const char* getStateLabelWorkLast();
 void   setStateLabelWorkLast(const char* label);
 
+// Ultimo valore raw filtrato (per calibrazione wizard)
+void   setLastRawAvg(long raw);
+long   getLastRawAvg();
+
 // ========================= DISPLAY QUANTIZZAZIONE =========================
 // Quantizza g con banda zero + isteresi (LIVE)
 long displayLiveStable(float gIn, long prevDisp, uint32_t nowMs);

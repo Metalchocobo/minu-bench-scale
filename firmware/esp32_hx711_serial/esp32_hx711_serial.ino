@@ -39,6 +39,7 @@
 #include "net_ota_cloud.h"
 #include "wifi_store.h"
 #include "ota_store.h"
+#include "calibration_wizard.h"
 
 // ========================= ALIAS =========================
 using namespace ScaleConfig;
@@ -381,6 +382,19 @@ void parseCommand(const char* cmd) {
         return;
       }
       float newCpg = (float)delta / refGrams;
+
+      // Validazione CPG (stesse soglie del wizard)
+      if (newCpg < CalWizard::CPG_MIN || newCpg > CalWizard::CPG_MAX) {
+        Serial.print(F("[CAL] ATTENZIONE: CPG fuori range tipico ("));
+        Serial.print(CalWizard::CPG_MIN, 0);
+        Serial.print(F("-"));
+        Serial.print(CalWizard::CPG_MAX, 0);
+        Serial.print(F("): "));
+        Serial.println(newCpg, 4);
+        Serial.println(F("[CAL] Verifica il peso di riferimento e riprova."));
+        return;
+      }
+
       ScaleState::setScaleCpg(newCpg);
       ScaleState::resetFiltersAndState();
       Serial.print(F("[CAL] CPG calcolato: ")); Serial.println(newCpg, 4);
@@ -1142,8 +1156,18 @@ void loop() {
 
   // Tastiera
   keypad_update(now);
+
+  // Calibration Wizard: gestisce long press su TARE e step
+  // Deve girare PRIMA di keypad_get_event() per tracciare il long press
+  CalWizard::update(now);
+
   KeyCode key = keypad_get_event();
-  if (key != KEY_NONE) {
+
+  // Se il wizard è attivo, i tasti vengono gestiti da CalWizard::update(),
+  // quindi qui ignoriamo solo KEY_TARE (che attiverebbe la tara normale)
+  bool wizardHandledKey = CalWizard::isActive() && (key == KEY_TARE || key == KEY_ENTER || key == KEY_SKIP || key == KEY_CLEAR);
+
+  if (key != KEY_NONE && !wizardHandledKey) {
     g_lastKeyPressMs = now;
     if (g_inactivitySleepStage != INACT_NONE) {
       g_inactivitySleepStage = INACT_NONE;
@@ -1152,6 +1176,11 @@ void loop() {
       lastOledMs = 0;
     }
     handleKeyEvent(key);
+  }
+
+  // Se il wizard è attivo, resetta comunque il timer inattività
+  if (CalWizard::isActive() && key != KEY_NONE) {
+    g_lastKeyPressMs = now;
   }
 
   // Batteria
@@ -1263,6 +1292,7 @@ void loop() {
       lastSampleMs = now;
       rawAvg = ScaleFilters::pushMA(rawWork);
       g_lastRawFiltered = rawAvg;  // Per calibrazione via seriale
+      ScaleState::setLastRawAvg(rawAvg);  // Per calibrazione wizard
       haveNewWork = true;
     }
   }
@@ -1431,6 +1461,28 @@ void loop() {
 
     if (g_inactivitySleepStage == INACT_ZZZ) {
       ui_renderSleepZzz();
+    } else if (CalWizard::isLongPressInProgress()) {
+      // Long press in corso: mostra barra di progresso
+      ui_renderCalLongPress(CalWizard::getLongPressProgress(now));
+    } else if (CalWizard::isActive()) {
+      // Calibration wizard UI
+      CalWizard::CalStep step = CalWizard::getStep();
+      switch (step) {
+        case CalWizard::CAL_STEP_ZERO:
+          ui_renderCalStepZero(CalWizard::getSampleProgress());
+          break;
+        case CalWizard::CAL_STEP_PLACE:
+          ui_renderCalStepPlace(CalWizard::getSampleProgress());
+          break;
+        case CalWizard::CAL_STEP_VALUE:
+          ui_renderCalStepValue(CalWizard::getRefWeightG());
+          break;
+        case CalWizard::CAL_STEP_CONFIRM:
+          ui_renderCalStepConfirm(CalWizard::getRefWeightG(), CalWizard::getCalculatedCpg());
+          break;
+        default:
+          break;
+      }
     } else {
       bool drewTare = false;
 

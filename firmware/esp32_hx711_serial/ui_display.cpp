@@ -577,3 +577,128 @@ void ui_renderHxError(bool hard, bool showLast, long lastG) {
 
   oled.sendBuffer();
 }
+
+// =============================================================================
+// CALIBRATION WIZARD UI
+// =============================================================================
+
+// Helper: disegna una barra di progresso
+static void drawProgressBar(int16_t x, int16_t y, int16_t w, int16_t h, uint8_t pct) {
+  if (pct > 100) pct = 100;
+  oled.drawFrame(x, y, w, h);
+  int16_t fillW = (int16_t)((w - 2) * (int32_t)pct / 100);
+  if (fillW < 0) fillW = 0;
+  if (fillW > (w - 2)) fillW = w - 2;
+  if (fillW > 0) {
+    oled.drawBox(x + 1, y + 1, fillW, h - 2);
+  }
+}
+
+void ui_renderCalStepZero(uint8_t progress) {
+  oled.clearBuffer();
+
+  // Titolo
+  oled.setFont(u8g2_font_logisoso16_tf);
+  drawCenteredText("CALIBRAZIONE", 18);
+
+  // Istruzione
+  oled.setFont(u8g2_font_6x12_tr);
+  drawCenteredText("1/4 - Piatto vuoto", 34);
+  drawCenteredText("Rimuovi tutto e premi ENTER", 46);
+
+  // Barra progresso campionamento
+  drawProgressBar(40, 52, 176, 8, progress);
+
+  // Hint in basso
+  oled.setFont(u8g2_font_5x8_tr);
+  oled.drawStr(4, 62, "CLEAR=annulla");
+
+  oled.sendBuffer();
+}
+
+void ui_renderCalStepPlace(uint8_t progress) {
+  oled.clearBuffer();
+
+  oled.setFont(u8g2_font_logisoso16_tf);
+  drawCenteredText("CALIBRAZIONE", 18);
+
+  oled.setFont(u8g2_font_6x12_tr);
+  drawCenteredText("2/4 - Appoggia peso", 34);
+  drawCenteredText("Peso stabile, premi ENTER", 46);
+
+  drawProgressBar(40, 52, 176, 8, progress);
+
+  oled.setFont(u8g2_font_5x8_tr);
+  oled.drawStr(4, 62, "CLEAR=annulla");
+
+  oled.sendBuffer();
+}
+
+void ui_renderCalStepValue(uint16_t refWeightG) {
+  oled.clearBuffer();
+
+  oled.setFont(u8g2_font_logisoso16_tf);
+  drawCenteredText("CALIBRAZIONE", 18);
+
+  oled.setFont(u8g2_font_6x12_tr);
+  drawCenteredText("3/4 - Peso riferimento", 32);
+
+  // Mostra il peso selezionato grande
+  char buf[16];
+  formatGramsWithDot((long)refWeightG, buf, sizeof(buf));
+
+  oled.setFont(u8g2_font_logisoso24_tn);
+  int16_t numW = oled.getStrWidth(buf);
+  oled.setFont(u8g2_font_6x12_tr);
+  int16_t gW = oled.getStrWidth("g");
+
+  int16_t totalW = numW + 4 + gW;
+  int16_t startX = (256 - totalW) / 2;
+
+  oled.setFont(u8g2_font_logisoso24_tn);
+  oled.drawStr(startX, 54, buf);
+  oled.setFont(u8g2_font_6x12_tr);
+  oled.drawStr(startX + numW + 4, 54, "g");
+
+  // Istruzioni
+  oled.setFont(u8g2_font_5x8_tr);
+  oled.drawStr(4, 62, "SKIP=+ TARE=- ENTER=ok");
+
+  oled.sendBuffer();
+}
+
+void ui_renderCalStepConfirm(uint16_t refWeightG, float cpg) {
+  oled.clearBuffer();
+
+  oled.setFont(u8g2_font_logisoso16_tf);
+  drawCenteredText("CONFERMA?", 18);
+
+  oled.setFont(u8g2_font_6x12_tr);
+
+  // Mostra i dati calcolati
+  char line1[32];
+  snprintf(line1, sizeof(line1), "Peso ref: %u g", refWeightG);
+  drawCenteredText(line1, 34);
+
+  char line2[32];
+  snprintf(line2, sizeof(line2), "CPG: %.2f", cpg);
+  drawCenteredText(line2, 48);
+
+  oled.setFont(u8g2_font_5x8_tr);
+  oled.drawStr(4, 62, "ENTER=salva  CLEAR=annulla");
+
+  oled.sendBuffer();
+}
+
+void ui_renderCalLongPress(uint8_t progress) {
+  oled.clearBuffer();
+
+  oled.setFont(u8g2_font_6x12_tr);
+  drawCenteredText("Tieni premuto TARE", 28);
+  drawCenteredText("per avviare calibrazione", 42);
+
+  // Barra di progresso
+  drawProgressBar(40, 50, 176, 10, progress);
+
+  oled.sendBuffer();
+}

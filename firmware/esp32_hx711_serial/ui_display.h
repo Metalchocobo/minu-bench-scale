@@ -37,3 +37,24 @@ void ui_renderHxError(bool hard, bool showLast, long lastG);
 // Schermata transizione standby (Zzz...)
 void ui_renderSleepZzz();
 
+// ========================= CALIBRATION WIZARD UI =========================
+// Step ZERO: Acquisisci zero (piatto vuoto)
+// progress: 0-100 indica quanti campioni sono stati raccolti
+void ui_renderCalStepZero(uint8_t progress);
+
+// Step PLACE: Appoggia peso di riferimento
+// progress: 0-100 indica quanti campioni sono stati raccolti
+void ui_renderCalStepPlace(uint8_t progress);
+
+// Step VALUE: Seleziona peso di riferimento
+// refWeightG: valore peso corrente selezionato (es. 2000)
+void ui_renderCalStepValue(uint16_t refWeightG);
+
+// Step CONFIRM: Conferma calibrazione
+// refWeightG: peso di riferimento, cpg: count-per-gram calcolato
+void ui_renderCalStepConfirm(uint16_t refWeightG, float cpg);
+
+// Long press progress: mostra barra di avanzamento durante long press
+// progress: 0-100 (0 = appena iniziato, 100 = wizard si attiva)
+void ui_renderCalLongPress(uint8_t progress);
+

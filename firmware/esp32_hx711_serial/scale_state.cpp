@@ -24,6 +24,9 @@ static const char* g_stateLabelWorkLast = "UNSTABLE";
 
 static float g_deadbandUnstable = ScaleConfig::DB_UNSTABLE_N;
 
+// Ultimo rawAvg (per calibrazione wizard)
+static long g_lastRawAvg = 0;
+
 // ========================= DISPLAY LIVE STATE =========================
 static long     g_lastDispLive     = 0;
 static uint32_t g_lastDispLiveMs   = 0;
@@ -88,6 +91,9 @@ long getDispLiveLast()        { return g_dispLiveLast; }
 
 const char* getStateLabelWorkLast() { return g_stateLabelWorkLast; }
 void setStateLabelWorkLast(const char* label) { g_stateLabelWorkLast = label; }
+
+void setLastRawAvg(long raw) { g_lastRawAvg = raw; }
+long getLastRawAvg()         { return g_lastRawAvg; }
 
 // ========================= DISPLAY QUANTIZZAZIONE =========================
 
