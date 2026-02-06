@@ -52,9 +52,6 @@ static uint32_t g_tareUiEndMs     = 0;
 static long     g_tareSamples[64];
 static uint8_t  g_tareSampleCount = 0;
 
-// ========================= INATTIVITÀ =========================
-static long g_inactLastWeightG = 0;
-
 // ========================= GETTERS/SETTERS =========================
 
 void setOffsetRaw(long offset)   { g_offsetRaw = offset; }
@@ -359,6 +356,8 @@ uint32_t getTareUiEndMs()    { return g_tareUiEndMs; }
 void setTareUiEndMs(uint32_t ms)   { g_tareUiEndMs = ms; }
 
 // ========================= INATTIVITÀ =========================
+static long g_inactLastWeightG = 0;
+static bool g_weightActivityFlag = false;
 
 void inactivityNoteWeightActivity(uint32_t nowMs, long gDispNow) {
   (void)nowMs;
@@ -366,9 +365,18 @@ void inactivityNoteWeightActivity(uint32_t nowMs, long gDispNow) {
   if (delta < 0) delta = -delta;
 
   if (delta > ScaleConfig::INACTIVITY_WEIGHT_DELTA_G) {
-    // Attività rilevata (gestita nel main loop)
+    g_weightActivityFlag = true;
   }
   g_inactLastWeightG = gDispNow;
+}
+
+// Ritorna true una sola volta se c'è stata variazione peso (pattern one-shot)
+bool popWeightActivity() {
+  if (g_weightActivityFlag) {
+    g_weightActivityFlag = false;
+    return true;
+  }
+  return false;
 }
 
 // ========================= RESET =========================

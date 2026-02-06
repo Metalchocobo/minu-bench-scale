@@ -37,7 +37,3 @@ void ui_renderHxError(bool hard, bool showLast, long lastG);
 // Schermata transizione standby (Zzz...)
 void ui_renderSleepZzz();
 
-// Schermata di errore runtime HX711 (bloccante)
-// hard=true: ERROR HARD (non mostra ultimo valore)
-// showLast=true: mostra "Ultimo valore valido: X g"
-void ui_renderHxRuntimeError(bool hard, bool showLast, long lastValueG);

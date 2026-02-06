@@ -95,6 +95,9 @@ void setTareUiEndMs(uint32_t ms);
 // Nota attività peso (reset timer se variazione > soglia)
 void inactivityNoteWeightActivity(uint32_t nowMs, long gDispNow);
 
+// Ritorna true una sola volta se c'è stata variazione peso (pattern one-shot)
+bool popWeightActivity();
+
 // ========================= RESET =========================
 void resetFiltersAndState();
 
