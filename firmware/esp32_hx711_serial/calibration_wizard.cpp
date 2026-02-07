@@ -203,11 +203,11 @@ void update(uint32_t nowMs, KeyCode key) {
 
       if (g_sampleCount >= SAMPLES_NEEDED) {
         g_zeroRaw = finalizeSample();
+        Serial.print(F("[CAL] Zero raw = "));
+        Serial.println(g_zeroRaw);
         g_step = CAL_STEP_PLACE;
         resetSampling();
         buzzerOk();
-        Serial.print(F("[CAL] Zero raw = "));
-        Serial.println(g_zeroRaw);
         Serial.println(F("[CAL] STEP 2/4: Appoggia peso riferimento - premi ENTER"));
       } else {
         buzzerWarn();
@@ -235,13 +235,14 @@ void update(uint32_t nowMs, KeyCode key) {
         g_refRaw = finalizeSample();
 
         long delta = g_refRaw - g_zeroRaw;
-        if (delta < 0) delta = -delta;
-
         Serial.print(F("[CAL] Ref raw = "));
         Serial.print(g_refRaw);
-        Serial.print(F(", delta = "));
+        Serial.print(F(", Zero raw = "));
+        Serial.print(g_zeroRaw);
+        Serial.print(F(", Delta = "));
         Serial.println(delta);
 
+        if (delta < 0) delta = -delta;
         if (delta < 1000) {
           buzzerError();
           Serial.println(F("[CAL] ERRORE: differenza raw troppo piccola, peso non rilevato"));
@@ -323,11 +324,24 @@ void update(uint32_t nowMs, KeyCode key) {
     }
 
     if (key == KEY_ENTER) {
-      float cpg = (float)(g_refRaw - g_zeroRaw) / (float)g_refWeightG;
+      long delta = g_refRaw - g_zeroRaw;
+      float cpg = (float)delta / (float)g_refWeightG;
+
+      Serial.println(F("[CAL] ========================================"));
+      Serial.println(F("[CAL] CALCOLO CPG:"));
+      Serial.print(F("[CAL]   Zero raw  = ")); Serial.println(g_zeroRaw);
+      Serial.print(F("[CAL]   Ref raw   = ")); Serial.println(g_refRaw);
+      Serial.print(F("[CAL]   Delta     = ")); Serial.println(delta);
+      Serial.print(F("[CAL]   Peso ref  = ")); Serial.print(g_refWeightG); Serial.println(F(" g"));
+      Serial.print(F("[CAL]   CPG       = ")); Serial.print(delta); Serial.print(F(" / "));
+      Serial.print(g_refWeightG); Serial.print(F(" = ")); Serial.println(cpg, 4);
+      Serial.println(F("[CAL] ========================================"));
 
       if (!validateCpg(cpg)) {
         buzzerError();
-        Serial.println(F("[CAL] ERRORE: CPG non valido"));
+        Serial.print(F("[CAL] ERRORE: CPG ")); Serial.print(cpg, 4);
+        Serial.print(F(" fuori range ")); Serial.print(CPG_MIN, 0);
+        Serial.print(F("-")); Serial.println(CPG_MAX, 0);
         abort();
         return;
       }
@@ -343,16 +357,7 @@ void update(uint32_t nowMs, KeyCode key) {
       delay(100);
       buzzerOk();
 
-      Serial.println(F("[CAL] ========================================"));
-      Serial.println(F("[CAL] CALIBRAZIONE COMPLETATA CON SUCCESSO!"));
-      Serial.print(F("[CAL] OFFSET = "));
-      Serial.println(g_zeroRaw);
-      Serial.print(F("[CAL] CPG = "));
-      Serial.println(cpg, 4);
-      Serial.print(F("[CAL] Peso ref = "));
-      Serial.print(g_refWeightG);
-      Serial.println(F(" g"));
-      Serial.println(F("[CAL] ========================================"));
+      Serial.println(F("[CAL] CALIBRAZIONE SALVATA CON SUCCESSO!"));
 
       return;
     }
