@@ -1158,20 +1158,15 @@ void loop() {
   keypad_update(now);
   KeyCode key = keypad_get_event();
 
-  // Calibration Wizard: controlla combo CLEAR poi TARE (entro 1 sec)
-  // checkComboAndStart() ritorna true se il wizard è stato appena avviato
-  // e il tasto TARE è stato consumato
-  bool wizardConsumedKey = false;
-  if (key != KEY_NONE) {
-    wizardConsumedKey = CalWizard::checkComboAndStart(key, now);
-  }
+  // Calibration Wizard: long press su SKIP per 5 secondi per avviare
+  CalWizard::updateLongPress(now);
 
   // Aggiorna state machine del wizard (gestisce tasti internamente quando attivo)
   CalWizard::update(now);
 
   // Se il wizard è attivo, i tasti vengono gestiti da CalWizard::update()
-  bool wizardHandledKey = wizardConsumedKey ||
-    (CalWizard::isActive() && (key == KEY_TARE || key == KEY_ENTER || key == KEY_SKIP || key == KEY_CLEAR));
+  bool wizardHandledKey = CalWizard::isActive() &&
+    (key == KEY_TARE || key == KEY_ENTER || key == KEY_SKIP || key == KEY_CLEAR);
 
   if (key != KEY_NONE && !wizardHandledKey) {
     g_lastKeyPressMs = now;
@@ -1184,8 +1179,8 @@ void loop() {
     handleKeyEvent(key);
   }
 
-  // Se il wizard è attivo, resetta comunque il timer inattività
-  if (CalWizard::isActive() && key != KEY_NONE) {
+  // Se il wizard è attivo o long press in corso, resetta timer inattività
+  if ((CalWizard::isActive() || CalWizard::isLongPressInProgress()) && key != KEY_NONE) {
     g_lastKeyPressMs = now;
   }
 

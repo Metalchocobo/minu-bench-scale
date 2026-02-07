@@ -6,7 +6,7 @@
 // =============================================================================
 // CALIBRATION_WIZARD.H - Wizard calibrazione on-display per Minù Bench Scale
 // =============================================================================
-// Attivato premendo CLEAR, poi TARE entro 1 secondo.
+// Attivato tenendo premuto SKIP per 5 secondi.
 // 4 step: ZERO -> PLACE -> VALUE -> CONFIRM
 // Non bloccante: state machine gestita da update().
 
@@ -31,8 +31,8 @@ static const uint16_t REF_WEIGHT_STEP_FINE_G = 50;  // Step sopra 2000g
 static const float CPG_MIN = 20.0f;     // Minimo ragionevole
 static const float CPG_MAX = 1000.0f;   // Massimo ragionevole
 
-// Finestra temporale per combo CLEAR+TARE
-static const uint32_t COMBO_WINDOW_MS = 1000;
+// Tempo di pressione SKIP per avviare wizard (5 secondi)
+static const uint32_t LONG_PRESS_MS = 5000;
 
 // ========================= API =========================
 
@@ -42,10 +42,16 @@ bool isActive();
 // Ritorna lo step corrente
 CalStep getStep();
 
-// Controlla se il tasto fa parte della combo per avviare il wizard.
-// Chiamare dal loop principale PRIMA di gestire il tasto.
-// Ritorna true se il wizard è stato avviato (il tasto non va gestito altrove).
-bool checkComboAndStart(KeyCode key, uint32_t nowMs);
+// Aggiorna il tracking del long press su SKIP.
+// Chiamare ogni ciclo loop() con nowMs = millis().
+// Ritorna true se il wizard è stato appena avviato.
+bool updateLongPress(uint32_t nowMs);
+
+// Ritorna true se il long press su SKIP è in corso
+bool isLongPressInProgress();
+
+// Ritorna il progresso del long press (0-100)
+uint8_t getLongPressProgress(uint32_t nowMs);
 
 // Aggiorna la state machine del wizard (solo quando attivo).
 // Chiamare ogni ciclo loop() con nowMs = millis().

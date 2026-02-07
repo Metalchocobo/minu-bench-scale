@@ -8,8 +8,9 @@ namespace CalWizard {
 // ========================= STATO INTERNO =========================
 static CalStep g_step = CAL_IDLE;
 
-// Combo tracking: CLEAR poi TARE entro 1 secondo
-static uint32_t g_clearPressedMs = 0;
+// Long press tracking: SKIP tenuto per 5 secondi
+static uint32_t g_longPressStartMs = 0;
+static bool g_longPressActive = false;
 
 // Dati acquisizione
 static long g_zeroRaw      = 0;          // Raw a vuoto (step ZERO)
@@ -92,7 +93,7 @@ uint16_t getRefWeightG() {
 }
 
 bool wantsCustomRender() {
-  return (g_step != CAL_IDLE);
+  return (g_step != CAL_IDLE) || g_longPressActive;
 }
 
 uint8_t getSampleProgress() {
@@ -108,48 +109,70 @@ float getCalculatedCpg() {
 
 void abort() {
   g_step = CAL_IDLE;
-  g_clearPressedMs = 0;
+  g_longPressStartMs = 0;
+  g_longPressActive = false;
   buzzerError();
   Serial.println(F("[CAL] Wizard annullato"));
 }
 
-bool checkComboAndStart(KeyCode key, uint32_t nowMs) {
-  // Solo quando wizard non è attivo
-  if (g_step != CAL_IDLE) return false;
+// ========================= LONG PRESS SU SKIP =========================
 
-  if (key == KEY_CLEAR) {
-    // Nota che CLEAR è stato premuto
-    g_clearPressedMs = nowMs;
-    // Ritorna false: CLEAR viene gestito normalmente (suona e basta)
+bool isLongPressInProgress() {
+  return g_longPressActive;
+}
+
+uint8_t getLongPressProgress(uint32_t nowMs) {
+  if (!g_longPressActive || g_longPressStartMs == 0) return 0;
+  uint32_t elapsed = nowMs - g_longPressStartMs;
+  if (elapsed >= LONG_PRESS_MS) return 100;
+  return (uint8_t)((elapsed * 100UL) / LONG_PRESS_MS);
+}
+
+bool updateLongPress(uint32_t nowMs) {
+  // Solo quando wizard non è attivo
+  if (g_step != CAL_IDLE) {
+    g_longPressActive = false;
+    g_longPressStartMs = 0;
     return false;
   }
 
-  if (key == KEY_TARE) {
-    // Controlla se CLEAR è stato premuto di recente
-    if (g_clearPressedMs != 0 && (nowMs - g_clearPressedMs) < COMBO_WINDOW_MS) {
-      // Combo rilevato! Avvia wizard
-      g_step = CAL_STEP_ZERO;
-      g_clearPressedMs = 0;
-      resetSampling();
-      buzzerOk();
-      Serial.println(F("[CAL] ========================================"));
-      Serial.println(F("[CAL] Wizard calibrazione avviato (CLEAR + TARE)"));
-      Serial.println(F("[CAL] STEP 1/4: Piatto vuoto - premi ENTER"));
-      Serial.println(F("[CAL] ========================================"));
-      return true;  // Il tasto TARE è stato consumato dal wizard
-    }
-  }
+  bool skipPressed = keypad_is_pressed(KEY_SKIP);
 
-  // Timeout della finestra combo
-  if (g_clearPressedMs != 0 && (nowMs - g_clearPressedMs) >= COMBO_WINDOW_MS) {
-    g_clearPressedMs = 0;
+  if (skipPressed) {
+    if (!g_longPressActive) {
+      // Inizio long press
+      g_longPressActive = true;
+      g_longPressStartMs = nowMs;
+    } else {
+      // Long press in corso: controlla se completato
+      uint32_t elapsed = nowMs - g_longPressStartMs;
+      if (elapsed >= LONG_PRESS_MS) {
+        // Long press completato! Avvia wizard
+        g_step = CAL_STEP_ZERO;
+        g_longPressActive = false;
+        g_longPressStartMs = 0;
+        resetSampling();
+        buzzerOk();
+        Serial.println(F("[CAL] ========================================"));
+        Serial.println(F("[CAL] Wizard calibrazione avviato (SKIP 5s)"));
+        Serial.println(F("[CAL] STEP 1/4: Piatto vuoto - premi ENTER"));
+        Serial.println(F("[CAL] ========================================"));
+        return true;
+      }
+    }
+  } else {
+    // SKIP rilasciato: reset
+    if (g_longPressActive) {
+      g_longPressActive = false;
+      g_longPressStartMs = 0;
+    }
   }
 
   return false;
 }
 
 void update(uint32_t nowMs) {
-  // In IDLE non fa nulla - la combo è gestita da checkComboAndStart()
+  // In IDLE non fa nulla - il long press è gestito da updateLongPress()
   if (g_step == CAL_IDLE) {
     return;
   }

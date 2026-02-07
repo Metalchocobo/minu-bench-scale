@@ -694,7 +694,7 @@ void ui_renderCalLongPress(uint8_t progress) {
   oled.clearBuffer();
 
   oled.setFont(u8g2_font_6x12_tr);
-  drawCenteredText("Tieni premuto TARE", 28);
+  drawCenteredText("Tieni premuto SKIP", 28);
   drawCenteredText("per avviare calibrazione", 42);
 
   // Barra di progresso

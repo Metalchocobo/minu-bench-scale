@@ -446,7 +446,7 @@ La bilancia può essere calibrata in due modi:
 
 #### Wizard calibrazione (on-display)
 
-Il wizard si attiva premendo **CLEAR** e poi **TARE** entro 1 secondo.
+Il wizard si attiva tenendo premuto **SKIP** per 5 secondi.
 
 **Passi del wizard:**
 
@@ -525,8 +525,8 @@ Comandi:
 - `hxlog rate <ms>` (50..5000)
 
 
-### Tastiera: debounce + one-shot + combo
+### Tastiera: debounce + one-shot + long press
 La tastiera ha un debounce software (40 ms) e genera eventi **one-shot**: un tasto premuto produce **un solo evento**, anche se lo tieni premuto.
 
-**Combo tasti:**
-- **CLEAR poi TARE** (entro 1 secondo): avvia il wizard di calibrazione on-display
+**Long press:**
+- **SKIP tenuto per 5 secondi**: avvia il wizard di calibrazione on-display
