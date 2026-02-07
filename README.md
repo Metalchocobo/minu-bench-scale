@@ -446,7 +446,7 @@ La bilancia può essere calibrata in due modi:
 
 #### Wizard calibrazione (on-display)
 
-Il wizard si attiva tenendo premuto **TARE** e premendo **CLEAR** contemporaneamente.
+Il wizard si attiva premendo **CLEAR** e poi **TARE** entro 1 secondo.
 
 **Passi del wizard:**
 
@@ -529,6 +529,4 @@ Comandi:
 La tastiera ha un debounce software (40 ms) e genera eventi **one-shot**: un tasto premuto produce **un solo evento**, anche se lo tieni premuto.
 
 **Combo tasti:**
-- **TARE tenuto + CLEAR premuto**: avvia il wizard di calibrazione on-display
-
-La funzione `keypad_is_pressed(KeyCode)` permette di rilevare se un tasto specifico è attualmente premuto (per logiche di combo).
+- **CLEAR poi TARE** (entro 1 secondo): avvia il wizard di calibrazione on-display

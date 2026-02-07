@@ -1,5 +1,4 @@
 #include "calibration_wizard.h"
-#include "keypad.h"
 #include "scale_state.h"
 #include "buzzer.h"
 #include <math.h>
@@ -9,8 +8,8 @@ namespace CalWizard {
 // ========================= STATO INTERNO =========================
 static CalStep g_step = CAL_IDLE;
 
-// Combo key tracking: TARE tenuto + CLEAR premuto
-static bool g_tareHeldForCombo = false;
+// Combo tracking: CLEAR poi TARE entro 1 secondo
+static uint32_t g_clearPressedMs = 0;
 
 // Dati acquisizione
 static long g_zeroRaw      = 0;          // Raw a vuoto (step ZERO)
@@ -22,7 +21,7 @@ static long     g_sampleAccum = 0;
 static uint8_t  g_sampleCount = 0;
 static const uint8_t SAMPLES_NEEDED = 32;
 static uint32_t g_sampleStartMs = 0;
-static const uint32_t SAMPLE_SETTLE_MS = 300;  // Ignora primi 300ms
+static const uint32_t SAMPLE_SETTLE_MS = 300;
 
 // Anti-duplicati: traccia ultimo raw visto
 static long g_lastSeenRaw = 0;
@@ -39,7 +38,6 @@ static void resetSampling() {
 }
 
 static bool accumulateSample(uint32_t nowMs) {
-  // Aspetta settle time
   if ((nowMs - g_sampleStartMs) < SAMPLE_SETTLE_MS) {
     return false;
   }
@@ -66,13 +64,9 @@ static long finalizeSample() {
 }
 
 static uint16_t stepWeight(uint16_t current, int16_t direction) {
-  // Sotto 2000g: step di 500g
-  // Sopra 2000g: step di 50g
   int16_t step = (current >= 2000) ? REF_WEIGHT_STEP_FINE_G : REF_WEIGHT_STEP_G;
-
   int32_t newVal = (int32_t)current + direction * step;
 
-  // Clamp
   if (newVal < REF_WEIGHT_MIN_G) newVal = REF_WEIGHT_MIN_G;
   if (newVal > REF_WEIGHT_MAX_G) newVal = REF_WEIGHT_MAX_G;
 
@@ -101,16 +95,6 @@ bool wantsCustomRender() {
   return (g_step != CAL_IDLE);
 }
 
-bool isLongPressInProgress() {
-  // Non più usato per long press, ma per combo TARE+CLEAR
-  return false;
-}
-
-uint8_t getLongPressProgress(uint32_t nowMs) {
-  (void)nowMs;
-  return 0;
-}
-
 uint8_t getSampleProgress() {
   if (g_step != CAL_STEP_ZERO && g_step != CAL_STEP_PLACE) return 0;
   if (g_sampleCount >= SAMPLES_NEEDED) return 100;
@@ -124,39 +108,49 @@ float getCalculatedCpg() {
 
 void abort() {
   g_step = CAL_IDLE;
-  g_tareHeldForCombo = false;
+  g_clearPressedMs = 0;
   buzzerError();
   Serial.println(F("[CAL] Wizard annullato"));
 }
 
+bool checkComboAndStart(KeyCode key, uint32_t nowMs) {
+  // Solo quando wizard non è attivo
+  if (g_step != CAL_IDLE) return false;
+
+  if (key == KEY_CLEAR) {
+    // Nota che CLEAR è stato premuto
+    g_clearPressedMs = nowMs;
+    // Ritorna false: CLEAR viene gestito normalmente (suona e basta)
+    return false;
+  }
+
+  if (key == KEY_TARE) {
+    // Controlla se CLEAR è stato premuto di recente
+    if (g_clearPressedMs != 0 && (nowMs - g_clearPressedMs) < COMBO_WINDOW_MS) {
+      // Combo rilevato! Avvia wizard
+      g_step = CAL_STEP_ZERO;
+      g_clearPressedMs = 0;
+      resetSampling();
+      buzzerOk();
+      Serial.println(F("[CAL] ========================================"));
+      Serial.println(F("[CAL] Wizard calibrazione avviato (CLEAR + TARE)"));
+      Serial.println(F("[CAL] STEP 1/4: Piatto vuoto - premi ENTER"));
+      Serial.println(F("[CAL] ========================================"));
+      return true;  // Il tasto TARE è stato consumato dal wizard
+    }
+  }
+
+  // Timeout della finestra combo
+  if (g_clearPressedMs != 0 && (nowMs - g_clearPressedMs) >= COMBO_WINDOW_MS) {
+    g_clearPressedMs = 0;
+  }
+
+  return false;
+}
+
 void update(uint32_t nowMs) {
-  // ========== GESTIONE COMBO TARE+CLEAR (solo in IDLE) ==========
+  // In IDLE non fa nulla - la combo è gestita da checkComboAndStart()
   if (g_step == CAL_IDLE) {
-    bool tarePressed = keypad_is_pressed(KEY_TARE);
-
-    // Traccia se TARE è tenuto premuto
-    if (tarePressed) {
-      g_tareHeldForCombo = true;
-    } else {
-      g_tareHeldForCombo = false;
-    }
-
-    // Se TARE è tenuto, controlla se arriva CLEAR
-    if (g_tareHeldForCombo) {
-      KeyCode ev = keypad_get_event();
-      if (ev == KEY_CLEAR) {
-        // Combo attivato! Avvia wizard
-        g_step = CAL_STEP_ZERO;
-        g_tareHeldForCombo = false;
-        resetSampling();
-        buzzerOk();
-        Serial.println(F("[CAL] ========================================"));
-        Serial.println(F("[CAL] Wizard calibrazione avviato (TARE+CLEAR)"));
-        Serial.println(F("[CAL] STEP 1/4: Piatto vuoto - premi ENTER"));
-        Serial.println(F("[CAL] ========================================"));
-      }
-    }
-
     return;
   }
 
@@ -169,7 +163,6 @@ void update(uint32_t nowMs) {
       return;
     }
 
-    // ENTER = conferma zero
     if (ev == KEY_ENTER) {
       Serial.print(F("[CAL] ENTER premuto. Campioni: "));
       Serial.println(g_sampleCount);
@@ -189,7 +182,6 @@ void update(uint32_t nowMs) {
       return;
     }
 
-    // Accumula campioni in background
     accumulateSample(nowMs);
     return;
   }
@@ -203,7 +195,6 @@ void update(uint32_t nowMs) {
       return;
     }
 
-    // ENTER = conferma peso appoggiato
     if (ev == KEY_ENTER) {
       Serial.print(F("[CAL] ENTER premuto. Campioni: "));
       Serial.println(g_sampleCount);
@@ -211,7 +202,6 @@ void update(uint32_t nowMs) {
       if (g_sampleCount >= SAMPLES_NEEDED) {
         g_refRaw = finalizeSample();
 
-        // Verifica che il raw sia diverso dallo zero
         long delta = g_refRaw - g_zeroRaw;
         if (delta < 0) delta = -delta;
 
@@ -236,7 +226,6 @@ void update(uint32_t nowMs) {
       return;
     }
 
-    // Accumula campioni
     accumulateSample(nowMs);
     return;
   }
@@ -250,7 +239,6 @@ void update(uint32_t nowMs) {
       return;
     }
 
-    // SKIP = aumenta peso
     if (ev == KEY_SKIP) {
       g_refWeightG = stepWeight(g_refWeightG, +1);
       buzzerKeyClick();
@@ -260,7 +248,6 @@ void update(uint32_t nowMs) {
       return;
     }
 
-    // TARE = diminuisci peso
     if (ev == KEY_TARE) {
       g_refWeightG = stepWeight(g_refWeightG, -1);
       buzzerKeyClick();
@@ -270,7 +257,6 @@ void update(uint32_t nowMs) {
       return;
     }
 
-    // ENTER = conferma e vai a CONFIRM
     if (ev == KEY_ENTER) {
       float cpg = (float)(g_refRaw - g_zeroRaw) / (float)g_refWeightG;
 
@@ -308,7 +294,6 @@ void update(uint32_t nowMs) {
       return;
     }
 
-    // ENTER = salva calibrazione
     if (ev == KEY_ENTER) {
       float cpg = (float)(g_refRaw - g_zeroRaw) / (float)g_refWeightG;
 
@@ -319,7 +304,6 @@ void update(uint32_t nowMs) {
         return;
       }
 
-      // Applica calibrazione
       ScaleState::setOffsetRaw(g_zeroRaw);
       ScaleState::setScaleCpg(cpg);
       ScaleState::setZtCounts(0);

@@ -1,11 +1,12 @@
 #pragma once
 
 #include <Arduino.h>
+#include "keypad.h"
 
 // =============================================================================
 // CALIBRATION_WIZARD.H - Wizard calibrazione on-display per Minù Bench Scale
 // =============================================================================
-// Attivato tenendo premuto TARE e premendo CLEAR.
+// Attivato premendo CLEAR, poi TARE entro 1 secondo.
 // 4 step: ZERO -> PLACE -> VALUE -> CONFIRM
 // Non bloccante: state machine gestita da update().
 
@@ -27,9 +28,11 @@ static const uint16_t REF_WEIGHT_STEP_G   = 500;    // Step sotto 2000g
 static const uint16_t REF_WEIGHT_STEP_FINE_G = 50;  // Step sopra 2000g
 
 // Soglie validazione CPG (count-per-gram)
-// Range ampio per supportare diverse celle di carico
 static const float CPG_MIN = 20.0f;     // Minimo ragionevole
 static const float CPG_MAX = 1000.0f;   // Massimo ragionevole
+
+// Finestra temporale per combo CLEAR+TARE
+static const uint32_t COMBO_WINDOW_MS = 1000;
 
 // ========================= API =========================
 
@@ -39,23 +42,20 @@ bool isActive();
 // Ritorna lo step corrente
 CalStep getStep();
 
-// Aggiorna la state machine del wizard.
-// Gestisce combo TARE+CLEAR, transizioni tra step, acquisizione dati.
+// Controlla se il tasto fa parte della combo per avviare il wizard.
+// Chiamare dal loop principale PRIMA di gestire il tasto.
+// Ritorna true se il wizard è stato avviato (il tasto non va gestito altrove).
+bool checkComboAndStart(KeyCode key, uint32_t nowMs);
+
+// Aggiorna la state machine del wizard (solo quando attivo).
 // Chiamare ogni ciclo loop() con nowMs = millis().
 void update(uint32_t nowMs);
 
 // Ritorna il valore peso di riferimento corrente (per UI)
 uint16_t getRefWeightG();
 
-// Ritorna true se il wizard richiede un render custom (impedisce renderWeight normale)
+// Ritorna true se il wizard richiede un render custom
 bool wantsCustomRender();
-
-// Ritorna true se l'utente sta tenendo premuto TARE (per UI combo)
-// NOTA: ora sempre false, combo non mostra barra progresso
-bool isLongPressInProgress();
-
-// Ritorna progresso long press (0-100) - sempre 0 con combo
-uint8_t getLongPressProgress(uint32_t nowMs);
 
 // Ritorna progresso campionamento step corrente (0-100)
 uint8_t getSampleProgress();
