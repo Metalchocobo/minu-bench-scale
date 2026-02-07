@@ -446,7 +446,7 @@ La bilancia può essere calibrata in due modi:
 
 #### Wizard calibrazione (on-display)
 
-Il wizard si attiva tenendo premuto **TARE per 3 secondi**. Una barra di progresso mostra l'avanzamento del long press.
+Il wizard si attiva tenendo premuto **TARE** e premendo **CLEAR** contemporaneamente.
 
 **Passi del wizard:**
 
@@ -463,7 +463,7 @@ Il wizard si attiva tenendo premuto **TARE per 3 secondi**. Una barra di progres
 - Step di 50g sopra 2000g
 
 **Validazione:**
-- Il CPG deve essere nel range 50-500 (tipico per celle 20kg)
+- Il CPG deve essere nel range 20-1000 (supporta diverse celle di carico)
 - Se fuori range, il wizard rifiuta la calibrazione
 
 **Feedback:**
@@ -489,7 +489,7 @@ Per calibrazione remota o debug:
 
 **Note:**
 - `cal zero` e `cal ref` sono disabilitati se HX health è in ERROR
-- `cal ref` rifiuta valori ≤ 0 e CPG fuori range 50-500
+- `cal ref` rifiuta valori ≤ 0 e CPG fuori range 20-1000
 - Dopo `cal zero` o `cal ref` i filtri vengono resettati automaticamente
 
 ### Legenda MP3 eventi (cartella /MP3)
@@ -525,10 +525,10 @@ Comandi:
 - `hxlog rate <ms>` (50..5000)
 
 
-### Tastiera: debounce + one-shot + long press
+### Tastiera: debounce + one-shot + combo
 La tastiera ha un debounce software (40 ms) e genera eventi **one-shot**: un tasto premuto produce **un solo evento**, anche se lo tieni premuto.
 
-**Long press supportati:**
-- **TARE (3 secondi)**: avvia il wizard di calibrazione on-display
+**Combo tasti:**
+- **TARE tenuto + CLEAR premuto**: avvia il wizard di calibrazione on-display
 
-La funzione `keypad_is_pressed(KeyCode)` permette di rilevare se un tasto specifico è attualmente premuto (per logiche di long press).
+La funzione `keypad_is_pressed(KeyCode)` permette di rilevare se un tasto specifico è attualmente premuto (per logiche di combo).

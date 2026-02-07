@@ -9,9 +9,8 @@ namespace CalWizard {
 // ========================= STATO INTERNO =========================
 static CalStep g_step = CAL_IDLE;
 
-// Long press tracking
-static bool     g_longPressStarted = false;
-static uint32_t g_longPressStartMs = 0;
+// Combo key tracking: TARE tenuto + CLEAR premuto
+static bool g_tareHeldForCombo = false;
 
 // Dati acquisizione
 static long g_zeroRaw      = 0;          // Raw a vuoto (step ZERO)
@@ -25,12 +24,18 @@ static const uint8_t SAMPLES_NEEDED = 32;
 static uint32_t g_sampleStartMs = 0;
 static const uint32_t SAMPLE_SETTLE_MS = 300;  // Ignora primi 300ms
 
+// Anti-duplicati: traccia ultimo raw visto
+static long g_lastSeenRaw = 0;
+static bool g_lastSeenRawValid = false;
+
 // ========================= UTILITY INTERNE =========================
 
 static void resetSampling() {
   g_sampleAccum = 0;
   g_sampleCount = 0;
   g_sampleStartMs = millis();
+  g_lastSeenRaw = 0;
+  g_lastSeenRawValid = false;
 }
 
 static bool accumulateSample(uint32_t nowMs) {
@@ -40,6 +45,15 @@ static bool accumulateSample(uint32_t nowMs) {
   }
 
   long raw = ScaleState::getLastRawAvg();
+
+  // Evita di accumulare lo stesso valore più volte
+  if (g_lastSeenRawValid && raw == g_lastSeenRaw) {
+    return (g_sampleCount >= SAMPLES_NEEDED);
+  }
+
+  g_lastSeenRaw = raw;
+  g_lastSeenRawValid = true;
+
   g_sampleAccum += raw;
   g_sampleCount++;
 
@@ -88,14 +102,13 @@ bool wantsCustomRender() {
 }
 
 bool isLongPressInProgress() {
-  return (g_step == CAL_IDLE && g_longPressStarted);
+  // Non più usato per long press, ma per combo TARE+CLEAR
+  return false;
 }
 
 uint8_t getLongPressProgress(uint32_t nowMs) {
-  if (!g_longPressStarted || g_step != CAL_IDLE) return 0;
-  uint32_t elapsed = nowMs - g_longPressStartMs;
-  if (elapsed >= LONG_PRESS_MS) return 100;
-  return (uint8_t)((elapsed * 100UL) / LONG_PRESS_MS);
+  (void)nowMs;
+  return 0;
 }
 
 uint8_t getSampleProgress() {
@@ -111,35 +124,37 @@ float getCalculatedCpg() {
 
 void abort() {
   g_step = CAL_IDLE;
-  g_longPressStarted = false;
+  g_tareHeldForCombo = false;
   buzzerError();
   Serial.println(F("[CAL] Wizard annullato"));
 }
 
 void update(uint32_t nowMs) {
-  // ========== GESTIONE LONG PRESS (solo in IDLE) ==========
+  // ========== GESTIONE COMBO TARE+CLEAR (solo in IDLE) ==========
   if (g_step == CAL_IDLE) {
     bool tarePressed = keypad_is_pressed(KEY_TARE);
 
-    if (tarePressed && !g_longPressStarted) {
-      // Inizia tracking long press
-      g_longPressStarted = true;
-      g_longPressStartMs = nowMs;
+    // Traccia se TARE è tenuto premuto
+    if (tarePressed) {
+      g_tareHeldForCombo = true;
+    } else {
+      g_tareHeldForCombo = false;
     }
-    else if (tarePressed && g_longPressStarted) {
-      // Controlla durata
-      if ((nowMs - g_longPressStartMs) >= LONG_PRESS_MS) {
-        // Long press completato: avvia wizard
+
+    // Se TARE è tenuto, controlla se arriva CLEAR
+    if (g_tareHeldForCombo) {
+      KeyCode ev = keypad_get_event();
+      if (ev == KEY_CLEAR) {
+        // Combo attivato! Avvia wizard
         g_step = CAL_STEP_ZERO;
-        g_longPressStarted = false;
+        g_tareHeldForCombo = false;
         resetSampling();
         buzzerOk();
-        Serial.println(F("[CAL] Wizard avviato - STEP_ZERO"));
+        Serial.println(F("[CAL] ========================================"));
+        Serial.println(F("[CAL] Wizard calibrazione avviato (TARE+CLEAR)"));
+        Serial.println(F("[CAL] STEP 1/4: Piatto vuoto - premi ENTER"));
+        Serial.println(F("[CAL] ========================================"));
       }
-    }
-    else if (!tarePressed) {
-      // Rilasciato prima del tempo
-      g_longPressStarted = false;
     }
 
     return;
@@ -147,8 +162,8 @@ void update(uint32_t nowMs) {
 
   // ========== STEP_ZERO: Acquisisci zero ==========
   if (g_step == CAL_STEP_ZERO) {
-    // CLEAR = annulla
     KeyCode ev = keypad_get_event();
+
     if (ev == KEY_CLEAR) {
       abort();
       return;
@@ -156,6 +171,9 @@ void update(uint32_t nowMs) {
 
     // ENTER = conferma zero
     if (ev == KEY_ENTER) {
+      Serial.print(F("[CAL] ENTER premuto. Campioni: "));
+      Serial.println(g_sampleCount);
+
       if (g_sampleCount >= SAMPLES_NEEDED) {
         g_zeroRaw = finalizeSample();
         g_step = CAL_STEP_PLACE;
@@ -163,10 +181,10 @@ void update(uint32_t nowMs) {
         buzzerOk();
         Serial.print(F("[CAL] Zero raw = "));
         Serial.println(g_zeroRaw);
-        Serial.println(F("[CAL] STEP_PLACE - Appoggia peso riferimento"));
+        Serial.println(F("[CAL] STEP 2/4: Appoggia peso riferimento - premi ENTER"));
       } else {
-        // Non abbastanza campioni
         buzzerWarn();
+        Serial.println(F("[CAL] Attendi, campionamento in corso..."));
       }
       return;
     }
@@ -187,6 +205,9 @@ void update(uint32_t nowMs) {
 
     // ENTER = conferma peso appoggiato
     if (ev == KEY_ENTER) {
+      Serial.print(F("[CAL] ENTER premuto. Campioni: "));
+      Serial.println(g_sampleCount);
+
       if (g_sampleCount >= SAMPLES_NEEDED) {
         g_refRaw = finalizeSample();
 
@@ -194,20 +215,23 @@ void update(uint32_t nowMs) {
         long delta = g_refRaw - g_zeroRaw;
         if (delta < 0) delta = -delta;
 
+        Serial.print(F("[CAL] Ref raw = "));
+        Serial.print(g_refRaw);
+        Serial.print(F(", delta = "));
+        Serial.println(delta);
+
         if (delta < 1000) {
-          // Differenza troppo piccola, probabilmente non c'è peso
           buzzerError();
-          Serial.println(F("[CAL] ERRORE: differenza raw troppo piccola"));
+          Serial.println(F("[CAL] ERRORE: differenza raw troppo piccola, peso non rilevato"));
           return;
         }
 
         g_step = CAL_STEP_VALUE;
         buzzerOk();
-        Serial.print(F("[CAL] Ref raw = "));
-        Serial.println(g_refRaw);
-        Serial.println(F("[CAL] STEP_VALUE - Seleziona peso in grammi"));
+        Serial.println(F("[CAL] STEP 3/4: Seleziona peso (SKIP=+, TARE=-) - premi ENTER"));
       } else {
         buzzerWarn();
+        Serial.println(F("[CAL] Attendi, campionamento in corso..."));
       }
       return;
     }
@@ -231,7 +255,8 @@ void update(uint32_t nowMs) {
       g_refWeightG = stepWeight(g_refWeightG, +1);
       buzzerKeyClick();
       Serial.print(F("[CAL] Peso ref = "));
-      Serial.println(g_refWeightG);
+      Serial.print(g_refWeightG);
+      Serial.println(F(" g"));
       return;
     }
 
@@ -240,27 +265,34 @@ void update(uint32_t nowMs) {
       g_refWeightG = stepWeight(g_refWeightG, -1);
       buzzerKeyClick();
       Serial.print(F("[CAL] Peso ref = "));
-      Serial.println(g_refWeightG);
+      Serial.print(g_refWeightG);
+      Serial.println(F(" g"));
       return;
     }
 
     // ENTER = conferma e vai a CONFIRM
     if (ev == KEY_ENTER) {
-      // Calcola CPG preliminare per verifica
       float cpg = (float)(g_refRaw - g_zeroRaw) / (float)g_refWeightG;
+
+      Serial.print(F("[CAL] ENTER premuto. CPG calcolato = "));
+      Serial.println(cpg, 4);
+      Serial.print(F("[CAL] Range valido: "));
+      Serial.print(CPG_MIN, 0);
+      Serial.print(F(" - "));
+      Serial.println(CPG_MAX, 0);
 
       if (!validateCpg(cpg)) {
         buzzerError();
-        Serial.print(F("[CAL] ERRORE: CPG fuori range = "));
-        Serial.println(cpg, 4);
+        Serial.print(F("[CAL] ERRORE: CPG "));
+        Serial.print(cpg, 4);
+        Serial.println(F(" fuori range!"));
+        Serial.println(F("[CAL] Controlla: peso corretto? Bilancia stabile?"));
         return;
       }
 
       g_step = CAL_STEP_CONFIRM;
       buzzerOk();
-      Serial.print(F("[CAL] CPG calcolato = "));
-      Serial.println(cpg, 4);
-      Serial.println(F("[CAL] STEP_CONFIRM - ENTER=salva, CLEAR=annulla"));
+      Serial.println(F("[CAL] STEP 4/4: Conferma (ENTER=salva, CLEAR=annulla)"));
       return;
     }
 
@@ -280,10 +312,9 @@ void update(uint32_t nowMs) {
     if (ev == KEY_ENTER) {
       float cpg = (float)(g_refRaw - g_zeroRaw) / (float)g_refWeightG;
 
-      // Double check validazione
       if (!validateCpg(cpg)) {
         buzzerError();
-        Serial.println(F("[CAL] ERRORE: CPG non valido, calibrazione annullata"));
+        Serial.println(F("[CAL] ERRORE: CPG non valido"));
         abort();
         return;
       }
@@ -291,22 +322,25 @@ void update(uint32_t nowMs) {
       // Applica calibrazione
       ScaleState::setOffsetRaw(g_zeroRaw);
       ScaleState::setScaleCpg(cpg);
-      ScaleState::setZtCounts(0);  // Reset zero-tracking
+      ScaleState::setZtCounts(0);
       ScaleState::saveToNVS();
       ScaleState::resetFiltersAndState();
 
       g_step = CAL_IDLE;
       buzzerOk();
       delay(100);
-      buzzerOk();  // Doppio beep = successo
+      buzzerOk();
 
-      Serial.println(F("[CAL] ===== CALIBRAZIONE COMPLETATA ====="));
+      Serial.println(F("[CAL] ========================================"));
+      Serial.println(F("[CAL] CALIBRAZIONE COMPLETATA CON SUCCESSO!"));
       Serial.print(F("[CAL] OFFSET = "));
       Serial.println(g_zeroRaw);
       Serial.print(F("[CAL] CPG = "));
       Serial.println(cpg, 4);
-      Serial.print(F("[CAL] REF_G = "));
-      Serial.println(g_refWeightG);
+      Serial.print(F("[CAL] Peso ref = "));
+      Serial.print(g_refWeightG);
+      Serial.println(F(" g"));
+      Serial.println(F("[CAL] ========================================"));
 
       return;
     }

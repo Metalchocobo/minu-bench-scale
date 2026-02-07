@@ -5,7 +5,7 @@
 // =============================================================================
 // CALIBRATION_WIZARD.H - Wizard calibrazione on-display per Minù Bench Scale
 // =============================================================================
-// Attivato da long press (3s) su TARE.
+// Attivato tenendo premuto TARE e premendo CLEAR.
 // 4 step: ZERO -> PLACE -> VALUE -> CONFIRM
 // Non bloccante: state machine gestita da update().
 
@@ -21,15 +21,15 @@ enum CalStep : uint8_t {
 };
 
 // ========================= CONFIG =========================
-static const uint32_t LONG_PRESS_MS       = 3000;   // 3 secondi per attivare
 static const uint16_t REF_WEIGHT_MIN_G    = 500;    // Peso minimo selezionabile
 static const uint16_t REF_WEIGHT_MAX_G    = 20000;  // Peso massimo selezionabile
 static const uint16_t REF_WEIGHT_STEP_G   = 500;    // Step sotto 2000g
 static const uint16_t REF_WEIGHT_STEP_FINE_G = 50;  // Step sopra 2000g
 
 // Soglie validazione CPG (count-per-gram)
-static const float CPG_MIN = 50.0f;    // Minimo ragionevole
-static const float CPG_MAX = 500.0f;   // Massimo ragionevole
+// Range ampio per supportare diverse celle di carico
+static const float CPG_MIN = 20.0f;     // Minimo ragionevole
+static const float CPG_MAX = 1000.0f;   // Massimo ragionevole
 
 // ========================= API =========================
 
@@ -40,7 +40,7 @@ bool isActive();
 CalStep getStep();
 
 // Aggiorna la state machine del wizard.
-// Gestisce long press su TARE, transizioni tra step, acquisizione dati.
+// Gestisce combo TARE+CLEAR, transizioni tra step, acquisizione dati.
 // Chiamare ogni ciclo loop() con nowMs = millis().
 void update(uint32_t nowMs);
 
@@ -50,10 +50,11 @@ uint16_t getRefWeightG();
 // Ritorna true se il wizard richiede un render custom (impedisce renderWeight normale)
 bool wantsCustomRender();
 
-// Ritorna true se l'utente sta tenendo premuto TARE (long press in corso)
+// Ritorna true se l'utente sta tenendo premuto TARE (per UI combo)
+// NOTA: ora sempre false, combo non mostra barra progresso
 bool isLongPressInProgress();
 
-// Ritorna progresso long press (0-100)
+// Ritorna progresso long press (0-100) - sempre 0 con combo
 uint8_t getLongPressProgress(uint32_t nowMs);
 
 // Ritorna progresso campionamento step corrente (0-100)
