@@ -357,7 +357,11 @@ void update(uint32_t nowMs, KeyCode key) {
       delay(100);
       buzzerOk();
 
-      Serial.println(F("[CAL] CALIBRAZIONE SALVATA CON SUCCESSO!"));
+      // Verifica valori salvati
+      Serial.println(F("[CAL] CALIBRAZIONE SALVATA - VERIFICA:"));
+      Serial.print(F("[CAL]   Offset salvato = ")); Serial.println(ScaleState::getOffsetRaw());
+      Serial.print(F("[CAL]   CPG salvato    = ")); Serial.println(ScaleState::getScaleCpg(), 4);
+      Serial.print(F("[CAL]   ZT counts      = ")); Serial.println(ScaleState::getZtCounts());
 
       return;
     }
