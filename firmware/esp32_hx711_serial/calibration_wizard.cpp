@@ -39,6 +39,11 @@ static void resetSampling() {
 }
 
 static bool accumulateSample(uint32_t nowMs) {
+  // Già abbastanza campioni? Non accumulare più!
+  if (g_sampleCount >= SAMPLES_NEEDED) {
+    return true;
+  }
+
   if ((nowMs - g_sampleStartMs) < SAMPLE_SETTLE_MS) {
     return false;
   }
@@ -47,7 +52,7 @@ static bool accumulateSample(uint32_t nowMs) {
 
   // Evita di accumulare lo stesso valore più volte
   if (g_lastSeenRawValid && raw == g_lastSeenRaw) {
-    return (g_sampleCount >= SAMPLES_NEEDED);
+    return false;
   }
 
   g_lastSeenRaw = raw;
