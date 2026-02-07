@@ -56,6 +56,16 @@ static bool accumulateSample(uint32_t nowMs) {
   g_sampleAccum += raw;
   g_sampleCount++;
 
+  // Debug: mostra ogni campione
+  if (g_sampleCount <= 5 || g_sampleCount == SAMPLES_NEEDED) {
+    Serial.print(F("[CAL] Sample #"));
+    Serial.print(g_sampleCount);
+    Serial.print(F(": raw="));
+    Serial.print(raw);
+    Serial.print(F(", accum="));
+    Serial.println(g_sampleAccum);
+  }
+
   return (g_sampleCount >= SAMPLES_NEEDED);
 }
 
@@ -293,6 +303,10 @@ void update(uint32_t nowMs, KeyCode key) {
 
       Serial.print(F("[CAL] ENTER premuto. CPG calcolato = "));
       Serial.println(cpg, 4);
+      Serial.print(F("[CAL]   g_zeroRaw = ")); Serial.println(g_zeroRaw);
+      Serial.print(F("[CAL]   g_refRaw  = ")); Serial.println(g_refRaw);
+      Serial.print(F("[CAL]   delta     = ")); Serial.println(g_refRaw - g_zeroRaw);
+      Serial.print(F("[CAL]   peso      = ")); Serial.println(g_refWeightG);
       Serial.print(F("[CAL] Range valido: "));
       Serial.print(CPG_MIN, 0);
       Serial.print(F(" - "));
