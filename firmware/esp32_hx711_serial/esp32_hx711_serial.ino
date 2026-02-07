@@ -1161,8 +1161,8 @@ void loop() {
   // Calibration Wizard: long press su SKIP per 5 secondi per avviare
   CalWizard::updateLongPress(now);
 
-  // Aggiorna state machine del wizard (gestisce tasti internamente quando attivo)
-  CalWizard::update(now);
+  // Aggiorna state machine del wizard, passando l'evento tastiera
+  CalWizard::update(now, key);
 
   // Se il wizard è attivo, i tasti vengono gestiti da CalWizard::update()
   bool wizardHandledKey = CalWizard::isActive() &&

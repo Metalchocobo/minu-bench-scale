@@ -34,6 +34,9 @@ static const float CPG_MAX = 1000.0f;   // Massimo ragionevole
 // Tempo di pressione SKIP per avviare wizard (5 secondi)
 static const uint32_t LONG_PRESS_MS = 5000;
 
+// Tempo minimo prima di mostrare l'UI del long press (2 secondi)
+static const uint32_t LONG_PRESS_SHOW_UI_MS = 2000;
+
 // ========================= API =========================
 
 // Ritorna true se il wizard è attivo
@@ -54,8 +57,9 @@ bool isLongPressInProgress();
 uint8_t getLongPressProgress(uint32_t nowMs);
 
 // Aggiorna la state machine del wizard (solo quando attivo).
-// Chiamare ogni ciclo loop() con nowMs = millis().
-void update(uint32_t nowMs);
+// Chiamare ogni ciclo loop() con nowMs = millis() e l'evento tastiera.
+// Il wizard gestisce i tasti internamente quando attivo.
+void update(uint32_t nowMs, KeyCode key);
 
 // Ritorna il valore peso di riferimento corrente (per UI)
 uint16_t getRefWeightG();

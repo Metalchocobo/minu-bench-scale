@@ -93,7 +93,13 @@ uint16_t getRefWeightG() {
 }
 
 bool wantsCustomRender() {
-  return (g_step != CAL_IDLE) || g_longPressActive;
+  if (g_step != CAL_IDLE) return true;
+  // Mostra UI long press solo dopo LONG_PRESS_SHOW_UI_MS (2 sec)
+  if (g_longPressActive && g_longPressStartMs != 0) {
+    uint32_t elapsed = millis() - g_longPressStartMs;
+    if (elapsed >= LONG_PRESS_SHOW_UI_MS) return true;
+  }
+  return false;
 }
 
 uint8_t getSampleProgress() {
@@ -118,14 +124,21 @@ void abort() {
 // ========================= LONG PRESS SU SKIP =========================
 
 bool isLongPressInProgress() {
-  return g_longPressActive;
+  // Ritorna true solo dopo LONG_PRESS_SHOW_UI_MS (2 sec)
+  if (!g_longPressActive || g_longPressStartMs == 0) return false;
+  uint32_t elapsed = millis() - g_longPressStartMs;
+  return (elapsed >= LONG_PRESS_SHOW_UI_MS);
 }
 
 uint8_t getLongPressProgress(uint32_t nowMs) {
   if (!g_longPressActive || g_longPressStartMs == 0) return 0;
   uint32_t elapsed = nowMs - g_longPressStartMs;
+  if (elapsed < LONG_PRESS_SHOW_UI_MS) return 0;
   if (elapsed >= LONG_PRESS_MS) return 100;
-  return (uint8_t)((elapsed * 100UL) / LONG_PRESS_MS);
+  // Progresso da 0% (a 2s) a 100% (a 5s)
+  uint32_t visibleElapsed = elapsed - LONG_PRESS_SHOW_UI_MS;
+  uint32_t visibleDuration = LONG_PRESS_MS - LONG_PRESS_SHOW_UI_MS;
+  return (uint8_t)((visibleElapsed * 100UL) / visibleDuration);
 }
 
 bool updateLongPress(uint32_t nowMs) {
@@ -171,7 +184,7 @@ bool updateLongPress(uint32_t nowMs) {
   return false;
 }
 
-void update(uint32_t nowMs) {
+void update(uint32_t nowMs, KeyCode key) {
   // In IDLE non fa nulla - il long press è gestito da updateLongPress()
   if (g_step == CAL_IDLE) {
     return;
@@ -179,14 +192,12 @@ void update(uint32_t nowMs) {
 
   // ========== STEP_ZERO: Acquisisci zero ==========
   if (g_step == CAL_STEP_ZERO) {
-    KeyCode ev = keypad_get_event();
-
-    if (ev == KEY_CLEAR) {
+    if (key == KEY_CLEAR) {
       abort();
       return;
     }
 
-    if (ev == KEY_ENTER) {
+    if (key == KEY_ENTER) {
       Serial.print(F("[CAL] ENTER premuto. Campioni: "));
       Serial.println(g_sampleCount);
 
@@ -211,14 +222,12 @@ void update(uint32_t nowMs) {
 
   // ========== STEP_PLACE: Appoggia peso di riferimento ==========
   if (g_step == CAL_STEP_PLACE) {
-    KeyCode ev = keypad_get_event();
-
-    if (ev == KEY_CLEAR) {
+    if (key == KEY_CLEAR) {
       abort();
       return;
     }
 
-    if (ev == KEY_ENTER) {
+    if (key == KEY_ENTER) {
       Serial.print(F("[CAL] ENTER premuto. Campioni: "));
       Serial.println(g_sampleCount);
 
@@ -255,14 +264,12 @@ void update(uint32_t nowMs) {
 
   // ========== STEP_VALUE: Seleziona valore peso ==========
   if (g_step == CAL_STEP_VALUE) {
-    KeyCode ev = keypad_get_event();
-
-    if (ev == KEY_CLEAR) {
+    if (key == KEY_CLEAR) {
       abort();
       return;
     }
 
-    if (ev == KEY_SKIP) {
+    if (key == KEY_SKIP) {
       g_refWeightG = stepWeight(g_refWeightG, +1);
       buzzerKeyClick();
       Serial.print(F("[CAL] Peso ref = "));
@@ -271,7 +278,7 @@ void update(uint32_t nowMs) {
       return;
     }
 
-    if (ev == KEY_TARE) {
+    if (key == KEY_TARE) {
       g_refWeightG = stepWeight(g_refWeightG, -1);
       buzzerKeyClick();
       Serial.print(F("[CAL] Peso ref = "));
@@ -280,7 +287,7 @@ void update(uint32_t nowMs) {
       return;
     }
 
-    if (ev == KEY_ENTER) {
+    if (key == KEY_ENTER) {
       float cpg = (float)(g_refRaw - g_zeroRaw) / (float)g_refWeightG;
 
       Serial.print(F("[CAL] ENTER premuto. CPG calcolato = "));
@@ -310,14 +317,12 @@ void update(uint32_t nowMs) {
 
   // ========== STEP_CONFIRM: Conferma e salva ==========
   if (g_step == CAL_STEP_CONFIRM) {
-    KeyCode ev = keypad_get_event();
-
-    if (ev == KEY_CLEAR) {
+    if (key == KEY_CLEAR) {
       abort();
       return;
     }
 
-    if (ev == KEY_ENTER) {
+    if (key == KEY_ENTER) {
       float cpg = (float)(g_refRaw - g_zeroRaw) / (float)g_refWeightG;
 
       if (!validateCpg(cpg)) {
