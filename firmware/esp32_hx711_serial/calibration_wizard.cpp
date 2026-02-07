@@ -247,30 +247,34 @@ void update(uint32_t nowMs, KeyCode key) {
       return;
     }
 
-    // Prima di campionare, aspetta che il peso venga rilevato
-    if (!g_weightDetected) {
-      long currentRaw = ScaleState::getLastRawAvg();
-      long diff = currentRaw - g_zeroRaw;
-      if (diff < 0) diff = -diff;
+    if (key == KEY_ENTER) {
+      // Primo ENTER: inizia campionamento (peso stabile)
+      if (!g_weightDetected) {
+        long currentRaw = ScaleState::getLastRawAvg();
+        long diff = currentRaw - g_zeroRaw;
+        if (diff < 0) diff = -diff;
 
-      if (diff >= WEIGHT_DETECT_THRESHOLD) {
+        if (diff < WEIGHT_DETECT_THRESHOLD) {
+          buzzerError();
+          Serial.println(F("[CAL] ERRORE: nessun peso rilevato! Appoggia il peso e riprova."));
+          return;
+        }
+
+        // Peso presente, inizia campionamento
         g_weightDetected = true;
         g_sampleAccum = 0;
         g_sampleCount = 0;
-        g_sampleStartMs = millis();  // Reset timer per settle
+        g_sampleStartMs = millis();
         g_lastSeenRaw = 0;
         g_lastSeenRawValid = false;
-        buzzerKeyClick();
-        Serial.print(F("[CAL] Peso rilevato! Raw="));
+        buzzerOk();
+        Serial.print(F("[CAL] Peso rilevato (raw="));
         Serial.print(currentRaw);
-        Serial.print(F(", diff="));
-        Serial.println(diff);
-        Serial.println(F("[CAL] Campionamento in corso..."));
+        Serial.println(F("). Campionamento..."));
+        return;
       }
-      return;  // Non campionare ancora
-    }
 
-    if (key == KEY_ENTER) {
+      // Secondo ENTER: finalizza se campionamento completo
       Serial.print(F("[CAL] ENTER premuto. Campioni: "));
       Serial.println(g_sampleCount);
 
@@ -302,7 +306,10 @@ void update(uint32_t nowMs, KeyCode key) {
       return;
     }
 
-    accumulateSample(nowMs);
+    // Campiona solo se peso già rilevato (dopo primo ENTER)
+    if (g_weightDetected) {
+      accumulateSample(nowMs);
+    }
     return;
   }
 
