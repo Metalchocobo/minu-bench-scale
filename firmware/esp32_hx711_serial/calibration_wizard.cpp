@@ -28,6 +28,10 @@ static const uint32_t SAMPLE_SETTLE_MS = 300;
 static long g_lastSeenRaw = 0;
 static bool g_lastSeenRawValid = false;
 
+// Per STEP_PLACE: aspetta che il peso venga rilevato
+static bool g_weightDetected = false;
+static const long WEIGHT_DETECT_THRESHOLD = 50000;  // Differenza minima per rilevare peso
+
 // ========================= UTILITY INTERNE =========================
 
 static void resetSampling() {
@@ -36,6 +40,7 @@ static void resetSampling() {
   g_sampleStartMs = millis();
   g_lastSeenRaw = 0;
   g_lastSeenRawValid = false;
+  g_weightDetected = false;
 }
 
 static bool accumulateSample(uint32_t nowMs) {
@@ -240,6 +245,29 @@ void update(uint32_t nowMs, KeyCode key) {
     if (key == KEY_CLEAR) {
       abort();
       return;
+    }
+
+    // Prima di campionare, aspetta che il peso venga rilevato
+    if (!g_weightDetected) {
+      long currentRaw = ScaleState::getLastRawAvg();
+      long diff = currentRaw - g_zeroRaw;
+      if (diff < 0) diff = -diff;
+
+      if (diff >= WEIGHT_DETECT_THRESHOLD) {
+        g_weightDetected = true;
+        g_sampleAccum = 0;
+        g_sampleCount = 0;
+        g_sampleStartMs = millis();  // Reset timer per settle
+        g_lastSeenRaw = 0;
+        g_lastSeenRawValid = false;
+        buzzerKeyClick();
+        Serial.print(F("[CAL] Peso rilevato! Raw="));
+        Serial.print(currentRaw);
+        Serial.print(F(", diff="));
+        Serial.println(diff);
+        Serial.println(F("[CAL] Campionamento in corso..."));
+      }
+      return;  // Non campionare ancora
     }
 
     if (key == KEY_ENTER) {
