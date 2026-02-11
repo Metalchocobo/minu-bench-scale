@@ -1,0 +1,168 @@
+# ANDREA'S AUTONOMOUS AGENT PROTOCOLS
+
+## 1. CORE BEHAVIOR: ACT, DON'T ASK
+- **Identity:** Senior Embedded DevOps for Gelateria Minu.
+- **Language:** Italian (Output), English (Code/Comments).
+- **Tone:** Direct. No apologies. No fluff.
+- **Default action:** Do the work. Ask only when genuinely ambiguous.
+
+## 2. USER CONSTRAINTS
+- **User:** Andrea.
+- Andrea decides scope. Don't expand scope without asking.
+- If Andrea says "fix X", fix X. Don't refactor Y while you're at it.
+
+## 3. DYNAMIC DOCUMENTATION (README.md)
+- **Rule:** The README is a **state file**, not a log.
+- **Auto-Update Trigger:** AFTER a successful flash/test.
+- **Action:**
+  - Scan `README.md`.
+  - **Overwrite** outdated sections (Pinout, Libs, Logic) with the code actually flashed.
+  - **Do NOT** append changelogs. Replace old info with new info.
+  - Keep section numbering consistent (renumber if sections are added/removed).
+
+## 4. BUILD-FLASH-MONITOR PIPELINE
+- **Rule:** Compile ALWAYS includes upload (`-u -p COM3`). Never compile without flashing.
+- **Command:**
+  ```
+  "C:\Users\shado\arduino-cli\arduino-cli.exe" compile --fqbn esp32:esp32:esp32 -u -p COM3 "D:\xampp\htdocs\bench-scale\minu-bench-scale\firmware\esp32_hx711_serial"
+  ```
+- **Pre-flash:** Serial Monitor MUST be closed (COM3 gets locked). If upload fails with `PermissionError`, tell Andrea to close the Serial Monitor and retry.
+- **Post-flash:** After successful upload, monitor the serial output for ~10 seconds to catch boot errors:
+  ```
+  timeout 10 < COM3
+  ```
+  If monitoring is not possible (port busy), tell Andrea to check serial output for errors.
+- **Timeout:** Compilation + upload can take up to 5 minutes. Use `timeout: 300000`.
+
+---
+
+# PROJECT TECHNICAL KNOWLEDGE
+
+## Architecture Overview
+
+Two separate projects that communicate via MQTT:
+
+1. **Firmware (ESP32):** `D:\xampp\htdocs\bench-scale\minu-bench-scale\firmware\esp32_hx711_serial\`
+   - Arduino IDE project, compiled with arduino-cli
+   - Board: `esp32:esp32:esp32` (ESP32 core v3.3.5)
+   - Flash: ~91% program, ~17% RAM (tight on flash, be mindful of string literals)
+
+2. **Laravel gestionale:** `D:\xampp\htdocs\minu\manager\`
+   - Laravel 11, Backpack 6, Tabler theme, horizontal layout
+   - Access requires permission approval (external directory)
+   - MQTT credentials in `.env` (MQTT_HOST, MQTT_WSS_PORT, MQTT_USERNAME, MQTT_PASSWORD)
+
+## Communication: MQTT via Mosquitto
+
+- **Broker:** `mqtt.gelateriaminu.it` (DigitalOcean VPS)
+- **ESP32 port:** 8883 (MQTTS, TLS over TCP)
+- **Browser port:** 8884 (WSS, WebSocket over TLS)
+- **Auth:** username/password (stored in NVS on ESP32, in .env on Laravel)
+- **TLS cert:** ISRG Root X1 (Let's Encrypt), hardcoded in firmware
+- **Scale ID:** ESP32 WiFi MAC address, lowercase, no separators (12 hex chars). Example: `841fe838c774`
+
+### MQTT Topics
+```
+minu/scale/{scale_id}/status    Bilancia -> Browser  (retained, QoS 1)
+minu/scale/{scale_id}/command   Browser -> Bilancia   (retained, QoS 1)
+minu/scale/{scale_id}/response  Bilancia -> Browser   (not retained, QoS 1)
+minu/scale/{scale_id}/owner     Browser -> Browser    (retained, QoS 1)
+```
+
+## Credential Storage Pattern (NVS)
+
+All secrets follow the same pattern — never hardcoded, always in ESP32 NVS:
+
+| Module | NVS Namespace | Serial Commands | Store File |
+|--------|--------------|-----------------|------------|
+| WiFi (2 slots) | `minu_wifi` | `wifi set <slot> "SSID" "PASS"`, `wifi creds`, `wifi apply` | `wifi_store.h/.cpp` |
+| OTA | `minu_ota` | `ota set "PASS"`, `ota status`, `ota clear` | `ota_store.h/.cpp` |
+| MQTT | `minu_mqtt` | `mqtt set "host" "user" "pass"`, `mqtt creds`, `mqtt apply` | `mqtt_store.h/.cpp` |
+
+**Pattern:** Each store has `load()`, `save()`, `clear()`, `isConfigured()`. Uses ESP32 `Preferences` library. Data persists across OTA/USB uploads, lost only on full flash erase.
+
+**After flashing new firmware**, credentials must be re-entered only if NVS was erased. Normal uploads preserve NVS.
+
+## ESP32 Gotchas (Lessons Learned)
+
+### TLS / MQTT Connection
+- **SNI required:** PubSubClient resolves DNS and passes IP to WiFiClientSecure, losing the hostname needed for SNI. **Fix:** Manual TLS connect with hostname BEFORE PubSubClient.connect():
+  ```cpp
+  mqttWifiClient.connect(mqtt_host, MQTT_PORT);  // TLS with hostname (SNI)
+  mqttClient.connect(clientId, user, pass, ...);  // MQTT over existing TLS
+  ```
+- **PEM certificates on Windows:** Raw string literals `R"EOF(...)EOF"` introduce `\r` characters that break PEM parsing. **Fix:** Use C string concatenation with explicit `\n`.
+- **PROGMEM not needed on ESP32:** Unlike AVR, ESP32 stores const in flash by default. `PROGMEM` on cert strings can cause issues.
+- **NTP sync required before TLS:** ESP32 boots with epoch 1970. Cert validation fails without correct time. `configTime()` must be called before any TLS connection attempt. Check `time(nullptr) > 1700000000` before connecting.
+
+### Watchdog Timer (WDT)
+- **8-second WDT** configured in firmware. If loop blocks > 8s, ESP32 reboots.
+- **TLS handshake can take > 8s.** Must disable WDT during handshake:
+  ```cpp
+  esp_task_wdt_delete(NULL);  // before handshake
+  // ... TLS handshake ...
+  esp_task_wdt_add(NULL);     // after handshake
+  ```
+- **Same for OTA uploads:** WDT disabled in `onStart`, re-enabled in `onEnd`/`onError`.
+
+### Light Sleep
+- **Do NOT call `esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_TIMER)`** if timer wakeup was never enabled. On ESP32 core v3.3.5 this causes a fatal error. Just call `esp_sleep_enable_gpio_wakeup()` directly.
+
+### PubSubClient
+- **Library:** PubSubClient v2.8 at `C:\Users\shado\Documents\Arduino\libraries\PubSubClient`
+- **MQTT_MAX_PACKET_SIZE** must be defined BEFORE including PubSubClient.h (set to 512).
+- **ArduinoJson** v7.3.0 at `C:\Users\shado\Documents\Arduino\libraries\ArduinoJson`
+
+## Firmware Module Structure
+
+```
+firmware/esp32_hx711_serial/
+├── esp32_hx711_serial.ino    # Main loop + serial commands + key handlers
+├── config/
+│   ├── config_pins.h         # GPIO assignments
+│   ├── config_audio.h        # DFPlayer timing, tracks, volume
+│   ├── config_scale.h        # Filters, states, zero-tracking, display params
+│   └── config_battery.h      # Voltage thresholds, shutdown timing
+├── audio.h / .cpp            # Audio:: (DFPlayer FIFO, priority, power-gating)
+├── scale_filters.h / .cpp    # ScaleFilters:: (median, MA, spike guard, history)
+├── scale_state.h / .cpp      # ScaleState:: (offset, tare, states, ZT, display)
+├── net_ota_cloud.h / .cpp    # Net:: (WiFi/OTA/MQTT, TLS, reconnection)
+├── mqtt_store.h / .cpp       # MqttStore:: (MQTT credentials in NVS)
+├── wifi_store.h / .cpp       # WifiStore:: (WiFi credentials in NVS)
+├── ota_store.h / .cpp        # OtaStore:: (OTA password hash in NVS)
+├── hx711_driver.h / .cpp     # HX711 low-level (SCK/DOUT, read)
+├── hx_health.h / .cpp        # HxHealth:: (OK/WARN/ERROR/ERROR_HARD)
+├── battery_monitor.h / .cpp  # BatteryMonitor:: (INA219, levels, charging)
+├── ui_display.h / .cpp       # UI:: (OLED SSD1322 256x64, icons, layouts)
+├── keypad.h / .cpp           # Keypad:: (4x2, debounce, one-shot)
+├── buzzer.h / .cpp           # Buzzer:: (beep, tones)
+├── dfplayer_driver.h / .cpp  # DFPlayer:: (UART, base commands)
+└── calibration_wizard.h/.cpp # CalWizard:: (on-display calibration wizard)
+```
+
+## Integration Spec Files
+
+- `minu-scale-integration-spec.md` — Overall architecture spec (firmware + browser + Laravel)
+- `prompt-fase1-firmware-mqtt.md` — Fase 1 prompt (COMPLETED: firmware MQTT client)
+- `prompt-fase2-3-browser-laravel.md` — Fase 2-3 prompt (READY: browser JS + Laravel CRUD)
+
+## Mosquitto Server Config
+
+On DigitalOcean VPS, config at `/etc/mosquitto/conf.d/minu.conf`:
+- Port 8883: MQTT over TLS (for ESP32)
+- Port 8884: WebSocket over TLS (for browser)
+- `tls_version tlsv1.2` required for ESP32 compatibility
+- Do NOT set `cafile` to the same file as `certfile` (causes Mosquitto error)
+
+## Current State (as of 2026-02-11)
+
+### Completed
+- Fase 1: ESP32 firmware MQTT client (weigh/clear commands, confirm/skip responses, TLS, LWT, backoff reconnection, OLED icons, key handlers)
+- Credential storage in NVS for WiFi, OTA, MQTT (no secrets in source code)
+- Calibration wizard (on-display + serial)
+- Battery monitoring with shutdown protection
+- HX711 health monitoring
+
+### Not Started
+- Fase 2: ScaleMqttClient JavaScript module (browser-side MQTT via mqtt.js)
+- Fase 3: Laravel integration (scales CRUD, user-scale association, REST endpoints, weigh view integration)

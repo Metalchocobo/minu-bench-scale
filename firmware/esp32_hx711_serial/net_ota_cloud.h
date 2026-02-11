@@ -26,6 +26,7 @@
   #include <WiFiClientSecure.h>
   #include <PubSubClient.h>
   #include <ArduinoJson.h>
+  #include "mqtt_store.h"
 #endif
 
 #if ENABLE_ARDUINO_CLOUD
@@ -36,10 +37,10 @@
 
 // ========================= MQTT CONFIG =========================
 #if ENABLE_MQTT
-  #define MQTT_HOST       "mqtt.gelateriaminu.it"
-  #define MQTT_PORT       8883
-  #define MQTT_USER       "minu"
-  #define MQTT_PASS       "Monia080787!"
+  // Host, username e password NON sono nel codice: si configurano via seriale
+  // e vengono salvati in NVS (persistono tra aggiornamenti firmware).
+  // Comandi: mqtt set "host" "user" "pass", mqtt creds, mqtt clear, mqtt apply
+  #define MQTT_PORT       8883          // MQTTS (TLS)
   #define MQTT_FW_VERSION "1.0.0"
   #define MQTT_SCALE_NAME "Minu Bench Scale"  // Nome visibile nel browser
 #endif
@@ -98,6 +99,12 @@ namespace Net {
 
   // Ritorna true una sola volta se MQTT si è disconnesso (per buzzer x2 nel .ino)
   bool mqttPopDisconnectBeep();
+
+  // Ricarica credenziali MQTT da NVS e riconnette (senza reboot)
+  void mqttReloadCreds();
+
+  // True se le credenziali MQTT sono configurate in NVS
+  bool isMqttConfigured();
 #endif
 
 #if ENABLE_ARDUINO_CLOUD

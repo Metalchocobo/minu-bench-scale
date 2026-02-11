@@ -139,6 +139,8 @@ void printHelp() {
   Serial.println(F("mp3 <track> [sec], stop, vol <0-30>, mp3 status"));
   Serial.println(F("wifi set <slot> \"SSID\" \"PASS\", wifi creds, wifi apply"));
   Serial.println(F("ota status, ota set \"PASS\", ota clear"));
+  Serial.println(F("mqtt set \"host\" \"user\" \"pass\", mqtt creds, mqtt clear, mqtt apply, mqtt status"));
+  Serial.println(F("cal status, cal zero, cal ref <g>, cal save, cal load"));
   Serial.println(F("-----------------------\n"));
 }
 
@@ -331,6 +333,106 @@ void parseCommand(const char* cmd) {
       ESP.restart();
       return;
     }
+  }
+#endif
+
+#if ENABLE_MQTT
+  // mqtt
+  if (strncmp(cmd, "mqtt ", 5) == 0) {
+    const char* arg = cmd + 5;
+
+    if (strncmp(arg, "set ", 4) == 0) {
+      // Formato: mqtt set "host" "user" "pass"
+      const char* p = arg + 4;
+      while (*p == ' ') p++;
+
+      char host[65] = {0}, user[33] = {0}, pass[65] = {0};
+
+      // Parse host
+      if (*p == '"') {
+        p++;
+        int i = 0;
+        while (*p && *p != '"' && i < 64) host[i++] = *p++;
+        if (*p == '"') p++;
+        while (*p == ' ') p++;
+      }
+
+      // Parse user
+      if (*p == '"') {
+        p++;
+        int i = 0;
+        while (*p && *p != '"' && i < 32) user[i++] = *p++;
+        if (*p == '"') p++;
+        while (*p == ' ') p++;
+      }
+
+      // Parse pass
+      if (*p == '"') {
+        p++;
+        int i = 0;
+        while (*p && *p != '"' && i < 64) pass[i++] = *p++;
+      }
+
+      if (strlen(host) > 0) {
+        MqttStore::save(host, user, pass);
+        Serial.print(F("[MQTT] Credenziali salvate. Host: "));
+        Serial.println(host);
+        Serial.println(F("[MQTT] Usa 'mqtt apply' per applicare senza reboot"));
+      } else {
+        Serial.println(F("[MQTT] Errore: host vuoto. Formato: mqtt set \"host\" \"user\" \"pass\""));
+      }
+      return;
+    }
+
+    if (strncmp(arg, "creds", 5) == 0) {
+      char h[65] = {0}, u[33] = {0}, pw[65] = {0};
+      bool ok = MqttStore::load(h, 65, u, 33, pw, 65);
+      if (ok) {
+        Serial.print(F("[MQTT] Host: ")); Serial.println(h);
+        Serial.print(F("[MQTT] User: ")); Serial.println(u[0] ? u : "(vuoto)");
+        if (strstr(arg, "showpass")) {
+          Serial.print(F("[MQTT] Pass: ")); Serial.println(pw);
+        } else {
+          // Password mascherata
+          size_t n = strlen(pw);
+          size_t stars = (n == 0) ? 0 : (n <= 8 ? n : 8);
+          char masked[9] = {0};
+          for (size_t i = 0; i < stars; i++) masked[i] = '*';
+          Serial.print(F("[MQTT] Pass: ")); Serial.println(masked);
+        }
+      } else {
+        Serial.println(F("[MQTT] Nessuna credenziale configurata"));
+      }
+      return;
+    }
+
+    if (strncmp(arg, "clear", 5) == 0) {
+      MqttStore::clear();
+      Serial.println(F("[MQTT] Credenziali cancellate (richiede reboot o mqtt apply)"));
+      return;
+    }
+
+    if (strcmp(arg, "apply") == 0) {
+      Net::mqttReloadCreds();
+      Serial.println(F("[MQTT] Credenziali ricaricate"));
+      return;
+    }
+
+    if (strcmp(arg, "status") == 0) {
+      Serial.println(F("[MQTT] --- Stato MQTT ---"));
+      Serial.print(F("  Configurato: ")); Serial.println(Net::isMqttConfigured() ? "si" : "no");
+      Serial.print(F("  Connesso:    ")); Serial.println(Net::isMqttConnected() ? "si" : "no");
+      Serial.print(F("  Scale ID:    ")); Serial.println(Net::getScaleId());
+      Serial.print(F("  Cmd attivo:  ")); Serial.println(Net::isMqttCommandActive() ? "si" : "no");
+      if (Net::isMqttCommandActive()) {
+        Serial.print(F("  UUID:        ")); Serial.println(Net::getMqttCommandUuid());
+        Serial.print(F("  Target (g):  ")); Serial.println(Net::getMqttTargetWeight(), 1);
+      }
+      return;
+    }
+
+    Serial.println(F("[MQTT] Comandi: mqtt set \"host\" \"user\" \"pass\" | mqtt creds [showpass] | mqtt clear | mqtt apply | mqtt status"));
+    return;
   }
 #endif
 
@@ -792,7 +894,6 @@ static void enterInactivityLightSleep() {
 
   ui_powerSave(true);
 
-  esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_TIMER);
   esp_sleep_enable_gpio_wakeup();
 
   delay(20);
@@ -873,7 +974,6 @@ static void enterLowBatteryLightSleep() {
   }
 
   ui_powerSave(true);
-  esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_TIMER);
   esp_sleep_enable_gpio_wakeup();
 
   delay(20);

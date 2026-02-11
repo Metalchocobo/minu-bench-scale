@@ -14,7 +14,7 @@ Le credenziali MQTT sono già nel `.env` di Laravel (righe 55-58):
 MQTT_HOST=mqtt.gelateriaminu.it
 MQTT_WSS_PORT=8884
 MQTT_USERNAME=minu
-MQTT_PASSWORD=Monia080787!
+MQTT_PASSWORD=<vedi .env>
 ```
 
 Le bilance si identificano con il MAC address WiFi dell'ESP32 (minuscolo, senza separatori, es. `841fe838c774`), usato come `scale_id` nei topic MQTT. Il MAC è fisso per ogni scheda ESP32, non cambia mai.
@@ -58,7 +58,7 @@ Il modulo riceve le credenziali MQTT e il `scale_id` della bilancia associata al
 const scale = new ScaleMqttClient({
     host: 'wss://mqtt.gelateriaminu.it:8884/mqtt',
     username: 'minu',
-    password: 'Monia080787!',
+    password: '<vedi .env>',
     scaleId: '841fe838c774',    // scale_id dalla tabella scales (FK su user)
     userId: 5                   // ID utente Laravel, per gestione owner
 });

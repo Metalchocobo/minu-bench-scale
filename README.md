@@ -1,4 +1,4 @@
-# Minù Bench Scale — ESP32 + HX711 + OLED SSD1322 + INA219 (SLA 6 V) · v2026-01-01
+# Minù Bench Scale — ESP32 + HX711 + OLED SSD1322 + INA219 (SLA 6 V) · v2026-02-11
 
 Bilancia da banco per uso interno in laboratorio (gelato/pasticceria), pensata per guidare e rendere affidabili le pesate ingredienti (non “pesatura legale”).
 
@@ -336,7 +336,75 @@ Se non ti serve OTA/WiFi:
 
 ---
 
-## 12) Troubleshooting rapido (i classici)
+## 12) MQTT — Integrazione gestionale
+
+Il firmware supporta la comunicazione real-time con il gestionale (Laravel/Backpack) tramite un broker MQTT (Mosquitto) su TLS. Il browser invia comandi di pesatura alla bilancia via MQTT; la bilancia mostra il target sul display e risponde con il peso confermato o skip.
+
+Abilitazione: `#define ENABLE_MQTT 1` in `net_ota_cloud.h` (richiede `ENABLE_WIFI_OTA 1`).
+
+### Credenziali
+
+Le credenziali MQTT (host, username, password) **non** sono nel codice sorgente. Si configurano via seriale e vengono salvate in NVS (persistono tra aggiornamenti firmware), come per WiFi e OTA.
+
+Comandi seriali:
+- `mqtt set "host" "user" "pass"` — salva credenziali MQTT in NVS
+- `mqtt creds` — mostra host e user (password mascherata)
+- `mqtt creds showpass` — mostra password in chiaro
+- `mqtt clear` — cancella credenziali da NVS
+- `mqtt apply` — ricarica credenziali e riconnette senza reboot
+- `mqtt status` — mostra stato connessione, scale_id, comando attivo
+
+Se le credenziali non sono configurate, MQTT resta inattivo (nessun tentativo di connessione).
+
+Porta default: **8883** (MQTTS, TLS). Il certificato CA (ISRG Root X1 di Let's Encrypt) è nel firmware. Il nome bilancia (`MQTT_SCALE_NAME`) e la versione firmware (`MQTT_FW_VERSION`) sono nei define.
+
+### Comportamento
+
+La bilancia si identifica con il MAC address WiFi (lowercase, senza separatori, 12 hex), usato come `scale_id` nei topic MQTT.
+
+**Topic:**
+
+| Topic | Direzione | QoS | Retain | Descrizione |
+|---|---|---|---|---|
+| `minu/scale/{scale_id}/status` | Bilancia → Browser | 1 | si | Stato online/offline (include nome e versione firmware) |
+| `minu/scale/{scale_id}/command` | Browser → Bilancia | 1 | si | Comandi pesatura (`weigh`, `clear`) |
+| `minu/scale/{scale_id}/response` | Bilancia → Browser | 1 | no | Risposte (`confirm` con peso attuale, `skip`) |
+
+**Alla connessione:**
+- Pubblica status `online` (retained) con scale_id, nome e firmware_version
+- Registra LWT che pubblica status `offline` (retained) alla disconnessione imprevista
+- Si sottoscrive al topic command per ricevere comandi dal browser
+
+**Comando `weigh`:** il browser invia UUID ingrediente, nome e peso target. La bilancia mostra il target sul display (icona target + grammi).
+
+**Comando `clear`:** annulla il comando attivo, la bilancia torna in idle.
+
+### Tasti (con MQTT attivo)
+
+- **ENTER**: se c'è un comando weigh attivo, pubblica `confirm` con il peso attuale letto dalla bilancia, poi torna in idle
+- **SKIP**: se c'è un comando weigh attivo, pubblica `skip`, poi torna in idle. Se non c'è nessun comando attivo, emette un buzzer di avviso
+
+### Display MQTT
+
+- **Icona MQTT** (frecce ↑↓) nella barra di stato: visibile quando il WiFi è connesso
+  - Fissa: connesso al broker
+  - Lampeggiante: disconnesso dal broker (in attesa di riconnessione)
+- **Peso target**: quando è attivo un comando `weigh`, il peso obiettivo viene mostrato accanto all'icona target
+
+### Disconnessione e riconnessione
+
+- Alla disconnessione dal broker: **doppio beep** buzzer + icona MQTT lampeggiante
+- Riconnessione automatica con **backoff esponenziale** (2s → 4s → 8s → 16s → 30s max)
+- Il **WDT viene disabilitato** durante il TLS handshake (può durare >8 secondi)
+- Alla sospensione (light-sleep per inattività o batteria scarica): MQTT viene disconnesso. Al wake, viene ristabilito (se le credenziali sono configurate)
+
+### NTP
+
+Il firmware sincronizza l'orologio via NTP (`pool.ntp.org`) all'avvio, necessario per la validazione del certificato TLS. I tentativi di connessione MQTT sono rinviati finché il clock non è sincronizzato.
+
+---
+
+## 13) Troubleshooting rapido (i classici)
 
 **DOUT sempre HIGH / letture 0 fisse**
 - spesso SCK resta HIGH → HX711 in power-down
@@ -351,7 +419,7 @@ Se non ti serve OTA/WiFi:
 
 ---
 
-## 13) Firmware e cartelle
+## 14) Firmware e cartelle
 
 Firmware corrente (HX711):
 - `firmware/esp32_hx711_serial/`
@@ -383,7 +451,8 @@ firmware/esp32_hx711_serial/
 ├── battery_monitor.h / .cpp # BatteryMonitor:: (INA219, tacche, charging)
 ├── hx_health.h / .cpp       # HxHealth:: (OK/WARN/ERROR/ERROR_HARD)
 ├── ui_display.h / .cpp      # UiDisplay:: (OLED SSD1322, layout, icone)
-├── net_ota_cloud.h / .cpp   # Net:: (WiFi/OTA, opzionale)
+├── net_ota_cloud.h / .cpp   # Net:: (WiFi/OTA/MQTT, opzionale)
+├── mqtt_store.h / .cpp      # MqttStore:: (credenziali MQTT in NVS)
 └── calibration_wizard.h/.cpp # CalWizard:: (wizard calibrazione on-display)
 ```
 
@@ -391,6 +460,8 @@ firmware/esp32_hx711_serial/
 - `Audio::` — gestione DFPlayer (coda FIFO, priorità, power-gating, anti-troncamento)
 - `ScaleFilters::` — filtri segnale (mediana 3, media mobile, spike guard, storico range/slope)
 - `ScaleState::` — macchina a stati (STABLE/UNSTABLE/LIVE), zero-tracking, tara, quantizzazione display
+- `Net::` — WiFi/OTA/MQTT (connessione non bloccante, TLS, comandi/risposte pesatura)
+- `MqttStore::` — persistenza credenziali MQTT in NVS
 - `ScaleConfig::` / `AudioConfig::` / `BatteryConfig::` — parametri configurabili (soglie, timing, tracce)
 
 ### Task Watchdog

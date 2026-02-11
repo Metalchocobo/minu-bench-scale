@@ -190,6 +190,7 @@ static void drawNetIcon(int x, int y, bool connected) {
 
 // -----------------------------------------------------------------------------
 // ICONA MQTT (frecce ↑↓ bidirezionali)
+// Area: 9px largo x 7px alto (due frecce affiancate)
 // -----------------------------------------------------------------------------
 static void drawMqttIcon(int x, int y, bool connected, bool visible) {
   if (!visible) return;  // WiFi non connesso: icona nascosta
@@ -200,17 +201,19 @@ static void drawMqttIcon(int x, int y, bool connected, bool visible) {
     if (!blink) return;
   }
 
-  // Freccia su (↑): da (x+3, y+6) a (x+3, y+1), punta a y
-  oled.drawVLine(x + 1, y + 1, 5);       // asta verticale sinistra
-  oled.drawPixel(x,     y + 2);           // punta freccia su - sinistra
-  oled.drawPixel(x + 2, y + 2);           // punta freccia su - destra
+  // Freccia su (↑) — colonna sinistra
+  // Punta triangolare in alto, asta verso il basso
   oled.drawPixel(x + 1, y);              // apice
+  oled.drawPixel(x,     y + 1);           // ala sinistra
+  oled.drawPixel(x + 2, y + 1);           // ala destra
+  oled.drawVLine(x + 1, y + 2, 5);       // asta (5px verso il basso)
 
-  // Freccia giù (↓): da (x+5, y) a (x+5, y+5), punta a y+6
-  oled.drawVLine(x + 4, y + 1, 5);       // asta verticale destra
-  oled.drawPixel(x + 3, y + 4);           // punta freccia giù - sinistra
-  oled.drawPixel(x + 5, y + 4);           // punta freccia giù - destra
-  oled.drawPixel(x + 4, y + 6);          // apice
+  // Freccia giù (↓) — colonna destra, distanziata di 5px
+  // Asta dall'alto, punta triangolare in basso
+  oled.drawVLine(x + 6, y, 5);           // asta (5px dall'alto)
+  oled.drawPixel(x + 5, y + 5);           // ala sinistra
+  oled.drawPixel(x + 7, y + 5);           // ala destra
+  oled.drawPixel(x + 6, y + 6);          // apice
 }
 
 // -----------------------------------------------------------------------------

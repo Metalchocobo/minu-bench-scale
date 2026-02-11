@@ -241,6 +241,12 @@ static const char MQTT_CA_CERT[] =
   "emyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=\n"
   "-----END CERTIFICATE-----\n";
 
+// ========================= CREDENZIALI MQTT (da NVS) =========================
+static char   mqtt_host[MqttStore::HOST_MAX_LEN + 1] = {0};
+static char   mqtt_user[MqttStore::USER_MAX_LEN + 1] = {0};
+static char   mqtt_pass[MqttStore::PASS_MAX_LEN + 1] = {0};
+static bool   mqtt_credsLoaded = false;
+
 // ========================= STATO MQTT =========================
 static WiFiClientSecure mqttWifiClient;
 static PubSubClient     mqttClient(mqttWifiClient);
@@ -362,7 +368,7 @@ static bool mqttAttemptConnect() {
   }
 
   Serial.print(F("[MQTT] Connessione a "));
-  Serial.print(MQTT_HOST);
+  Serial.print(mqtt_host);
   Serial.print(F(":"));
   Serial.print(MQTT_PORT);
   Serial.println(F("..."));
@@ -373,7 +379,7 @@ static bool mqttAttemptConnect() {
   if (!mqttWifiClient.connected()) {
     Serial.println(F("[MQTT] TLS handshake..."));
     esp_task_wdt_delete(NULL);  // TLS handshake può durare >8s, disabilita WDT
-    bool tlsOk = mqttWifiClient.connect(MQTT_HOST, MQTT_PORT);
+    bool tlsOk = mqttWifiClient.connect(mqtt_host, MQTT_PORT);
     esp_task_wdt_add(NULL);     // Riabilita WDT
     if (!tlsOk) {
       Serial.println(F("[MQTT] TLS handshake fallito"));
@@ -385,8 +391,8 @@ static bool mqttAttemptConnect() {
   // connect(clientId, user, pass, willTopic, willQos, willRetain, willMessage)
   bool ok = mqttClient.connect(
     mqtt_clientId,
-    MQTT_USER,
-    MQTT_PASS,
+    mqtt_user,
+    mqtt_pass,
     mqtt_topicSts,     // LWT topic
     1,                 // LWT QoS
     true,              // LWT retain
@@ -426,13 +432,32 @@ void mqttSetup() {
   Serial.print(F("[MQTT] scale_id = "));
   Serial.println(mqtt_scaleId);
 
+  // Carica credenziali da NVS
+  mqtt_credsLoaded = MqttStore::load(
+    mqtt_host, sizeof(mqtt_host),
+    mqtt_user, sizeof(mqtt_user),
+    mqtt_pass, sizeof(mqtt_pass)
+  );
+
+  if (!mqtt_credsLoaded) {
+    Serial.println(F("[MQTT] ATTENZIONE: credenziali non configurate. Usa la seriale: mqtt set \"host\" \"user\" \"pass\""));
+    Serial.println(F("[MQTT] Setup completato (in attesa di configurazione)"));
+    mqtt_setupDone = true;
+    return;
+  }
+
+  Serial.print(F("[MQTT] Host: "));
+  Serial.println(mqtt_host);
+  Serial.print(F("[MQTT] User: "));
+  Serial.println(mqtt_user);
+
   // NTP necessario per validazione certificato TLS (ESP32 parte da epoch 1970)
   configTime(3600, 3600, "pool.ntp.org", "time.google.com");  // CET + DST
   Serial.println(F("[MQTT] NTP configurato (pool.ntp.org)"));
 
   mqttWifiClient.setCACert(MQTT_CA_CERT);
   mqttWifiClient.setHandshakeTimeout(10);  // 10s per TLS handshake
-  mqttClient.setServer(MQTT_HOST, MQTT_PORT);
+  mqttClient.setServer(mqtt_host, MQTT_PORT);
   mqttClient.setCallback(mqttCallback);
 
   mqtt_setupDone = true;
@@ -515,6 +540,7 @@ void mqttPublishSkip() {
 // Chiamata internamente da update() — gestisce riconnessione con backoff
 static void mqttUpdateInternal() {
   if (!mqtt_setupDone) return;
+  if (!mqtt_credsLoaded) return;  // Credenziali non configurate: non tentare
   if (!WiFi.isConnected()) {
     // WiFi giù: reset stato MQTT
     if (mqtt_wasPrevConnected) {
@@ -571,6 +597,56 @@ bool mqttPopDisconnectBeep() {
     return true;
   }
   return false;
+}
+
+void mqttReloadCreds() {
+  // Disconnetti se connesso
+  if (mqttClient.connected()) {
+    mqttClient.disconnect();
+  }
+
+  // Ricarica da NVS
+  mqtt_credsLoaded = MqttStore::load(
+    mqtt_host, sizeof(mqtt_host),
+    mqtt_user, sizeof(mqtt_user),
+    mqtt_pass, sizeof(mqtt_pass)
+  );
+
+  if (!mqtt_credsLoaded) {
+    Serial.println(F("[MQTT] Credenziali non configurate"));
+    return;
+  }
+
+  Serial.print(F("[MQTT] Credenziali ricaricate. Host: "));
+  Serial.println(mqtt_host);
+  Serial.print(F("[MQTT] User: "));
+  Serial.println(mqtt_user);
+
+  // Riconfigura il client con il nuovo host
+  mqttClient.setServer(mqtt_host, MQTT_PORT);
+
+  // Reset backoff per tentare subito
+  mqtt_wasPrevConnected = false;
+  mqtt_lastAttemptMs = 0;
+  mqtt_backoffMs = MQTT_BACKOFF_INIT;
+  mqtt_disconnectBeep = false;
+  mqtt_cmdActive = false;
+  mqtt_cmdUuid[0] = '\0';
+  mqtt_cmdTargetWeight = 0.0f;
+
+  // NTP (nel caso non fosse stato configurato al setup perché mancavano le credenziali)
+  configTime(3600, 3600, "pool.ntp.org", "time.google.com");
+
+  // TLS
+  mqttWifiClient.setCACert(MQTT_CA_CERT);
+  mqttWifiClient.setHandshakeTimeout(10);
+  mqttClient.setCallback(mqttCallback);
+
+  Serial.println(F("[MQTT] Pronto per la riconnessione"));
+}
+
+bool isMqttConfigured() {
+  return mqtt_credsLoaded;
 }
 
 #endif // ENABLE_MQTT
