@@ -14,6 +14,7 @@
 #include <Wire.h>
 #include <Preferences.h>
 #include <esp_sleep.h>
+#include <esp_task_wdt.h>
 #include <driver/gpio.h>
 #include <math.h>
 
@@ -21,6 +22,7 @@
 #include "config/config_pins.h"
 #include "config/config_audio.h"
 #include "config/config_scale.h"
+#include "config/config_battery.h"
 
 // ========================= MODULI =========================
 #include "audio.h"
@@ -37,10 +39,12 @@
 #include "net_ota_cloud.h"
 #include "wifi_store.h"
 #include "ota_store.h"
+#include "calibration_wizard.h"
 
 // ========================= ALIAS =========================
 using namespace ScaleConfig;
 using namespace AudioConfig;
+using namespace BatteryConfig;
 
 // ========================= VARIABILI GLOBALI =========================
 // Necessaria per ui_display.cpp
@@ -58,6 +62,9 @@ static const HxHealthConfig HX_HEALTH_CFG = {
 
 static bool g_hxBeginOk = false;
 static bool g_isBooting = true;
+
+// Ultimo valore raw filtrato (per calibrazione via seriale)
+static long g_lastRawFiltered = 0;
 
 // Timing
 static uint32_t lastOledMs     = 0;
@@ -326,6 +333,91 @@ void parseCommand(const char* cmd) {
     }
   }
 #endif
+
+  // cal (calibrazione)
+  if (strncmp(cmd, "cal ", 4) == 0) {
+    const char* arg = cmd + 4;
+
+    if (strcmp(arg, "status") == 0) {
+      Serial.println(F("[CAL] --- Stato calibrazione ---"));
+      Serial.print(F("  Offset:   ")); Serial.println(ScaleState::getOffsetRaw());
+      Serial.print(F("  CPG:      ")); Serial.println(ScaleState::getScaleCpg(), 4);
+      Serial.print(F("  ZT:       ")); Serial.println(ScaleState::getZtCounts());
+      Serial.print(F("  RawFilt:  ")); Serial.println(g_lastRawFiltered);
+      float cpg = ScaleState::getScaleCpg();
+      long off = ScaleState::effectiveOffsetCounts();
+      float grams = (cpg > 0.01f) ? ((float)(g_lastRawFiltered - off) / cpg) : 0.0f;
+      Serial.print(F("  Grammi:   ")); Serial.println(grams, 1);
+      return;
+    }
+
+    if (strcmp(arg, "zero") == 0) {
+      if (hxHealth_isError(&g_hxHealth)) {
+        Serial.println(F("[CAL] Errore: HX in stato ERROR, calibrazione disabilitata"));
+        return;
+      }
+      long newOffset = g_lastRawFiltered;
+      ScaleState::setOffsetRaw(newOffset);
+      ScaleState::setZtCounts(0);
+      ScaleState::resetFiltersAndState();
+      Serial.print(F("[CAL] Zero impostato. Nuovo OFFSET=")); Serial.println(newOffset);
+      Serial.println(F("[CAL] Usa 'cal save' per salvare in NVS"));
+      return;
+    }
+
+    if (strncmp(arg, "ref ", 4) == 0) {
+      if (hxHealth_isError(&g_hxHealth)) {
+        Serial.println(F("[CAL] Errore: HX in stato ERROR, calibrazione disabilitata"));
+        return;
+      }
+      float refGrams = atof(arg + 4);
+      if (refGrams <= 0.0f) {
+        Serial.println(F("[CAL] Errore: peso di riferimento deve essere > 0"));
+        return;
+      }
+      long offset = ScaleState::getOffsetRaw();
+      long delta = g_lastRawFiltered - offset;
+      if (delta == 0) {
+        Serial.println(F("[CAL] Errore: delta=0, posiziona un peso sulla bilancia"));
+        return;
+      }
+      float newCpg = (float)delta / refGrams;
+
+      // Validazione CPG (stesse soglie del wizard)
+      if (newCpg < CalWizard::CPG_MIN || newCpg > CalWizard::CPG_MAX) {
+        Serial.print(F("[CAL] ATTENZIONE: CPG fuori range tipico ("));
+        Serial.print(CalWizard::CPG_MIN, 0);
+        Serial.print(F("-"));
+        Serial.print(CalWizard::CPG_MAX, 0);
+        Serial.print(F("): "));
+        Serial.println(newCpg, 4);
+        Serial.println(F("[CAL] Verifica il peso di riferimento e riprova."));
+        return;
+      }
+
+      ScaleState::setScaleCpg(newCpg);
+      ScaleState::resetFiltersAndState();
+      Serial.print(F("[CAL] CPG calcolato: ")); Serial.println(newCpg, 4);
+      Serial.println(F("[CAL] Usa 'cal save' per salvare in NVS"));
+      return;
+    }
+
+    if (strcmp(arg, "save") == 0) {
+      ScaleState::saveToNVS();
+      Serial.println(F("[CAL] Calibrazione salvata in NVS"));
+      return;
+    }
+
+    if (strcmp(arg, "load") == 0) {
+      ScaleState::loadFromNVS();
+      ScaleState::resetFiltersAndState();
+      Serial.println(F("[CAL] Calibrazione caricata da NVS"));
+      return;
+    }
+
+    Serial.println(F("[CAL] Comandi: cal status | cal zero | cal ref <grammi> | cal save | cal load"));
+    return;
+  }
 
   Serial.print(F("[CMD] Sconosciuto: "));
   Serial.println(cmd);
@@ -709,22 +801,7 @@ static void enterInactivityLightSleep() {
   ScaleState::resetFiltersAndState();
 }
 
-// ========================= BATTERIA SAFETY =========================
-static const float    V_SAFE_SHUTDOWN_MIN_V     = 5.80f;
-static const float    V_SAFE_SHUTDOWN_CLEAR_V   = 5.90f;
-static const float    V_SAFE_SHUTDOWN_EXIT_V    = 5.85f;
-static const float    V_HARD_SLEEP_MIN_V        = 5.70f;
-static const uint32_t SAFE_SHUTDOWN_DEBOUNCE_MS = 5000;
-static const uint32_t SAFE_SHUTDOWN_EXIT_STABLE_MS = 15000;
-static const uint32_t PRE_SLEEP_COUNTDOWN_MS    = 120000;
-static const uint32_t PRE_SLEEP_MID_AUDIO_MS    = 60000;
-static const uint32_t BEEP_EMPTY_MS             = 300000;
-static const uint32_t BEEP_COUNTDOWN_MS         = 10000;
-static const uint32_t BATT_EMPTY_DEBOUNCE_MS    = 10000;
-static const uint32_t BATT_RECOVERY_STABLE_MS   = 30000;
-static const uint32_t BATT_ALERT_COOLDOWN_MS    = 300000;
-static const uint32_t BATT_ZZZ_MS               = 5000;
-
+// ========================= BATTERIA SAFETY STATE =========================
 static uint32_t g_lowBattSinceMs      = 0;
 static uint32_t g_preSleepStartMs     = 0;
 static uint32_t g_countdownExitSinceMs = 0;
@@ -1048,10 +1125,23 @@ void setup() {
   hxHealth_init(&g_hxHealth, HX_HEALTH_CFG);
 
   lastOledMs = millis();
+
+  // Task Watchdog: 8 secondi, reboot automatico se loop si blocca
+  esp_task_wdt_config_t wdtCfg = {
+    .timeout_ms = 8000,
+    .idle_core_mask = 0,
+    .trigger_panic = true
+  };
+  esp_task_wdt_init(&wdtCfg);
+  esp_task_wdt_add(NULL);  // Registra il task corrente (loopTask)
+  Serial.println(F("[WDT] Task Watchdog attivo (8s)"));
 }
 
 // ========================= LOOP =========================
 void loop() {
+  // Reset Task Watchdog (evita reboot se loop è vivo)
+  esp_task_wdt_reset();
+
 #if ENABLE_WIFI_OTA
   Net::update();
   wifiAudioUpdate(millis());
@@ -1067,7 +1157,18 @@ void loop() {
   // Tastiera
   keypad_update(now);
   KeyCode key = keypad_get_event();
-  if (key != KEY_NONE) {
+
+  // Calibration Wizard: long press su SKIP per 5 secondi per avviare
+  CalWizard::updateLongPress(now);
+
+  // Aggiorna state machine del wizard, passando l'evento tastiera
+  CalWizard::update(now, key);
+
+  // Se il wizard è attivo, i tasti vengono gestiti da CalWizard::update()
+  bool wizardHandledKey = CalWizard::isActive() &&
+    (key == KEY_TARE || key == KEY_ENTER || key == KEY_SKIP || key == KEY_CLEAR);
+
+  if (key != KEY_NONE && !wizardHandledKey) {
     g_lastKeyPressMs = now;
     if (g_inactivitySleepStage != INACT_NONE) {
       g_inactivitySleepStage = INACT_NONE;
@@ -1076,6 +1177,11 @@ void loop() {
       lastOledMs = 0;
     }
     handleKeyEvent(key);
+  }
+
+  // Se il wizard è attivo o long press in corso, resetta timer inattività
+  if ((CalWizard::isActive() || CalWizard::isLongPressInProgress()) && key != KEY_NONE) {
+    g_lastKeyPressMs = now;
   }
 
   // Batteria
@@ -1186,6 +1292,8 @@ void loop() {
 
       lastSampleMs = now;
       rawAvg = ScaleFilters::pushMA(rawWork);
+      g_lastRawFiltered = rawAvg;  // Per calibrazione via seriale
+      ScaleState::setLastRawAvg(rawAvg);  // Per calibrazione wizard
       haveNewWork = true;
     }
   }
@@ -1308,6 +1416,11 @@ void loop() {
   // Inattività: nota variazione peso
   ScaleState::inactivityNoteWeightActivity(now, stEnable ? ScaleState::getDispWorkLast() : ScaleState::getDispLiveLast());
 
+  // Se il peso è variato, resetta il timer inattività (evita sleep mentre si versa)
+  if (ScaleState::popWeightActivity()) {
+    g_lastKeyPressMs = now;
+  }
+
   // Sleep per inattività
   bool allowInactivitySleep = g_inactivitySleepArmed;
   if (g_inactivitySleepStage == INACT_NONE && Audio::isActive()) allowInactivitySleep = false;
@@ -1349,6 +1462,28 @@ void loop() {
 
     if (g_inactivitySleepStage == INACT_ZZZ) {
       ui_renderSleepZzz();
+    } else if (CalWizard::isLongPressInProgress()) {
+      // Long press in corso: mostra barra di progresso
+      ui_renderCalLongPress(CalWizard::getLongPressProgress(now));
+    } else if (CalWizard::isActive()) {
+      // Calibration wizard UI
+      CalWizard::CalStep step = CalWizard::getStep();
+      switch (step) {
+        case CalWizard::CAL_STEP_ZERO:
+          ui_renderCalStepZero(CalWizard::getSampleProgress());
+          break;
+        case CalWizard::CAL_STEP_PLACE:
+          ui_renderCalStepPlace(CalWizard::getSampleProgress());
+          break;
+        case CalWizard::CAL_STEP_VALUE:
+          ui_renderCalStepValue(CalWizard::getRefWeightG());
+          break;
+        case CalWizard::CAL_STEP_CONFIRM:
+          ui_renderCalStepConfirm(CalWizard::getRefWeightG(), CalWizard::getCalculatedCpg());
+          break;
+        default:
+          break;
+      }
     } else {
       bool drewTare = false;
 

@@ -55,6 +55,10 @@ long   getDispLiveLast();
 const char* getStateLabelWorkLast();
 void   setStateLabelWorkLast(const char* label);
 
+// Ultimo valore raw filtrato (per calibrazione wizard)
+void   setLastRawAvg(long raw);
+long   getLastRawAvg();
+
 // ========================= DISPLAY QUANTIZZAZIONE =========================
 // Quantizza g con banda zero + isteresi (LIVE)
 long displayLiveStable(float gIn, long prevDisp, uint32_t nowMs);
@@ -94,6 +98,9 @@ void setTareUiEndMs(uint32_t ms);
 // ========================= INATTIVITÀ =========================
 // Nota attività peso (reset timer se variazione > soglia)
 void inactivityNoteWeightActivity(uint32_t nowMs, long gDispNow);
+
+// Ritorna true una sola volta se c'è stata variazione peso (pattern one-shot)
+bool popWeightActivity();
 
 // ========================= RESET =========================
 void resetFiltersAndState();

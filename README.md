@@ -371,7 +371,8 @@ firmware/esp32_hx711_serial/
 ├── config/
 │   ├── config_pins.h        # Pin hardware (HX711, I2C, SPI, keypad, buzzer, DFPlayer)
 │   ├── config_audio.h       # AudioConfig:: (volume, timing, tracce MP3)
-│   └── config_scale.h       # ScaleConfig:: (filtri, stati, ZT, display)
+│   ├── config_scale.h       # ScaleConfig:: (filtri, stati, ZT, display)
+│   └── config_battery.h     # BatteryConfig:: (soglie tensione, timing shutdown)
 ├── audio.h / audio.cpp      # Audio:: (DFPlayer: play, coda, power-gating)
 ├── scale_filters.h / .cpp   # ScaleFilters:: (mediana, MA, spike guard, storico)
 ├── scale_state.h / .cpp     # ScaleState:: (offset, tara, stati, ZT, display)
@@ -382,15 +383,18 @@ firmware/esp32_hx711_serial/
 ├── battery_monitor.h / .cpp # BatteryMonitor:: (INA219, tacche, charging)
 ├── hx_health.h / .cpp       # HxHealth:: (OK/WARN/ERROR/ERROR_HARD)
 ├── ui_display.h / .cpp      # UiDisplay:: (OLED SSD1322, layout, icone)
-├── scale_core.h / .cpp      # ScaleCore:: (calibrazione, NVS)
-└── net_ota_cloud.h          # WiFi/OTA (opzionale)
+├── net_ota_cloud.h / .cpp   # Net:: (WiFi/OTA, opzionale)
+└── calibration_wizard.h/.cpp # CalWizard:: (wizard calibrazione on-display)
 ```
 
 **Namespace principali:**
 - `Audio::` — gestione DFPlayer (coda FIFO, priorità, power-gating, anti-troncamento)
 - `ScaleFilters::` — filtri segnale (mediana 3, media mobile, spike guard, storico range/slope)
 - `ScaleState::` — macchina a stati (STABLE/UNSTABLE/LIVE), zero-tracking, tara, quantizzazione display
-- `ScaleConfig::` / `AudioConfig::` — parametri configurabili (soglie, timing, tracce)
+- `ScaleConfig::` / `AudioConfig::` / `BatteryConfig::` — parametri configurabili (soglie, timing, tracce)
+
+### Task Watchdog
+Il firmware include un **Task Watchdog** (8 secondi) che provoca un reboot automatico se il loop si blocca (es. I2C lock, HX711 hang). Il WDT viene resettato a ogni iterazione del loop principale.
 
 ### DFPlayer Mini (audio eventi) + power-gating solo in standby
 Il firmware può suonare file MP3 (es. avviso sleep). Per evitare click e stati strani, **non fa power-cycle a fine brano**.
@@ -434,6 +438,59 @@ Per provare oggi:
 - `vol 20`
 - `mp3 status`
 
+### Calibrazione
+
+La bilancia può essere calibrata in due modi:
+1. **Wizard on-display** — per calibrazione guidata senza PC
+2. **Comandi seriali** — per calibrazione remota/debug
+
+#### Wizard calibrazione (on-display)
+
+Il wizard si attiva tenendo premuto **SKIP** per 5 secondi.
+
+**Passi del wizard:**
+
+| Step | Schermata | Azione | Tasti |
+|---:|---|---|---|
+| 1/4 | ZERO | Piatto vuoto, acquisisci offset | **ENTER** = conferma, **CLEAR** = annulla |
+| 2/4 | PLACE | Appoggia peso di riferimento | **ENTER** = conferma, **CLEAR** = annulla |
+| 3/4 | VALUE | Seleziona peso in grammi | **SKIP** = +, **TARE** = -, **ENTER** = conferma |
+| 4/4 | CONFIRM | Verifica CPG calcolato | **ENTER** = salva, **CLEAR** = annulla |
+
+**Selezione peso:**
+- Da 500g a 20kg
+- Step di 500g sotto 2000g
+- Step di 50g sopra 2000g
+
+**Validazione:**
+- Il CPG deve essere nel range 20-1000 (supporta diverse celle di carico)
+- Se fuori range, il wizard rifiuta la calibrazione
+
+**Feedback:**
+- Beep singolo: conferma step
+- Beep doppio: calibrazione completata
+- Doppio beep basso: errore/annullato
+
+#### Calibrazione via seriale
+
+Per calibrazione remota o debug:
+
+- `cal status` — stampa offset, CPG, ZT counts, grammi attuali
+- `cal zero` — imposta il valore raw corrente come nuovo offset (tara "permanente")
+- `cal ref <grammi>` — con un peso noto posizionato, calcola il nuovo CPG
+- `cal save` — salva offset e CPG in NVS (persistono ai riavvii)
+- `cal load` — ricarica offset e CPG da NVS
+
+**Procedura di calibrazione seriale:**
+1. Bilancia vuota, esegui `cal zero`
+2. Posiziona un peso noto (es. 500g), esegui `cal ref 500`
+3. Verifica con `cal status` che i grammi siano corretti
+4. Salva con `cal save`
+
+**Note:**
+- `cal zero` e `cal ref` sono disabilitati se HX health è in ERROR
+- `cal ref` rifiuta valori ≤ 0 e CPG fuori range 20-1000
+- Dopo `cal zero` o `cal ref` i filtri vengono resettati automaticamente
 
 ### Legenda MP3 eventi (cartella /MP3)
 Metti i file in **SD:/MP3/** con nome a 4 cifre (es. `0001.mp3`).
@@ -468,7 +525,8 @@ Comandi:
 - `hxlog rate <ms>` (50..5000)
 
 
-### Tastiera: debounce + one-shot
+### Tastiera: debounce + one-shot + long press
 La tastiera ha un debounce software (40 ms) e genera eventi **one-shot**: un tasto premuto produce **un solo evento**, anche se lo tieni premuto.
 
-Se in futuro ti serve una logica di "long press" o autorepeat (freccia UP), va aggiunta esplicitamente.
+**Long press:**
+- **SKIP tenuto per 5 secondi**: avvia il wizard di calibrazione on-display

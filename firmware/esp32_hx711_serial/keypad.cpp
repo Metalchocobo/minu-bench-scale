@@ -107,6 +107,11 @@ KeyCode keypad_get_event() {
   return ev;
 }
 
+bool keypad_is_pressed(KeyCode key) {
+  // Ritorna true se il tasto specificato è attualmente premuto (stabile)
+  return (stableKey == key);
+}
+
 void keypad_get_pins(const int** rows, int* nRows, const int** cols, int* nCols) {
   if (rows)  *rows  = rowPins;
   if (nRows) *nRows = 4;

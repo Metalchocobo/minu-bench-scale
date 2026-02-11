@@ -24,6 +24,9 @@ static const char* g_stateLabelWorkLast = "UNSTABLE";
 
 static float g_deadbandUnstable = ScaleConfig::DB_UNSTABLE_N;
 
+// Ultimo rawAvg (per calibrazione wizard)
+static long g_lastRawAvg = 0;
+
 // ========================= DISPLAY LIVE STATE =========================
 static long     g_lastDispLive     = 0;
 static uint32_t g_lastDispLiveMs   = 0;
@@ -51,9 +54,6 @@ static uint32_t g_tareUiStartMs   = 0;
 static uint32_t g_tareUiEndMs     = 0;
 static long     g_tareSamples[64];
 static uint8_t  g_tareSampleCount = 0;
-
-// ========================= INATTIVITÀ =========================
-static long g_inactLastWeightG = 0;
 
 // ========================= GETTERS/SETTERS =========================
 
@@ -91,6 +91,9 @@ long getDispLiveLast()        { return g_dispLiveLast; }
 
 const char* getStateLabelWorkLast() { return g_stateLabelWorkLast; }
 void setStateLabelWorkLast(const char* label) { g_stateLabelWorkLast = label; }
+
+void setLastRawAvg(long raw) { g_lastRawAvg = raw; }
+long getLastRawAvg()         { return g_lastRawAvg; }
 
 // ========================= DISPLAY QUANTIZZAZIONE =========================
 
@@ -359,6 +362,8 @@ uint32_t getTareUiEndMs()    { return g_tareUiEndMs; }
 void setTareUiEndMs(uint32_t ms)   { g_tareUiEndMs = ms; }
 
 // ========================= INATTIVITÀ =========================
+static long g_inactLastWeightG = 0;
+static bool g_weightActivityFlag = false;
 
 void inactivityNoteWeightActivity(uint32_t nowMs, long gDispNow) {
   (void)nowMs;
@@ -366,9 +371,18 @@ void inactivityNoteWeightActivity(uint32_t nowMs, long gDispNow) {
   if (delta < 0) delta = -delta;
 
   if (delta > ScaleConfig::INACTIVITY_WEIGHT_DELTA_G) {
-    // Attività rilevata (gestita nel main loop)
+    g_weightActivityFlag = true;
   }
   g_inactLastWeightG = gDispNow;
+}
+
+// Ritorna true una sola volta se c'è stata variazione peso (pattern one-shot)
+bool popWeightActivity() {
+  if (g_weightActivityFlag) {
+    g_weightActivityFlag = false;
+    return true;
+  }
+  return false;
 }
 
 // ========================= RESET =========================
