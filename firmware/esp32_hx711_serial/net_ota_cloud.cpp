@@ -1,4 +1,5 @@
 #include "net_ota_cloud.h"
+#include <esp_task_wdt.h>
 
 namespace Net {
 
@@ -176,11 +177,13 @@ void otaSetup(const char* hostname) {
   ArduinoOTA.onStart([]() {
     Serial.println(F("[OTA] Update iniziato"));
     otaInProgress = true;
+    esp_task_wdt_delete(NULL);  // Rimuove loopTask dal WDT durante upload
   });
 
   ArduinoOTA.onEnd([]() {
     Serial.println(F("\n[OTA] Update finito"));
     otaInProgress = false;
+    esp_task_wdt_add(NULL);  // Riaggiunge loopTask al WDT
   });
 
   ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
@@ -204,39 +207,39 @@ void otaSetup(const char* hostname) {
 #if ENABLE_MQTT
 
 // ========================= ISRG Root X1 (Let's Encrypt) =========================
-static const char MQTT_CA_CERT[] PROGMEM = R"EOF(
------BEGIN CERTIFICATE-----
-MIIFazCCA1OgAwIBAgIRAIIQz7DSQONZRGPgu2OCiwAwDQYJKoZIhvcNAQELBQAw
-TzELMAkGA1UEBhMCVVMxKTAnBgNVBAoTIEludGVybmV0IFNlY3VyaXR5IFJlc2Vh
-cmNoIEdyb3VwMRUwEwYDVQQDEwxJU1JHIFJvb3QgWDEwHhcNMTUwNjA0MTEwNDM4
-WhcNMzUwNjA0MTEwNDM4WjBPMQswCQYDVQQGEwJVUzEpMCcGA1UEChMgSW50ZXJu
-ZXQgU2VjdXJpdHkgUmVzZWFyY2ggR3JvdXAxFTATBgNVBAMTDElTUkcgUm9vdCBY
-MTCCAiIwDQYJKoZIhvcNAQEBBQADggIPADCCAgoCggIBAK3oJHP0FDfzm54rVygc
-h77ct984kIxuPOZXoHj3dcKi/vVqbvYATyjb3miGbESTtrFj/RQSa78f0uoxmyF+
-0TM8ukj13Xnfs7j/EvEhmkvBioZxaUpmZmyPfjxwv60pIgbz5MDmgK7iS4+3mX6U
-A5/TR5d8mUgjU+g4rk8Kb4Mu0UlXjIB0ttov0DiNewNwIRt18jA8+o+u3dpjq+sW
-T8KOEUt+zwvo/7V3LvSye0rgTBIlDHCNAymg4VMk7BPZ7hm/ELNKjD+Jo2FR3qyH
-B5T0Y3HsLuJvW5iB4YlcNHlsdu87kGJ55tukmi8mxdAQ4Q7e2RCOFvu396j3x+UC
-B5iPNgiV5+I3lg02dZ77DnKxHZu8A/lJBdiB3QW0KtZB6awBdpUKD9jf1b0SHzUv
-KBds0pjBqAlkd25HN7rOrFleaJ1/ctaJxQZBKT5ZPt0m9STJEadao0xAH0ahmbWn
-OlFuhjuefXKnEgV4We0+UXgVCwOPjdAvBbI+e0ocS3MFEvzG6uBQE3xDk3SzynTn
-jh8BCNAw1FtxNrQHusEwMFxIt4I7mKZ9YIqioymCzLq9gwQbooMDQaHWBfEbwrbw
-qHyGO0aoSCqI3Haadr8faqU9GY/rOPNk3sgrDQoo//fb4hVC1CLQJ13hef4Y53CI
-rU7m2Ys6xt0nUW7/vGT1M0NPAgMBAAGjQjBAMA4GA1UdDwEB/wQEAwIBBjAPBgNV
-HRMBAf8EBTADAQH/MB0GA1UdDgQWBBR5tFnme7bl5AFzgAiIyBpY9umbbjANBgkq
-hkiG9w0BAQsFAAOCAgEAVR9YqbyyqFDQDLHYGmkgJykIrGF1XIpu+ILlaS/V9lZL
-ubhzEFnTIZd+50xx+7LSYK05qAvqFyFWhfFQDlnrzuBZ6brJFe+GnY+EgPbk6ZGQ
-3BebYhtF8GaV0nxvwuo77x/Py9auJ/GpsMiu/X1+mvoiBOv/2X/qkSsisRcOj/KK
-NFtY2PwByVS5uCbMiogZiUvsEkrBVuo/Hv6JHYR+REvCqHkEB44Y1NLRL0vv/4nX
-e+WObf8Tn7UaREgALOo+lfKJlxeT2ykVPFYbqjJRH2GP+gDRq6a/8LKEUCg9l6T
-f3JiEfrlBNeRVLCchVGJq+R0bfVWgeyBmQjm/Kfzx1pCwT4peMFGCYP+eFJFVZYE
-sNH4Ag7uKsd9h8RqPDhDJSDXU4WV1BrQOGB8NRGX/0u0yYMAQ0LjdVbM9OKfBdsM
-0L2utrsV/XA+wsol5sDkADN4VyFE+9mRjNwBtgfqMss79raDmzOkcMl3NpK7JKKn
-fCRidlgrkJwXh6K3zDkMComxUvMFqemHpJqVNkUMP4q9BrKRA7Pxs5npaEGCH5Y4
-lXi3mzaElQ2B2YNPa0FGmJk7dJCnNRnGGnnYbgDGNU/jc3bNjKBQAb4zhYJWh/GZ
-VwOTO5OcNFk6FIYV5bR/4X0J9TIDAoKZPP+c8L1JdwwH3XU9KWCLHEB/qA0=
------END CERTIFICATE-----
-)EOF";
+// Fonte: https://letsencrypt.org/certs/isrgrootx1.pem
+static const char MQTT_CA_CERT[] =
+  "-----BEGIN CERTIFICATE-----\n"
+  "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\n"
+  "-----END CERTIFICATE-----\n";
 
 // ========================= STATO MQTT =========================
 static WiFiClientSecure mqttWifiClient;
@@ -345,16 +348,39 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length) {
 
 // ========================= CONNESSIONE AL BROKER =========================
 static bool mqttAttemptConnect() {
-  // Prepara LWT payload
-  char lwtPayload[128];
+  // Prepara LWT payload (include name per discovery dal browser)
+  char lwtPayload[192];
   snprintf(lwtPayload, sizeof(lwtPayload),
-    "{\"type\":\"status\",\"state\":\"offline\",\"scale_id\":\"%s\"}", mqtt_scaleId);
+    "{\"type\":\"status\",\"state\":\"offline\",\"scale_id\":\"%s\",\"name\":\"%s\"}",
+    mqtt_scaleId, MQTT_SCALE_NAME);
+
+  // Verifica che il clock sia sincronizzato (NTP), necessario per TLS
+  time_t now = time(nullptr);
+  if (now < 1700000000) {  // Prima di ~nov 2023 = clock non sincronizzato
+    Serial.println(F("[MQTT] Clock non sincronizzato (NTP in corso), rinvio"));
+    return false;
+  }
 
   Serial.print(F("[MQTT] Connessione a "));
   Serial.print(MQTT_HOST);
   Serial.print(F(":"));
   Serial.print(MQTT_PORT);
   Serial.println(F("..."));
+
+  // Connessione TLS manuale con hostname (per SNI)
+  // PubSubClient risolve il DNS e passa l'IP a WiFiClientSecure,
+  // perdendo il hostname necessario per SNI. Lo facciamo noi prima.
+  if (!mqttWifiClient.connected()) {
+    Serial.println(F("[MQTT] TLS handshake..."));
+    esp_task_wdt_delete(NULL);  // TLS handshake può durare >8s, disabilita WDT
+    bool tlsOk = mqttWifiClient.connect(MQTT_HOST, MQTT_PORT);
+    esp_task_wdt_add(NULL);     // Riabilita WDT
+    if (!tlsOk) {
+      Serial.println(F("[MQTT] TLS handshake fallito"));
+      return false;
+    }
+    Serial.println(F("[MQTT] TLS OK"));
+  }
 
   // connect(clientId, user, pass, willTopic, willQos, willRetain, willMessage)
   bool ok = mqttClient.connect(
@@ -375,11 +401,11 @@ static bool mqttAttemptConnect() {
 
   Serial.println(F("[MQTT] Connesso al broker!"));
 
-  // Pubblica status online (retained)
-  char statusPayload[160];
+  // Pubblica status online (retained) — include name per discovery dal browser
+  char statusPayload[256];
   snprintf(statusPayload, sizeof(statusPayload),
-    "{\"type\":\"status\",\"state\":\"online\",\"scale_id\":\"%s\",\"firmware_version\":\"%s\"}",
-    mqtt_scaleId, MQTT_FW_VERSION);
+    "{\"type\":\"status\",\"state\":\"online\",\"scale_id\":\"%s\",\"name\":\"%s\",\"firmware_version\":\"%s\"}",
+    mqtt_scaleId, MQTT_SCALE_NAME, MQTT_FW_VERSION);
   mqttClient.publish(mqtt_topicSts, (const uint8_t*)statusPayload, strlen(statusPayload), true);
   Serial.println(F("[MQTT] Status 'online' pubblicato"));
 
@@ -400,7 +426,12 @@ void mqttSetup() {
   Serial.print(F("[MQTT] scale_id = "));
   Serial.println(mqtt_scaleId);
 
+  // NTP necessario per validazione certificato TLS (ESP32 parte da epoch 1970)
+  configTime(3600, 3600, "pool.ntp.org", "time.google.com");  // CET + DST
+  Serial.println(F("[MQTT] NTP configurato (pool.ntp.org)"));
+
   mqttWifiClient.setCACert(MQTT_CA_CERT);
+  mqttWifiClient.setHandshakeTimeout(10);  // 10s per TLS handshake
   mqttClient.setServer(MQTT_HOST, MQTT_PORT);
   mqttClient.setCallback(mqttCallback);
 

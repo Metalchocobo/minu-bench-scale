@@ -38,9 +38,10 @@
 #if ENABLE_MQTT
   #define MQTT_HOST       "mqtt.gelateriaminu.it"
   #define MQTT_PORT       8883
-  #define MQTT_USER       "minu_scale"
-  #define MQTT_PASS       "minu_scale_2026"
+  #define MQTT_USER       "minu"
+  #define MQTT_PASS       "Monia080787!"
   #define MQTT_FW_VERSION "1.0.0"
+  #define MQTT_SCALE_NAME "Minu Bench Scale"  // Nome visibile nel browser
 #endif
 
 namespace Net {
