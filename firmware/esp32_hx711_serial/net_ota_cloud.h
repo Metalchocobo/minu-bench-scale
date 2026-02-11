@@ -1,6 +1,6 @@
 #pragma once
 
-// Gestione WiFi + OTA + Arduino Cloud per Minù Bench Scale
+// Gestione WiFi + OTA + MQTT + Arduino Cloud per Minù Bench Scale
 // NOTE:
 //  - Di default è attivo solo WiFi + OTA via Arduino IDE.
 //  - Arduino Cloud è disabilitato; abilitalo cambiando ENABLE_ARDUINO_CLOUD a 1
@@ -9,6 +9,7 @@
 // Abilita / disabilita i vari moduli
 #define ENABLE_WIFI_OTA       1   // 1 = attiva WiFi + OTA
 #define ENABLE_ARDUINO_CLOUD  0   // 1 = attiva Arduino Cloud (richiede librerie + thingProperties.h)
+#define ENABLE_MQTT           1   // 1 = attiva client MQTT per integrazione gestionale
 
 #if ENABLE_WIFI_OTA
   #include <WiFi.h>
@@ -19,10 +20,27 @@
   #include "ota_store.h"
 #endif
 
+#if ENABLE_MQTT
+  // MQTT_MAX_PACKET_SIZE deve essere definito PRIMA dell'include di PubSubClient
+  #define MQTT_MAX_PACKET_SIZE 512
+  #include <WiFiClientSecure.h>
+  #include <PubSubClient.h>
+  #include <ArduinoJson.h>
+#endif
+
 #if ENABLE_ARDUINO_CLOUD
   #include <ArduinoIoTCloud.h>
   #include <Arduino_ConnectionHandler.h>
   #include "thingProperties.h"
+#endif
+
+// ========================= MQTT CONFIG =========================
+#if ENABLE_MQTT
+  #define MQTT_HOST       "mqtt.gelateriaminu.it"
+  #define MQTT_PORT       8883
+  #define MQTT_USER       "minu_scale"
+  #define MQTT_PASS       "minu_scale_2026"
+  #define MQTT_FW_VERSION "1.0.0"
 #endif
 
 namespace Net {
@@ -48,6 +66,37 @@ namespace Net {
 
   // True se OTA update in corso
   bool isOtaInProgress();
+#endif
+
+#if ENABLE_MQTT
+  // Inizializza MQTT (da chiamare dopo wifiSetup)
+  void mqttSetup();
+
+  // Sospende MQTT (prima di light-sleep)
+  void mqttSuspend();
+
+  // True se connesso al broker MQTT
+  bool isMqttConnected();
+
+  // Pubblica risposta confirm sul topic response
+  void mqttPublishConfirm(float actualWeight);
+
+  // Pubblica risposta skip sul topic response
+  void mqttPublishSkip();
+
+  // Restituisce il scale_id (MAC formattato)
+  const char* getScaleId();
+
+  // Stato comando attivo
+  bool   isMqttCommandActive();
+  float  getMqttTargetWeight();
+  const char* getMqttCommandUuid();
+
+  // Pulisce il comando attivo (usato internamente dopo confirm/skip)
+  void mqttClearActiveCommand();
+
+  // Ritorna true una sola volta se MQTT si è disconnesso (per buzzer x2 nel .ino)
+  bool mqttPopDisconnectBeep();
 #endif
 
 #if ENABLE_ARDUINO_CLOUD

@@ -516,12 +516,31 @@ void handleKeyEvent(KeyCode key) {
       Serial.println(F("[KEYPAD] ENTER pressed"));
       buzzerKeyClick();
       Audio::requestPlayMp3(Track::ENTER_PRESSED);
+#if ENABLE_MQTT
+      if (Net::isMqttCommandActive() && Net::isMqttConnected()) {
+        float actualW = (float)(stEnable ? ScaleState::getDispWorkLast() : ScaleState::getDispLiveLast());
+        Net::mqttPublishConfirm(actualW);
+        Net::mqttClearActiveCommand();
+      }
+#endif
       break;
 
     case KEY_SKIP:
       Serial.println(F("[KEYPAD] SKIP pressed"));
       buzzerKeyClick();
+#if ENABLE_MQTT
+      if (Net::isMqttCommandActive() && Net::isMqttConnected()) {
+        Net::mqttPublishSkip();
+        Net::mqttClearActiveCommand();
+      } else if (Net::isMqttConnected() && !Net::isMqttCommandActive()) {
+        // Nessun comando attivo: bip di avviso sordo
+        buzzerWarn();
+      } else {
+        Audio::requestPlayMp3(Track::SKIP_PRESSED);
+      }
+#else
       Audio::requestPlayMp3(Track::SKIP_PRESSED);
+#endif
       break;
 
     case KEY_TOTAL:
@@ -750,6 +769,9 @@ static void enterInactivityLightSleep() {
   Audio::powerOffNow();
   sleepLedOn();
 
+#if ENABLE_MQTT
+  Net::mqttSuspend();
+#endif
 #if ENABLE_WIFI_OTA
   bool wasWifiOn = g_wifiUserEnabled && g_wifiSetupDone;
   if (wasWifiOn) Net::wifiSuspend();
@@ -829,6 +851,9 @@ static void enterLowBatteryLightSleep() {
   delay(80);
   Audio::powerOffNow();
 
+#if ENABLE_MQTT
+  Net::mqttSuspend();
+#endif
 #if ENABLE_WIFI_OTA
   WiFi.disconnect(true);
   WiFi.mode(WIFI_OFF);
@@ -1059,6 +1084,10 @@ void setup() {
     g_wifiSetupDone = false;
     Serial.println(F("[NET] WiFi OFF (preferenza utente)"));
   }
+
+#if ENABLE_MQTT
+  Net::mqttSetup();
+#endif
 #endif
 
   // I2C
@@ -1145,6 +1174,15 @@ void loop() {
 #if ENABLE_WIFI_OTA
   Net::update();
   wifiAudioUpdate(millis());
+#endif
+
+#if ENABLE_MQTT
+  // Due bip di avviso se MQTT si disconnette (WiFi ancora up)
+  if (Net::mqttPopDisconnectBeep() && WiFi.isConnected()) {
+    buzzerWarn();
+    delay(120);
+    buzzerWarn();
+  }
 #endif
 
   serial_task();
@@ -1499,10 +1537,23 @@ void loop() {
       }
 
       if (!drewTare) {
+#if ENABLE_MQTT
+        bool mqttTarget = Net::isMqttCommandActive();
+        float mqttTW    = Net::getMqttTargetWeight();
+        bool mqttConn   = Net::isMqttConnected();
+        bool mqttVis    = WiFi.isConnected();
+#else
+        bool mqttTarget = false;
+        float mqttTW    = 0.0f;
+        bool mqttConn   = false;
+        bool mqttVis    = false;
+#endif
         if (!stEnable) {
-          ui_renderWeight(ScaleState::getDispLiveLast(), "LIVE");
+          ui_renderWeight(ScaleState::getDispLiveLast(), "LIVE",
+                          mqttTarget, mqttTW, mqttConn, mqttVis);
         } else {
-          ui_renderWeight(ScaleState::getDispWorkLast(), ScaleState::getStateLabelWorkLast());
+          ui_renderWeight(ScaleState::getDispWorkLast(), ScaleState::getStateLabelWorkLast(),
+                          mqttTarget, mqttTW, mqttConn, mqttVis);
         }
       }
     }

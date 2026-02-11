@@ -5,6 +5,7 @@
 #include <WiFi.h>
 
 #include "battery_monitor.h"
+#include "net_ota_cloud.h"
 
 // -----------------------------------------------------------------------------
 // PIN OLED (come firmware originale)
@@ -185,6 +186,31 @@ static void drawNetIcon(int x, int y, bool connected) {
     oled.drawLine(x,     y,
                   x + 7, y + 6);
   }
+}
+
+// -----------------------------------------------------------------------------
+// ICONA MQTT (frecce ↑↓ bidirezionali)
+// -----------------------------------------------------------------------------
+static void drawMqttIcon(int x, int y, bool connected, bool visible) {
+  if (!visible) return;  // WiFi non connesso: icona nascosta
+
+  // Se MQTT disconnesso (ma WiFi up): lampeggia
+  if (!connected) {
+    bool blink = ((millis() / 500) % 2) == 0;
+    if (!blink) return;
+  }
+
+  // Freccia su (↑): da (x+3, y+6) a (x+3, y+1), punta a y
+  oled.drawVLine(x + 1, y + 1, 5);       // asta verticale sinistra
+  oled.drawPixel(x,     y + 2);           // punta freccia su - sinistra
+  oled.drawPixel(x + 2, y + 2);           // punta freccia su - destra
+  oled.drawPixel(x + 1, y);              // apice
+
+  // Freccia giù (↓): da (x+5, y) a (x+5, y+5), punta a y+6
+  oled.drawVLine(x + 4, y + 1, 5);       // asta verticale destra
+  oled.drawPixel(x + 3, y + 4);           // punta freccia giù - sinistra
+  oled.drawPixel(x + 5, y + 4);           // punta freccia giù - destra
+  oled.drawPixel(x + 4, y + 6);          // apice
 }
 
 // -----------------------------------------------------------------------------
@@ -427,7 +453,9 @@ void ui_renderSleepZzz() {
 // -----------------------------------------------------------------------------
 // LAYOUT PRINCIPALE PESO
 // -----------------------------------------------------------------------------
-void ui_renderWeight(long gDisp, const char* stateLabel) {
+void ui_renderWeight(long gDisp, const char* stateLabel,
+                     bool showTarget, float targetWeight,
+                     bool mqttConnected, bool mqttVisible) {
   oled.clearBuffer();
   const int16_t BASELINE_Y = 56;   // baseline comune per le "g"
 
@@ -435,13 +463,14 @@ void ui_renderWeight(long gDisp, const char* stateLabel) {
   const char* modeValue  = uiGetModeLabel();   // es: WORK / LIVE
   const char* stateValue = stateLabel;         // STABLE / UNSTABLE / LIVE
 
-  // ------- Riga alta: batteria + wifi -------
+  // ------- Riga alta: batteria + wifi + mqtt -------
   uint8_t batteryLevel = uiGetBatteryLevel4Step();  // 0..4
   bool    isCharging   = uiIsBatteryCharging();
   bool    netConnected = WiFi.isConnected();
 
   drawBatteryIcon(2, 2, batteryLevel, isCharging);
   drawNetIcon(30, 3, netConnected);
+  drawMqttIcon(44, 3, mqttConnected, mqttVisible);
   drawWarnTriangleIconTopRight();
 
   // ------- Info Mode / State (allineate) -------
@@ -462,21 +491,24 @@ void ui_renderWeight(long gDisp, const char* stateLabel) {
   oled.drawStr(LABEL_X, 36, "State:");
   oled.drawStr(VALUE_X, 36, stateValue);
 
-  // ------- Icona target (mirino) -------
-  drawTargetIcon(2, BASELINE_Y - 11);
+  // ------- Icona target (mirino) + peso target da MQTT -------
+  if (showTarget && targetWeight > 0.0f) {
+    drawTargetIcon(2, BASELINE_Y - 11);
 
-  // ------- Target: placeholder fisso 10.500g -------
-  const char *targetStr = "10.500";
+    // Formatta il target weight come intero in grammi (es. 450 → "450")
+    char targetStr[16];
+    formatGramsWithDot((long)targetWeight, targetStr, sizeof(targetStr));
 
-  oled.setFont(u8g2_font_logisoso16_tn);
-  int16_t targetX     = 2 + 11 + 3;              // mirino (11) + 3 px
-  int16_t targetWidth = oled.getStrWidth(targetStr);
-  oled.drawStr(targetX, BASELINE_Y, targetStr);
+    oled.setFont(u8g2_font_logisoso16_tn);
+    int16_t targetX     = 2 + 11 + 3;              // mirino (11) + 3 px
+    int16_t targetWidth = oled.getStrWidth(targetStr);
+    oled.drawStr(targetX, BASELINE_Y, targetStr);
 
-  oled.setFont(u8g2_font_6x12_tr);
-  const int16_t TARGET_G_MARGIN = 0;
-  int16_t gTargetX             = targetX + targetWidth + TARGET_G_MARGIN;
-  oled.drawStr(gTargetX, BASELINE_Y, "g");
+    oled.setFont(u8g2_font_6x12_tr);
+    const int16_t TARGET_G_MARGIN = 0;
+    int16_t gTargetX             = targetX + targetWidth + TARGET_G_MARGIN;
+    oled.drawStr(gTargetX, BASELINE_Y, "g");
+  }
 
   // ------- Peso principale: gDisp formattato come 12.250 -------
   char weightStr[16];
@@ -516,9 +548,10 @@ void ui_renderTareProgress(uint8_t progressPct) {
 
   drawBatteryIcon(2, 2, batteryLevel, isCharging);
   drawNetIcon(30, 3, netConnected);
+#if ENABLE_MQTT
+  drawMqttIcon(44, 3, Net::isMqttConnected(), netConnected);
+#endif
   drawWarnTriangleIconTopRight();
-
-  
 
   // ------- Colonna sinistra: Mode / State (manteniamo la UI come prima) -------
   const char* modeValue  = uiGetModeLabel();   // es: WORK / LIVE
