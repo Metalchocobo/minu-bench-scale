@@ -27,10 +27,12 @@ void ui_setHxWarn(bool enable);
 //  - stateLabel: "STABLE", "UNSTABLE" o "LIVE"
 //  - showTarget: se true mostra peso target (da MQTT weigh)
 //  - targetWeight: peso target in grammi (float)
+//  - ingredientName: nome ingrediente (se disponibile), troncato lato UI
 //  - mqttConnected: true se connesso al broker MQTT
 //  - mqttVisible: true se l'icona MQTT deve essere visibile (WiFi connesso)
 void ui_renderWeight(long gDisp, const char* stateLabel,
                      bool showTarget = false, float targetWeight = 0.0f,
+                     const char* ingredientName = nullptr,
                      bool mqttConnected = false, bool mqttVisible = false);
 
 // Overlay TARA: mostra testo + barra (0..100)

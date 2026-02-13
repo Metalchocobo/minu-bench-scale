@@ -632,6 +632,7 @@ void handleKeyEvent(KeyCode key) {
       buzzerKeyClick();
 #if ENABLE_MQTT
       if (Net::isMqttCommandActive() && Net::isMqttConnected()) {
+        Audio::requestPlayMp3(Track::SKIP_PRESSED);
         Net::mqttPublishSkip();
         Net::mqttClearActiveCommand();
       } else if (Net::isMqttConnected() && !Net::isMqttCommandActive()) {
@@ -1283,6 +1284,11 @@ void loop() {
     delay(120);
     buzzerWarn();
   }
+
+  // Bip distintivo quando arriva un nuovo comando weigh da MQTT
+  if (Net::mqttPopCommandRxBeep()) {
+    buzzerMqttRx();
+  }
 #endif
 
   serial_task();
@@ -1640,20 +1646,22 @@ void loop() {
 #if ENABLE_MQTT
         bool mqttTarget = Net::isMqttCommandActive();
         float mqttTW    = Net::getMqttTargetWeight();
+        const char* mqttName = Net::getMqttCommandName();
         bool mqttConn   = Net::isMqttConnected();
         bool mqttVis    = WiFi.isConnected();
 #else
         bool mqttTarget = false;
         float mqttTW    = 0.0f;
+        const char* mqttName = nullptr;
         bool mqttConn   = false;
         bool mqttVis    = false;
 #endif
         if (!stEnable) {
           ui_renderWeight(ScaleState::getDispLiveLast(), "LIVE",
-                          mqttTarget, mqttTW, mqttConn, mqttVis);
+                          mqttTarget, mqttTW, mqttName, mqttConn, mqttVis);
         } else {
           ui_renderWeight(ScaleState::getDispWorkLast(), ScaleState::getStateLabelWorkLast(),
-                          mqttTarget, mqttTW, mqttConn, mqttVis);
+                          mqttTarget, mqttTW, mqttName, mqttConn, mqttVis);
         }
       }
     }

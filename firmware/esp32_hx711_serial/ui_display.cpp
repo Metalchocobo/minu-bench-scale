@@ -458,6 +458,7 @@ void ui_renderSleepZzz() {
 // -----------------------------------------------------------------------------
 void ui_renderWeight(long gDisp, const char* stateLabel,
                      bool showTarget, float targetWeight,
+                     const char* ingredientName,
                      bool mqttConnected, bool mqttVisible) {
   oled.clearBuffer();
   const int16_t BASELINE_Y = 56;   // baseline comune per le "g"
@@ -476,23 +477,44 @@ void ui_renderWeight(long gDisp, const char* stateLabel,
   drawMqttIcon(44, 3, mqttConnected, mqttVisible);
   drawWarnTriangleIconTopRight();
 
-  // ------- Info Mode / State (allineate) -------
+  // ------- Info Mode + State (stessa riga) + Ingrediente -------
   oled.setFont(u8g2_font_6x12_tr);
 
   const int16_t LABEL_X = 2;
 
-  int16_t wModeLabel  = oled.getStrWidth("Mode:");
-  int16_t wStateLabel = oled.getStrWidth("State:");
-  int16_t labelMaxW   = (wModeLabel > wStateLabel) ? wModeLabel : wStateLabel;
-  const int16_t VALUE_X = LABEL_X + labelMaxW + 8; // 8 px dopo i due punti
+  char infoLine[24];
+  if (strcmp(modeValue, "LIVE") == 0) {
+    // In LIVE non mostrare stato STABLE/UNSTABLE
+    strlcpy(infoLine, "LIVE", sizeof(infoLine));
+  } else {
+    snprintf(infoLine, sizeof(infoLine), "%s | %s", modeValue, stateValue);
+  }
+  oled.drawStr(LABEL_X, 24, infoLine);
 
-  // Riga 1: Mode
-  oled.drawStr(LABEL_X, 24, "Mode:");
-  oled.drawStr(VALUE_X, 24, modeValue);
+  // Ingrediente (se presente): max 15 caratteri, oltre -> 15 + puntini ravvicinati
+  if (ingredientName && ingredientName[0] != '\0') {
+    bool truncated = false;
+    char ingLine[24] = {0};
+    size_t n = strlen(ingredientName);
+    if (n > 15) {
+      memcpy(ingLine, ingredientName, 15);
+      ingLine[15] = '\0';
+      truncated = true;
+    } else {
+      strlcpy(ingLine, ingredientName, sizeof(ingLine));
+    }
+    oled.drawStr(LABEL_X, 36, ingLine);
 
-  // Riga 2: State
-  oled.drawStr(LABEL_X, 36, "State:");
-  oled.drawStr(VALUE_X, 36, stateValue);
+    if (truncated) {
+      // Puntini disegnati a pixel (piu' ravvicinati del font standard)
+      int16_t textW = oled.getStrWidth(ingLine);
+      int16_t dotX = LABEL_X + textW + 1;
+      int16_t dotY = 34;
+      oled.drawPixel(dotX,     dotY);
+      oled.drawPixel(dotX + 2, dotY);
+      oled.drawPixel(dotX + 4, dotY);
+    }
+  }
 
   // ------- Icona target (mirino) + peso target da MQTT -------
   if (showTarget && targetWeight > 0.0f) {

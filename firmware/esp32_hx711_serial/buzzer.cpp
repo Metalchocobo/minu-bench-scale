@@ -114,3 +114,10 @@ void buzzerError() {
 void buzzerWarn() {
   playToneHz(1800, 110);
 }
+
+// Ricezione comando MQTT weigh: doppio beep rapido e riconoscibile
+void buzzerMqttRx() {
+  playToneHz(3200, 45);
+  delay(35);
+  playToneHz(2400, 65);
+}

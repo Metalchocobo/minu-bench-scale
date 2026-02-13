@@ -260,6 +260,7 @@ static char   mqtt_clientId[32] = {0};  // scale-{scaleId}
 // Stato comando attivo
 static bool   mqtt_cmdActive       = false;
 static char   mqtt_cmdUuid[37]     = {0};  // UUID standard 36 chars + null
+static char   mqtt_cmdName[32]     = {0};  // Nome ingrediente (troncato)
 static float  mqtt_cmdTargetWeight = 0.0f;
 
 // Riconnessione con backoff esponenziale
@@ -272,6 +273,9 @@ static const uint32_t MQTT_BACKOFF_MAX  = 30000;
 
 // Flag per segnalare disconnessione (per buzzer nel .ino)
 static bool     mqtt_disconnectBeep  = false;
+
+// Flag per segnalare ricezione di un nuovo comando weigh (bip distintivo)
+static bool     mqtt_commandRxBeep   = false;
 
 // Forward declaration
 static void mqttCallback(char* topic, byte* payload, unsigned int length);
@@ -327,11 +331,23 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length) {
       return;
     }
 
+    bool sameUuid = (strcmp(mqtt_cmdUuid, uuid) == 0);
+    float targetDelta = targetWeight - mqtt_cmdTargetWeight;
+    if (targetDelta < 0.0f) targetDelta = -targetDelta;
+    bool sameTarget = (targetDelta < 0.05f);
+    bool isNewWeigh = (!mqtt_cmdActive) || (!sameUuid) || (!sameTarget);
+
     // Salva comando attivo
     strncpy(mqtt_cmdUuid, uuid, sizeof(mqtt_cmdUuid) - 1);
     mqtt_cmdUuid[sizeof(mqtt_cmdUuid) - 1] = '\0';
+    strncpy(mqtt_cmdName, name, sizeof(mqtt_cmdName) - 1);
+    mqtt_cmdName[sizeof(mqtt_cmdName) - 1] = '\0';
     mqtt_cmdTargetWeight = targetWeight;
     mqtt_cmdActive = true;
+
+    if (isNewWeigh) {
+      mqtt_commandRxBeep = true;
+    }
 
     Serial.print(F("[MQTT] CMD weigh: uuid="));
     Serial.print(mqtt_cmdUuid);
@@ -343,6 +359,7 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length) {
   } else if (strcmp(type, "clear") == 0) {
     mqtt_cmdActive = false;
     mqtt_cmdUuid[0] = '\0';
+    mqtt_cmdName[0] = '\0';
     mqtt_cmdTargetWeight = 0.0f;
     Serial.println(F("[MQTT] CMD clear: tornato in idle"));
 
@@ -465,6 +482,7 @@ void mqttSetup() {
   mqtt_lastAttemptMs = 0;
   mqtt_backoffMs = MQTT_BACKOFF_INIT;
   mqtt_disconnectBeep = false;
+  mqtt_commandRxBeep = false;
 
   Serial.println(F("[MQTT] Setup completato"));
 }
@@ -479,6 +497,7 @@ void mqttSuspend() {
   mqtt_backoffMs = MQTT_BACKOFF_INIT;
   mqtt_cmdActive = false;
   mqtt_cmdUuid[0] = '\0';
+  mqtt_cmdName[0] = '\0';
   mqtt_cmdTargetWeight = 0.0f;
   Serial.println(F("[MQTT] Sospeso"));
 }
@@ -503,9 +522,14 @@ const char* getMqttCommandUuid() {
   return mqtt_cmdUuid;
 }
 
+const char* getMqttCommandName() {
+  return mqtt_cmdName;
+}
+
 void mqttClearActiveCommand() {
   mqtt_cmdActive = false;
   mqtt_cmdUuid[0] = '\0';
+  mqtt_cmdName[0] = '\0';
   mqtt_cmdTargetWeight = 0.0f;
 }
 
@@ -599,6 +623,14 @@ bool mqttPopDisconnectBeep() {
   return false;
 }
 
+bool mqttPopCommandRxBeep() {
+  if (mqtt_commandRxBeep) {
+    mqtt_commandRxBeep = false;
+    return true;
+  }
+  return false;
+}
+
 void mqttReloadCreds() {
   // Disconnetti se connesso
   if (mqttClient.connected()) {
@@ -630,8 +662,10 @@ void mqttReloadCreds() {
   mqtt_lastAttemptMs = 0;
   mqtt_backoffMs = MQTT_BACKOFF_INIT;
   mqtt_disconnectBeep = false;
+  mqtt_commandRxBeep = false;
   mqtt_cmdActive = false;
   mqtt_cmdUuid[0] = '\0';
+  mqtt_cmdName[0] = '\0';
   mqtt_cmdTargetWeight = 0.0f;
 
   // NTP (nel caso non fosse stato configurato al setup perché mancavano le credenziali)

@@ -375,7 +375,7 @@ La bilancia si identifica con il MAC address WiFi (lowercase, senza separatori, 
 - Registra LWT che pubblica status `offline` (retained) alla disconnessione imprevista
 - Si sottoscrive al topic command per ricevere comandi dal browser
 
-**Comando `weigh`:** il browser invia UUID ingrediente, nome e peso target. La bilancia mostra il target sul display (icona target + grammi).
+**Comando `weigh`:** il browser invia UUID ingrediente, nome e peso target. La bilancia emette un bip distintivo di ricezione e mostra il target sul display (icona target + grammi).
 
 **Comando `clear`:** annulla il comando attivo, la bilancia torna in idle.
 
@@ -389,6 +389,8 @@ La bilancia si identifica con il MAC address WiFi (lowercase, senza separatori, 
 - **Icona MQTT** (frecce ↑↓) nella barra di stato: visibile quando il WiFi è connesso
   - Fissa: connesso al broker
   - Lampeggiante: disconnesso dal broker (in attesa di riconnessione)
+- **Riga info**: valori only, senza label (`WORK | STABLE` / `WORK | UNSTABLE`); in modalità LIVE mostra solo `LIVE`
+- **Ingrediente**: quando arriva un comando `weigh`, il nome ingrediente è mostrato sulla riga sotto (max 15 caratteri; oltre: 15 + tre puntini ravvicinati)
 - **Peso target**: quando è attivo un comando `weigh`, il peso obiettivo viene mostrato accanto all'icona target
 
 ### Disconnessione e riconnessione

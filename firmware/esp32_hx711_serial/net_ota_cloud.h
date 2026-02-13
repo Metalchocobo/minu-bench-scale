@@ -93,12 +93,16 @@ namespace Net {
   bool   isMqttCommandActive();
   float  getMqttTargetWeight();
   const char* getMqttCommandUuid();
+  const char* getMqttCommandName();
 
   // Pulisce il comando attivo (usato internamente dopo confirm/skip)
   void mqttClearActiveCommand();
 
   // Ritorna true una sola volta se MQTT si è disconnesso (per buzzer x2 nel .ino)
   bool mqttPopDisconnectBeep();
+
+  // Ritorna true una sola volta quando arriva un nuovo comando weigh
+  bool mqttPopCommandRxBeep();
 
   // Ricarica credenziali MQTT da NVS e riconnette (senza reboot)
   void mqttReloadCreds();
