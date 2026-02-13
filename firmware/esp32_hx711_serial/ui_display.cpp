@@ -760,3 +760,85 @@ void ui_renderCalLongPress(uint8_t progress) {
 
   oled.sendBuffer();
 }
+
+// =============================================================================
+// WEIGH STACK OVERLAYS
+// =============================================================================
+
+void ui_renderStackCompare(long gTotal, long gNet, int count) {
+  oled.clearBuffer();
+
+  char regCore[16];
+  char effCore[16];
+  char diffCore[16];
+  char regStr[20];
+  char effStr[20];
+  char diffStr[20];
+
+  formatGramsWithDot(gTotal, regCore, sizeof(regCore));
+  formatGramsWithDot(gNet, effCore, sizeof(effCore));
+
+  long delta = gNet - gTotal;
+  formatGramsWithDot((delta < 0) ? -delta : delta, diffCore, sizeof(diffCore));
+
+  strlcpy(regStr, regCore, sizeof(regStr));
+  strlcpy(effStr, effCore, sizeof(effStr));
+  if (delta > 0) {
+    snprintf(diffStr, sizeof(diffStr), "+%s", diffCore);
+  } else if (delta < 0) {
+    snprintf(diffStr, sizeof(diffStr), "-%s", diffCore);
+  } else {
+    strlcpy(diffStr, "0", sizeof(diffStr));
+  }
+
+  const int16_t Y1 = 18;
+  const int16_t Y2 = 40;
+  const int16_t Y3 = 62;
+  const int16_t RIGHT_X = 254;
+
+  // Labels (Italian)
+  oled.setFont(u8g2_font_7x13_tr);
+  oled.drawStr(2, Y1, "Registrato:");
+  oled.drawStr(2, Y2, "Effettivo:");
+  oled.drawStr(2, Y3, "Differenza:");
+
+  // Values large and right aligned with small unit 'g'
+  oled.setFont(u8g2_font_logisoso16_tn);
+  int16_t wReg = oled.getStrWidth(regStr);
+  int16_t wEff = oled.getStrWidth(effStr);
+  int16_t wDif = oled.getStrWidth(diffStr);
+
+  oled.setFont(u8g2_font_6x12_tr);
+  int16_t wG = oled.getStrWidth("g");
+  int16_t gX = RIGHT_X - wG;
+
+  oled.setFont(u8g2_font_logisoso16_tn);
+  oled.drawStr(gX - 2 - wReg, Y1, regStr);
+  oled.drawStr(gX - 2 - wEff, Y2, effStr);
+  oled.drawStr(gX - 2 - wDif, Y3, diffStr);
+
+  oled.setFont(u8g2_font_6x12_tr);
+  oled.drawStr(gX, Y1, "g");
+  oled.drawStr(gX, Y2, "g");
+  oled.drawStr(gX, Y3, "g");
+
+  (void)count;
+
+  oled.sendBuffer();
+}
+
+void ui_renderStackClear(const char* msg, int remaining) {
+  oled.clearBuffer();
+
+  // Messaggio grande al centro
+  oled.setFont(u8g2_font_logisoso24_tf);
+  drawCenteredText(msg, 32);
+
+  // Info rimanenti
+  oled.setFont(u8g2_font_6x12_tr);
+  char info[24];
+  snprintf(info, sizeof(info), "Stack: %d", remaining);
+  drawCenteredText(info, 52);
+
+  oled.sendBuffer();
+}

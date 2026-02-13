@@ -40,6 +40,7 @@
 #include "wifi_store.h"
 #include "ota_store.h"
 #include "calibration_wizard.h"
+#include "weigh_stack.h"
 
 // ========================= ALIAS =========================
 using namespace ScaleConfig;
@@ -103,6 +104,64 @@ static bool g_wifiSuppressNextConnectAnnounce = false;
 static const uint32_t WIFI_ERR_COOLDOWN_MS = 60000;
 #endif
 
+// ========================= WEIGH STACK: LONG PRESS & OVERLAY =========================
+static const uint32_t LONG_PRESS_MS = 2000;  // 2 seconds for long press
+
+// CLEAR key long press tracking
+static uint32_t g_clearPressStartMs   = 0;
+static bool     g_clearLongPressFired = false;
+
+// Overlay state (temporary display for TOTAL/NET/CLEAR feedback)
+enum OverlayType : uint8_t {
+  OVERLAY_NONE = 0,
+  OVERLAY_STACK_COMPARE,
+  OVERLAY_CLEAR_FEEDBACK
+};
+static OverlayType g_overlayType      = OVERLAY_NONE;
+static uint32_t    g_overlayStartMs   = 0;
+static const uint32_t OVERLAY_TIMEOUT_MS = 10000; // 10 seconds auto-dismiss
+
+// Cached overlay values (captured at overlay start)
+static long g_overlayTotal    = 0;
+static long g_overlayNet      = 0;
+static int  g_overlayCount    = 0;
+static char g_overlayMsg[12]  = {0};
+
+// Manual TARE reference capture: save ref offset only after tare is applied
+static bool g_captureReferenceAfterTare = false;
+
+static void showStackCompareOverlay(uint32_t nowMs) {
+  float stackTotal = WeighStack::total();
+  long totalDisp = (stackTotal >= 0.0f) ? (long)(stackTotal + 0.5f) : (long)(stackTotal - 0.5f);
+
+  long netDisp = 0;
+  if (WeighStack::hasReference()) {
+    long refOffset = WeighStack::getReferenceOffset();
+    float cpg = ScaleState::getScaleCpg();
+    long rawNow = ScaleState::getLastRawAvg();
+    float netG = (cpg > 0.01f) ? ((float)(rawNow - refOffset) / cpg) : 0.0f;
+    netDisp = (netG >= 0.0f) ? (long)(netG + 0.5f) : (long)(netG - 0.5f);
+  } else {
+    netDisp = (long)(stEnable ? ScaleState::getDispWorkLast() : ScaleState::getDispLiveLast());
+    Serial.println(F("[STACK] No reference yet, NET fallback to current display"));
+  }
+
+  g_overlayType = OVERLAY_STACK_COMPARE;
+  g_overlayStartMs = nowMs;
+  g_overlayTotal = totalDisp;
+  g_overlayNet = netDisp;
+  g_overlayCount = WeighStack::count();
+
+  // Render subito per feedback immediato anche se la UI TARE e' attiva
+  ui_renderStackCompare(g_overlayTotal, g_overlayNet, g_overlayCount);
+  lastOledMs = nowMs;
+
+  Serial.print(F("[STACK] TOT=")); Serial.print(totalDisp);
+  Serial.print(F("g NET=")); Serial.print(netDisp);
+  Serial.print(F("g DELTA=")); Serial.print(netDisp - totalDisp);
+  Serial.println(F("g"));
+}
+
 // Log HX
 static bool     g_hxLogEnabled  = false;
 static uint32_t g_hxLogPeriodMs = 250;
@@ -141,6 +200,7 @@ void printHelp() {
   Serial.println(F("ota status, ota set \"PASS\", ota clear"));
   Serial.println(F("mqtt set \"host\" \"user\" \"pass\", mqtt creds, mqtt clear, mqtt apply, mqtt status"));
   Serial.println(F("cal status, cal zero, cal ref <g>, cal save, cal load"));
+  Serial.println(F("stack [status], stack list, stack clear"));
   Serial.println(F("-----------------------\n"));
 }
 
@@ -436,6 +496,44 @@ void parseCommand(const char* cmd) {
   }
 #endif
 
+  // stack
+  if (strncmp(cmd, "stack", 5) == 0) {
+    const char* arg = cmd + 5;
+    while (*arg == ' ') arg++;
+
+    if (strcmp(arg, "status") == 0 || *arg == '\0') {
+      Serial.println(F("[STACK] --- Stato stack ---"));
+      Serial.print(F("  Count: ")); Serial.println(WeighStack::count());
+      Serial.print(F("  Total: ")); Serial.print(WeighStack::total(), 0); Serial.println(F("g"));
+      Serial.print(F("  Ref:   ")); Serial.println(WeighStack::hasReference() ? "si" : "no");
+      if (WeighStack::hasReference()) {
+        Serial.print(F("  RefOff: ")); Serial.println(WeighStack::getReferenceOffset());
+      }
+      return;
+    }
+
+    if (strcmp(arg, "list") == 0) {
+      int n = WeighStack::count();
+      Serial.print(F("[STACK] ")); Serial.print(n); Serial.println(F(" items:"));
+      for (int i = 0; i < n; i++) {
+        Serial.print(F("  [")); Serial.print(i);
+        Serial.print(F("] ")); Serial.print(WeighStack::get(i), 0);
+        Serial.println(F("g"));
+      }
+      Serial.print(F("  TOTAL: ")); Serial.print(WeighStack::total(), 0); Serial.println(F("g"));
+      return;
+    }
+
+    if (strcmp(arg, "clear") == 0) {
+      WeighStack::clear();
+      Serial.println(F("[STACK] Cleared"));
+      return;
+    }
+
+    Serial.println(F("[STACK] Comandi: stack [status] | stack list | stack clear"));
+    return;
+  }
+
   // cal (calibrazione)
   if (strncmp(cmd, "cal ", 4) == 0) {
     const char* arg = cmd + 4;
@@ -550,11 +648,24 @@ void handleKeyEvent(KeyCode key) {
       Serial.println(F("[KEYPAD] TARE pressed"));
       buzzerKeyClick();
 
+      // Dismiss overlay if active
+      if (g_overlayType != OVERLAY_NONE) {
+        g_overlayType = OVERLAY_NONE;
+        lastOledMs = 0;
+      }
+
       if (hxHealth_isError(&g_hxHealth)) {
         Serial.println(F("[TARE] Disabilitata (HX error)"));
         buzzerError();
         return;
       }
+
+      // Mark reference capture to happen after tare is actually applied
+      g_captureReferenceAfterTare = true;
+
+      // Reset weigh stack (new weighing session)
+      WeighStack::clear();
+      Serial.println(F("[STACK] Stack cleared (new session)"));
 
       ScaleState::tareStart(millis());
       break;
@@ -614,18 +725,55 @@ void handleKeyEvent(KeyCode key) {
       break;
     }
 
-    case KEY_ENTER:
+    case KEY_ENTER: {
       Serial.println(F("[KEYPAD] ENTER pressed"));
       buzzerKeyClick();
+
+      // Dismiss overlay if active
+      if (g_overlayType != OVERLAY_NONE) {
+        g_overlayType = OVERLAY_NONE;
+        lastOledMs = 0;
+      }
+
+      // Read current display weight
+      float currentWeight = (float)(stEnable ? ScaleState::getDispWorkLast() : ScaleState::getDispLiveLast());
+
+      // If weight <= 0, ignore everything (no push, no tare, no MQTT)
+      if (currentWeight <= 0.0f) {
+        Serial.println(F("[STACK] Weight <= 0, ignoring ENTER"));
+        buzzerWarn();
+        break;
+      }
+
+      // Push to stack
+      if (WeighStack::push(currentWeight)) {
+        Serial.print(F("[STACK] Push: "));
+        Serial.print(currentWeight, 0);
+        Serial.print(F("g (count="));
+        Serial.print(WeighStack::count());
+        Serial.println(F(")"));
+      } else {
+        Serial.println(F("[STACK] Full, cannot push"));
+        buzzerError();
+      }
+
       Audio::requestPlayMp3(Track::ENTER_PRESSED);
+
+      // MQTT confirm (if active)
 #if ENABLE_MQTT
       if (Net::isMqttCommandActive() && Net::isMqttConnected()) {
-        float actualW = (float)(stEnable ? ScaleState::getDispWorkLast() : ScaleState::getDispLiveLast());
-        Net::mqttPublishConfirm(actualW);
+        Net::mqttPublishConfirm(currentWeight);
         Net::mqttClearActiveCommand();
       }
 #endif
+
+      // Auto-tare (working tare: does NOT reset stack, does NOT update reference)
+      if (!hxHealth_isError(&g_hxHealth)) {
+        ScaleState::tareStart(millis());
+        Serial.println(F("[STACK] Auto-tare (working)"));
+      }
       break;
+    }
 
     case KEY_SKIP:
       Serial.println(F("[KEYPAD] SKIP pressed"));
@@ -649,13 +797,24 @@ void handleKeyEvent(KeyCode key) {
     case KEY_TOTAL:
       Serial.println(F("[KEYPAD] TOTAL pressed"));
       buzzerKeyClick();
-      Audio::requestPlayMp3(Track::TOTAL_PRESSED);
+
+      if (g_overlayType == OVERLAY_STACK_COMPARE) {
+        // Second press: dismiss overlay
+        g_overlayType = OVERLAY_NONE;
+        lastOledMs = 0;
+        Serial.println(F("[STACK] TOTAL dismiss overlay"));
+      } else {
+        showStackCompareOverlay(millis());
+        Audio::requestPlayMp3(Track::TOTAL_PRESSED);
+      }
       break;
 
     case KEY_CLEAR:
-      Serial.println(F("[KEYPAD] CLEAR pressed"));
+      Serial.println(F("[KEYPAD] CLEAR pressed (tracking long press)"));
       buzzerKeyClick();
-      Audio::requestPlayMp3(Track::CLEAR_PRESSED);
+      // Start long press tracking; short/long action handled in loop
+      g_clearPressStartMs = millis();
+      g_clearLongPressFired = false;
       break;
 
     default:
@@ -1328,6 +1487,73 @@ void loop() {
     g_lastKeyPressMs = now;
   }
 
+  // ====================== WEIGH STACK: CLEAR LONG PRESS ======================
+
+  // CLEAR key: long press detection (2s -> clear all)
+  if (g_clearPressStartMs != 0) {
+    if (keypad_is_pressed(KEY_CLEAR)) {
+      // Still held
+      if (!g_clearLongPressFired && (int32_t)(now - g_clearPressStartMs) >= (int32_t)LONG_PRESS_MS) {
+        // Long press fired: clear entire stack
+        g_clearLongPressFired = true;
+        WeighStack::clear();
+        Serial.println(F("[STACK] CLEAR long press -> stack cleared"));
+
+        g_overlayType = OVERLAY_CLEAR_FEEDBACK;
+        g_overlayStartMs = now;
+        strlcpy(g_overlayMsg, "CLEAR ALL", sizeof(g_overlayMsg));
+        g_overlayCount = 0;
+        lastOledMs = 0;
+
+        buzzerOk();
+        delay(80);
+        buzzerOk();  // double beep for clear all
+        Audio::requestPlayMp3(Track::CLEAR_PRESSED);
+      }
+    } else {
+      // Released
+      if (!g_clearLongPressFired) {
+        // Short press: pop last item
+        if (WeighStack::count() > 0) {
+          float popped = WeighStack::get(WeighStack::count() - 1);
+          WeighStack::pop();
+          Serial.print(F("[STACK] POP: "));
+          Serial.print(popped, 0);
+          Serial.print(F("g (remaining="));
+          Serial.print(WeighStack::count());
+          Serial.println(F(")"));
+
+          g_overlayType = OVERLAY_CLEAR_FEEDBACK;
+          g_overlayStartMs = now;
+          strlcpy(g_overlayMsg, "POP", sizeof(g_overlayMsg));
+          g_overlayCount = WeighStack::count();
+          lastOledMs = 0;
+
+          buzzerKeyClick();
+        } else {
+          Serial.println(F("[STACK] POP: stack empty"));
+          buzzerWarn();
+        }
+        Audio::requestPlayMp3(Track::CLEAR_PRESSED);
+      }
+      g_clearPressStartMs = 0;
+    }
+  }
+
+  // Overlay timeout: auto-dismiss after 3 seconds or any key press
+  if (g_overlayType != OVERLAY_NONE) {
+    if ((int32_t)(now - g_overlayStartMs) >= (int32_t)OVERLAY_TIMEOUT_MS) {
+      g_overlayType = OVERLAY_NONE;
+      lastOledMs = 0;  // force redraw of normal screen
+    }
+    // Any key dismisses overlay (already handled in TARE/ENTER/TOTAL above)
+    // CLEAR has dedicated short/long handling
+    if (key != KEY_NONE && key != KEY_CLEAR) {
+      // Non-CLEAR keys dismiss immediately
+      // (CLEAR already starts its own tracking)
+    }
+  }
+
   // Batteria
   battery_update(now);
   if (maybeEnterSafeShutdown(now)) return;
@@ -1546,8 +1772,15 @@ void loop() {
     }
   }
 
-  // Tara apply (usa millis() fresco per evitare problemi di timing)
-  ScaleState::tareMaybeApply(millis());
+  // Tara apply
+  bool tareApplied = ScaleState::tareMaybeApply(millis());
+  if (tareApplied && g_captureReferenceAfterTare) {
+    long ref = ScaleState::effectiveOffsetCounts();
+    WeighStack::setReferenceOffset(ref);
+    g_captureReferenceAfterTare = false;
+    Serial.print(F("[STACK] Ref offset saved: "));
+    Serial.println(ref);
+  }
 
   // HX health update
   hxHealth_update(&g_hxHealth, now);
@@ -1642,7 +1875,19 @@ void loop() {
         }
       }
 
-      if (!drewTare) {
+      if (g_overlayType != OVERLAY_NONE) {
+        // Weigh stack overlay active
+        switch (g_overlayType) {
+          case OVERLAY_STACK_COMPARE:
+            ui_renderStackCompare(g_overlayTotal, g_overlayNet, g_overlayCount);
+            break;
+          case OVERLAY_CLEAR_FEEDBACK:
+            ui_renderStackClear(g_overlayMsg, g_overlayCount);
+            break;
+          default:
+            break;
+        }
+      } else if (!drewTare) {
 #if ENABLE_MQTT
         bool mqttTarget = Net::isMqttCommandActive();
         float mqttTW    = Net::getMqttTargetWeight();

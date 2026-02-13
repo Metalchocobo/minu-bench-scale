@@ -66,3 +66,13 @@ void ui_renderCalStepConfirm(uint16_t refWeightG, float cpg);
 // progress: 0-100 (0 = appena iniziato, 100 = wizard si attiva)
 void ui_renderCalLongPress(uint8_t progress);
 
+// ========================= WEIGH STACK OVERLAYS =========================
+
+// Overlay: confronto totale logico vs netto fisico
+// gTotal: somma stack, gNet: peso netto reale, count: elementi stack
+void ui_renderStackCompare(long gTotal, long gNet, int count);
+
+// Overlay: feedback CLEAR (pop/clear all)
+// msg: "POP" o "CLEAR ALL", remaining: elementi rimasti nello stack
+void ui_renderStackClear(const char* msg, int remaining);
+

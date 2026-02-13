@@ -1,4 +1,4 @@
-# Minù Bench Scale — ESP32 + HX711 + OLED SSD1322 + INA219 (SLA 6 V) · v2026-02-11
+# Minù Bench Scale — ESP32 + HX711 + OLED SSD1322 + INA219 (SLA 6 V) · v2026-02-13
 
 Bilancia da banco per uso interno in laboratorio (gelato/pasticceria), pensata per guidare e rendere affidabili le pesate ingredienti (non “pesatura legale”).
 
@@ -406,7 +406,49 @@ Il firmware sincronizza l'orologio via NTP (`pool.ntp.org`) all'avvio, necessari
 
 ---
 
-## 13) Troubleshooting rapido (i classici)
+## 13) Weigh Stack — Stack pesate locale
+
+Stack pesate in RAM (LIFO, max 50 elementi, perso al riavvio — corretto). Permette di pesare ingredienti in successione dentro lo stesso contenitore, sommandoli.
+
+### Workflow tipico
+
+1. Metti contenitore, premi **TARA** → avvia tara, azzera stack, salva la tara di riferimento quando la tara termina
+2. Aggiungi ingrediente, premi **ENTER** → peso viene registrato nello stack + tara automatica (display torna a 0)
+3. Ripeti per ogni ingrediente
+4. **TOTAL** (breve) → mostra overlay di controllo con **Registrato**, **Effettivo** e **Differenza** (3 secondi)
+5. **CLEAR** (breve) → rimuove ultima pesata (LIFO pop)
+6. **CLEAR** (2 secondi) → svuota tutto lo stack
+
+### Tasti
+
+| Tasto | Breve | Lungo (2s) |
+|---|---|---|
+| **TARE** | Tara + azzera stack (salva riferimento a fine tara) | — |
+| **ENTER** | Push peso + MQTT confirm + auto-tare | — |
+| **TOTAL** | Mostra overlay confronto: Registrato / Effettivo / Differenza | — |
+| **CLEAR** | Pop ultimo (LIFO) | Svuota tutto lo stack |
+
+**Note:**
+- ENTER con peso <= 0: ignorato (nessun push, nessuna tara, nessun MQTT)
+- La tara automatica post-ENTER NON azzera lo stack e NON aggiorna il riferimento
+- Le overlay si chiudono dopo 3 secondi o alla pressione di un qualsiasi tasto
+- Long press "solido" usato su CLEAR: l'azione breve scatta al rilascio solo se la soglia non è stata raggiunta
+
+### Comandi seriali
+
+- `stack [status]` — mostra contatore, totale, stato riferimento
+- `stack list` — lista tutti gli elementi con indice e peso
+- `stack clear` — svuota lo stack
+
+### Interazione con MQTT
+
+- **Nessuna modifica ai messaggi MQTT.** Lo stack è puramente locale.
+- Il push nello stack avviene prima del publish MQTT confirm
+- Il comando MQTT `clear` non tocca lo stack pesate (riguarda solo UUID/target)
+
+---
+
+## 14) Troubleshooting rapido (i classici)
 
 **DOUT sempre HIGH / letture 0 fisse**
 - spesso SCK resta HIGH → HX711 in power-down
@@ -421,7 +463,7 @@ Il firmware sincronizza l'orologio via NTP (`pool.ntp.org`) all'avvio, necessari
 
 ---
 
-## 14) Firmware e cartelle
+## 15) Firmware e cartelle
 
 Firmware corrente (HX711):
 - `firmware/esp32_hx711_serial/`
@@ -455,6 +497,7 @@ firmware/esp32_hx711_serial/
 ├── ui_display.h / .cpp      # UiDisplay:: (OLED SSD1322, layout, icone)
 ├── net_ota_cloud.h / .cpp   # Net:: (WiFi/OTA/MQTT, opzionale)
 ├── mqtt_store.h / .cpp      # MqttStore:: (credenziali MQTT in NVS)
+├── weigh_stack.h / .cpp     # WeighStack:: (stack pesate locale, LIFO)
 └── calibration_wizard.h/.cpp # CalWizard:: (wizard calibrazione on-display)
 ```
 
@@ -464,6 +507,7 @@ firmware/esp32_hx711_serial/
 - `ScaleState::` — macchina a stati (STABLE/UNSTABLE/LIVE), zero-tracking, tara, quantizzazione display
 - `Net::` — WiFi/OTA/MQTT (connessione non bloccante, TLS, comandi/risposte pesatura)
 - `MqttStore::` — persistenza credenziali MQTT in NVS
+- `WeighStack::` — stack pesate locale (push/pop/clear/total, tara di riferimento)
 - `ScaleConfig::` / `AudioConfig::` / `BatteryConfig::` — parametri configurabili (soglie, timing, tracce)
 
 ### Task Watchdog
@@ -603,3 +647,4 @@ La tastiera ha un debounce software (40 ms) e genera eventi **one-shot**: un tas
 
 **Long press:**
 - **SKIP tenuto per 5 secondi**: avvia il wizard di calibrazione on-display
+- **CLEAR tenuto per 2 secondi**: svuota completamente lo stack pesate
