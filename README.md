@@ -368,7 +368,7 @@ La bilancia si identifica con il MAC address WiFi (lowercase, senza separatori, 
 |---|---|---|---|---|
 | `minu/scale/{scale_id}/status` | Bilancia → Browser | 1 | si | Stato online/offline (include nome e versione firmware) |
 | `minu/scale/{scale_id}/command` | Browser → Bilancia | 1 | si | Comandi pesatura (`weigh`, `clear`) |
-| `minu/scale/{scale_id}/response` | Bilancia → Browser | 1 | no | Risposte (`confirm` con peso attuale, `skip`) |
+| `minu/scale/{scale_id}/response` | Bilancia → Browser | 1 | no | Risposte (`confirm` con `actual_weight` registrato, `skip`) |
 
 **Alla connessione:**
 - Pubblica status `online` (retained) con scale_id, nome e firmware_version
@@ -381,7 +381,7 @@ La bilancia si identifica con il MAC address WiFi (lowercase, senza separatori, 
 
 ### Tasti (con MQTT attivo)
 
-- **ENTER**: se c'è un comando weigh attivo, pubblica `confirm` con il peso attuale letto dalla bilancia, poi torna in idle
+- **ENTER**: se c'è un comando weigh attivo, pubblica `confirm` con il campo `actual_weight` uguale al peso registrato nello stack, poi torna in idle
 - **SKIP**: se c'è un comando weigh attivo, pubblica `skip`, poi torna in idle. Se non c'è nessun comando attivo, emette un buzzer di avviso
 
 ### Display MQTT

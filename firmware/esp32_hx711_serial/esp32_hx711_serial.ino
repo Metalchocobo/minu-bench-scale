@@ -746,7 +746,8 @@ void handleKeyEvent(KeyCode key) {
       }
 
       // Push to stack
-      if (WeighStack::push(currentWeight)) {
+      bool pushed = WeighStack::push(currentWeight);
+      if (pushed) {
         Serial.print(F("[STACK] Push: "));
         Serial.print(currentWeight, 0);
         Serial.print(F("g (count="));
@@ -761,8 +762,10 @@ void handleKeyEvent(KeyCode key) {
 
       // MQTT confirm (if active)
 #if ENABLE_MQTT
-      if (Net::isMqttCommandActive() && Net::isMqttConnected()) {
-        Net::mqttPublishConfirm(currentWeight);
+      if (pushed && Net::isMqttCommandActive() && Net::isMqttConnected()) {
+        // Send exactly the registered weight to Laravel payload actual_weight
+        float registeredWeight = WeighStack::get(WeighStack::count() - 1);
+        Net::mqttPublishConfirm(registeredWeight);
         Net::mqttClearActiveCommand();
       }
 #endif
