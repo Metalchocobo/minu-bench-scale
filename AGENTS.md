@@ -11,14 +11,28 @@
 - Andrea decides scope. Don't expand scope without asking.
 - If Andrea says "fix X", fix X. Don't refactor Y while you're at it.
 
-## 3. DYNAMIC DOCUMENTATION (README.md)
-- **Rule:** The README is a **state file**, not a log.
-- **Auto-Update Trigger:** AFTER any code change that affects functionality.
+## 3. DOCUMENTATION MAINTENANCE
+- **Rule:** Documentation is a **state file**, not a log. It must describe the current system, not the history of interventions.
+- **Default:** Agents must keep documentation synchronized with the code/config they change in the same task.
+- **Read before editing:** For firmware behavior, pinout, wiring, commands, MQTT, power, calibration, or build flow, scan the relevant sections of `README.md`, `docs/WIRING.md`, and `firmware/esp32_hx711_serial/README.md` if present.
+- **Auto-Update Trigger:** AFTER any code/config change that affects:
+  - pinout, wiring, hardware modules, voltage thresholds, battery/sleep behavior
+  - firmware logic, state machines, filters, calibration, serial commands, keypad/OLED/audio behavior
+  - WiFi/OTA/MQTT topics, payloads, credentials/storage, TLS/NTP/reconnect behavior
+  - build/upload commands, library requirements, module/file structure
+- **Documentation targets:**
+  - `README.md`: project current state, user workflows, firmware behavior, commands, MQTT, pinout, libraries.
+  - `docs/WIRING.md`: physical wiring, pin maps, power paths, hardware caveats.
+  - `firmware/esp32_hx711_serial/README.md`: firmware-local quick reference when code changes diverge from it.
+  - `AGENTS.md`: durable cross-agent rules only.
+  - `CLAUDE.md`: Claude-specific guardrails only, when they must differ from `AGENTS.md`.
 - **Action:**
-  - Scan `README.md`.
-  - **Overwrite** outdated sections (Pinout, Libs, Logic) with the code actually written.
+  - **Overwrite** outdated sections with the code actually written.
   - **Do NOT** append changelogs. Replace old info with new info.
   - Keep section numbering consistent (renumber if sections are added/removed).
+  - Do not duplicate the same state in multiple docs unless each doc needs it for its audience.
+  - Never document secrets or real passwords. Document storage locations/patterns only.
+  - If no documentation update is needed after a code change, state that explicitly in the final response.
 
 ## 4. BUILD VERIFICATION
 - **Compile command** (verification only — Codex cannot flash hardware):

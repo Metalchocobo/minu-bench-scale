@@ -14,6 +14,7 @@
 #include <Wire.h>
 #include <Preferences.h>
 #include <esp_sleep.h>
+#include <esp_system.h>
 #include <esp_task_wdt.h>
 #include <driver/gpio.h>
 #include <math.h>
@@ -130,6 +131,20 @@ static char g_overlayMsg[12]  = {0};
 // Manual TARE reference capture: save ref offset only after tare is applied
 static bool g_captureReferenceAfterTare = false;
 
+// Runtime recovery survives WDT resets but is lost on power loss.
+struct RuntimeTareRecovery {
+  uint32_t magic;
+  uint16_t version;
+  uint16_t valid;
+  long offsetRaw;
+  long ztCounts;
+  uint32_t crc;
+};
+
+static const uint32_t RECOVERY_MAGIC = 0x4D545245UL;  // MTRE
+static const uint16_t RECOVERY_VERSION = 1;
+RTC_NOINIT_ATTR static RuntimeTareRecovery g_runtimeTareRecovery;
+
 static void showStackCompareOverlay(uint32_t nowMs) {
   float stackTotal = WeighStack::total();
   long totalDisp = (stackTotal >= 0.0f) ? (long)(stackTotal + 0.5f) : (long)(stackTotal - 0.5f);
@@ -182,6 +197,10 @@ void handleKeyEvent(KeyCode key);
 bool autoTareOnBoot(uint16_t maxSamples);
 bool initHX711();
 long readRawHXOnceBlocking(uint32_t timeoutMs);
+static void runtimeTareRecoverySave();
+static bool runtimeTareRecoveryTryRestore();
+static void runtimeTareRecoveryClear();
+static void setupLoopWatchdog();
 static void enterInactivityLightSleep();
 static bool maybeEnterSafeShutdown(uint32_t nowMs);
 
@@ -190,6 +209,79 @@ static bool loadWifiUserEnabledFromNVS();
 static void saveWifiUserEnabledToNVS(bool en);
 static void wifiAudioUpdate(uint32_t now);
 #endif
+
+// ========================= RUNTIME TARE RECOVERY =========================
+static uint32_t recoveryMix(uint32_t h, uint32_t v) {
+  h ^= v;
+  h *= 16777619UL;
+  return h;
+}
+
+static uint32_t runtimeTareRecoveryCrc(const RuntimeTareRecovery& r) {
+  uint32_t h = 2166136261UL;
+  h = recoveryMix(h, r.magic);
+  h = recoveryMix(h, ((uint32_t)r.version << 16) | r.valid);
+  h = recoveryMix(h, (uint32_t)r.offsetRaw);
+  h = recoveryMix(h, (uint32_t)r.ztCounts);
+  return h;
+}
+
+static bool runtimeTareRecoveryIsWdtReset() {
+  esp_reset_reason_t reason = esp_reset_reason();
+  return reason == ESP_RST_WDT ||
+         reason == ESP_RST_TASK_WDT ||
+         reason == ESP_RST_INT_WDT;
+}
+
+static bool runtimeTareRecoveryIsValid() {
+  if (g_runtimeTareRecovery.magic != RECOVERY_MAGIC) return false;
+  if (g_runtimeTareRecovery.version != RECOVERY_VERSION) return false;
+  if (g_runtimeTareRecovery.valid != 1) return false;
+  return g_runtimeTareRecovery.crc == runtimeTareRecoveryCrc(g_runtimeTareRecovery);
+}
+
+static void runtimeTareRecoveryClear() {
+  g_runtimeTareRecovery.magic = RECOVERY_MAGIC;
+  g_runtimeTareRecovery.version = RECOVERY_VERSION;
+  g_runtimeTareRecovery.valid = 0;
+  g_runtimeTareRecovery.offsetRaw = 0;
+  g_runtimeTareRecovery.ztCounts = 0;
+  g_runtimeTareRecovery.crc = runtimeTareRecoveryCrc(g_runtimeTareRecovery);
+}
+
+static void runtimeTareRecoverySave() {
+  g_runtimeTareRecovery.magic = RECOVERY_MAGIC;
+  g_runtimeTareRecovery.version = RECOVERY_VERSION;
+  g_runtimeTareRecovery.valid = 1;
+  g_runtimeTareRecovery.offsetRaw = ScaleState::getOffsetRaw();
+  g_runtimeTareRecovery.ztCounts = ScaleState::getZtCounts();
+  g_runtimeTareRecovery.crc = runtimeTareRecoveryCrc(g_runtimeTareRecovery);
+}
+
+static bool runtimeTareRecoveryTryRestore() {
+  if (!runtimeTareRecoveryIsWdtReset()) {
+    runtimeTareRecoveryClear();
+    return false;
+  }
+  if (!runtimeTareRecoveryIsValid()) return false;
+
+  ScaleState::setOffsetRaw(g_runtimeTareRecovery.offsetRaw);
+  ScaleState::setZtCounts(g_runtimeTareRecovery.ztCounts);
+  ScaleState::resetFiltersAndState();
+  return true;
+}
+
+// ========================= WATCHDOG =========================
+static void setupLoopWatchdog() {
+  esp_task_wdt_config_t wdtCfg = {
+    .timeout_ms = LOOP_WDT_TIMEOUT_MS,
+    .idle_core_mask = 0,
+    .trigger_panic = true
+  };
+  esp_task_wdt_init(&wdtCfg);
+  esp_task_wdt_add(NULL);
+  Serial.println(F("[WDT] Task Watchdog attivo (8s)"));
+}
 
 // ========================= PRINT HELP =========================
 void printHelp() {
@@ -560,6 +652,7 @@ void parseCommand(const char* cmd) {
       ScaleState::setOffsetRaw(newOffset);
       ScaleState::setZtCounts(0);
       ScaleState::resetFiltersAndState();
+      runtimeTareRecoverySave();
       Serial.print(F("[CAL] Zero impostato. Nuovo OFFSET=")); Serial.println(newOffset);
       Serial.println(F("[CAL] Usa 'cal save' per salvare in NVS"));
       return;
@@ -611,6 +704,7 @@ void parseCommand(const char* cmd) {
     if (strcmp(arg, "load") == 0) {
       ScaleState::loadFromNVS();
       ScaleState::resetFiltersAndState();
+      runtimeTareRecoverySave();
       Serial.println(F("[CAL] Calibrazione caricata da NVS"));
       return;
     }
@@ -994,6 +1088,7 @@ static void wifiAudioUpdate(uint32_t now) {
 static void bootPump(uint32_t ms) {
   uint32_t start = millis();
   while (millis() - start < ms) {
+    esp_task_wdt_reset();
 #if ENABLE_WIFI_OTA
     Net::update();
     wifiAudioUpdate(millis());
@@ -1013,6 +1108,7 @@ static void bootShow(const char* line1, const char* line2, uint16_t holdMs = 350
 
 static void bootWaitTare() {
   while (true) {
+    esp_task_wdt_reset();
     uint32_t now = millis();
     keypad_update(now);
     Audio::task(now);
@@ -1315,6 +1411,7 @@ void setup() {
   pinMode(SLEEP_LED_PIN, OUTPUT);
   sleepLedOff();
   g_lastKeyPressMs = millis();
+  setupLoopWatchdog();
 
   // Display subito
   ui_init();
@@ -1357,6 +1454,7 @@ void setup() {
   bootShow("I2C", "Avvio bus...");
   Wire.begin(I2C_SDA_PIN, I2C_SCL_PIN);
   Wire.setClock(400000);
+  Wire.setTimeOut(I2C_TIMEOUT_MS);
   bootShow("I2C", "OK");
 
   // HX711
@@ -1389,14 +1487,22 @@ void setup() {
   ScaleState::setMode("work");
   stEnable = true;
 
+  bool restoredRuntimeTare = runtimeTareRecoveryTryRestore();
+  if (restoredRuntimeTare) {
+    Serial.println(F("[RECOVERY] Tara runtime ripristinata dopo WDT"));
+    bootShow("Recovery", "Tara ripristinata");
+  }
+
   // Auto-TARE
-  if (AUTO_TARE_ON_BOOT) {
+  if (AUTO_TARE_ON_BOOT && !restoredRuntimeTare) {
     bootShow("Auto-TARE", "In corso...");
     bool tareOk = autoTareOnBoot(AUTO_TARE_SAMPLES);
     if (!tareOk) {
       ui_showError("Auto-TARE", "Timeout/FAIL", "Premi TARA per continuare");
       Audio::requestPlayMp3(Track::ERROR_TARE);
       bootWaitTare();
+    } else {
+      runtimeTareRecoverySave();
     }
   }
 
@@ -1418,15 +1524,6 @@ void setup() {
 
   lastOledMs = millis();
 
-  // Task Watchdog: 8 secondi, reboot automatico se loop si blocca
-  esp_task_wdt_config_t wdtCfg = {
-    .timeout_ms = 8000,
-    .idle_core_mask = 0,
-    .trigger_panic = true
-  };
-  esp_task_wdt_init(&wdtCfg);
-  esp_task_wdt_add(NULL);  // Registra il task corrente (loopTask)
-  Serial.println(F("[WDT] Task Watchdog attivo (8s)"));
 }
 
 // ========================= LOOP =========================
@@ -1777,6 +1874,9 @@ void loop() {
 
   // Tara apply
   bool tareApplied = ScaleState::tareMaybeApply(millis());
+  if (tareApplied) {
+    runtimeTareRecoverySave();
+  }
   if (tareApplied && g_captureReferenceAfterTare) {
     long ref = ScaleState::effectiveOffsetCounts();
     WeighStack::setReferenceOffset(ref);

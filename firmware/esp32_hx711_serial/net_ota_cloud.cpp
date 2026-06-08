@@ -1,4 +1,5 @@
 #include "net_ota_cloud.h"
+#include "config/config_scale.h"
 #include <esp_task_wdt.h>
 
 namespace Net {
@@ -15,9 +16,12 @@ static uint8_t  wifiTriedThisRound = 0;
 static uint8_t  wifiAttemptIdx     = 0;
 static uint32_t wifiAttemptStartMs = 0;
 static uint32_t wifiRetryAtMs      = 0;
+static uint8_t  wifiPendingAttemptIdx = 0;
+static uint32_t wifiPendingAttemptAtMs = 0;
 
 static const uint32_t WIFI_TICK_MS             = 200;
 static const uint32_t WIFI_CONNECT_TIMEOUT_MS  = 8000;
+static const uint32_t WIFI_RECONFIG_PAUSE_MS   = 300;
 static const uint32_t WIFI_BACKOFF_MS          = 3000;
 
 static bool     otaConfigured  = false;
@@ -37,6 +41,22 @@ static WifiCred wifiCreds[2];
 static uint8_t  wifiCredsN = 0;
 
 // ========================= FUNZIONI INTERNE =========================
+
+static void configureLoopWdt(uint32_t timeoutMs) {
+  esp_task_wdt_config_t cfg = {
+    .timeout_ms = timeoutMs,
+    .idle_core_mask = 0,
+    .trigger_panic = true
+  };
+  if (esp_task_wdt_reconfigure(&cfg) == ESP_OK) {
+    esp_task_wdt_reset();
+  }
+}
+
+static void restoreLoopWdt() {
+  (void)esp_task_wdt_add(NULL);
+  configureLoopWdt(ScaleConfig::LOOP_WDT_TIMEOUT_MS);
+}
 
 static void wifiRebuildCredList() {
   wifiCredsN = 0;
@@ -72,13 +92,32 @@ static void otaLoadPasswordHashFromNVS(bool log) {
 
 static void wifiKickAttempt(uint8_t idx) {
   if (wifiCredsN == 0) return;
-  wifiAttemptIdx = idx % wifiCredsN;
-  wifiAttemptStartMs = millis();
+  uint8_t nextIdx = idx % wifiCredsN;
+  uint32_t now = millis();
+
+  wl_status_t beginStatus = WiFi.begin(wifiCreds[nextIdx].ssid, wifiCreds[nextIdx].pass);
+  if (beginStatus == WL_CONNECT_FAILED) {
+    wifiAttemptStartMs = 0;
+    wifiPendingAttemptIdx = nextIdx;
+    wifiPendingAttemptAtMs = now + WIFI_RECONFIG_PAUSE_MS;
+    return;
+  }
+
+  wifiPendingAttemptAtMs = 0;
+  wifiAttemptIdx = nextIdx;
+  wifiAttemptStartMs = now;
   wifiTriedThisRound = (wifiTriedThisRound < wifiCredsN) ? (wifiTriedThisRound + 1) : wifiCredsN;
 
-  WiFi.begin(wifiCreds[wifiAttemptIdx].ssid, wifiCreds[wifiAttemptIdx].pass);
   Serial.print(F("[NET] WiFi: tentativo connessione a: "));
   Serial.println(wifiCreds[wifiAttemptIdx].ssid);
+}
+
+static void wifiScheduleAttempt(uint8_t idx, uint32_t now) {
+  if (wifiCredsN == 0) return;
+  WiFi.disconnect(false, false);
+  wifiAttemptStartMs = 0;
+  wifiPendingAttemptIdx = idx % wifiCredsN;
+  wifiPendingAttemptAtMs = now + WIFI_RECONFIG_PAUSE_MS;
 }
 
 // ========================= FUNZIONI PUBBLICHE =========================
@@ -98,6 +137,7 @@ void wifiSetup() {
   wifiAttemptIdx = 0;
   wifiAttemptStartMs = 0;
   wifiRetryAtMs = 0;
+  wifiPendingAttemptAtMs = 0;
   wifiLoadCredsFromNVS(true);
   if (wifiCredsN > 0) {
     Serial.println(F("[NET] WiFi avviato (background)."));
@@ -115,6 +155,7 @@ void wifiSuspend() {
   wifiWasConnected = false;
   wifiAttemptStartMs = 0;
   wifiRetryAtMs = 0;
+  wifiPendingAttemptAtMs = 0;
   wifiTriedThisRound = 0;
   WiFi.disconnect(true);
   WiFi.mode(WIFI_OFF);
@@ -130,6 +171,7 @@ void wifiResume() {
   wifiWasConnected = false;
   wifiAttemptStartMs = 0;
   wifiRetryAtMs = 0;
+  wifiPendingAttemptAtMs = 0;
   wifiTriedThisRound = 0;
 
   wifiLoadCredsFromNVS(false);
@@ -150,11 +192,11 @@ void wifiReloadCredsAndRestart() {
   wifiWasConnected = false;
   wifiAttemptStartMs = 0;
   wifiRetryAtMs = 0;
+  wifiPendingAttemptAtMs = 0;
   wifiTriedThisRound = 0;
 
-  WiFi.disconnect(false);
   if (wifiCredsN > 0) {
-    wifiKickAttempt(0);
+    wifiScheduleAttempt(0, millis());
   } else {
     Serial.println(F("[NET] Nessuna credenziale configurata: tentativi sospesi."));
   }
@@ -183,7 +225,7 @@ void otaSetup(const char* hostname) {
   ArduinoOTA.onEnd([]() {
     Serial.println(F("\n[OTA] Update finito"));
     otaInProgress = false;
-    esp_task_wdt_add(NULL);  // Riaggiunge loopTask al WDT
+    restoreLoopWdt();  // Riaggiunge loopTask al WDT
   });
 
   ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
@@ -194,6 +236,7 @@ void otaSetup(const char* hostname) {
   ArduinoOTA.onError([](ota_error_t error) {
     Serial.printf("[OTA] Errore[%u]\n", error);
     otaInProgress = false;
+    restoreLoopWdt();
   });
 
   Serial.println(F("[OTA] Configurato. Si attiva quando il WiFi si connette."));
@@ -270,6 +313,8 @@ static uint32_t mqtt_lastAttemptMs   = 0;
 static uint32_t mqtt_backoffMs       = 2000;
 static const uint32_t MQTT_BACKOFF_INIT = 2000;
 static const uint32_t MQTT_BACKOFF_MAX  = 30000;
+static const uint16_t MQTT_KEEPALIVE_SEC = 15;
+static const uint16_t MQTT_SOCKET_TIMEOUT_SEC = 2;
 
 // Flag per segnalare disconnessione (per buzzer nel .ino)
 static bool     mqtt_disconnectBeep  = false;
@@ -395,9 +440,9 @@ static bool mqttAttemptConnect() {
   // perdendo il hostname necessario per SNI. Lo facciamo noi prima.
   if (!mqttWifiClient.connected()) {
     Serial.println(F("[MQTT] TLS handshake..."));
-    esp_task_wdt_delete(NULL);  // TLS handshake può durare >8s, disabilita WDT
+    configureLoopWdt(ScaleConfig::MQTT_TLS_WDT_TIMEOUT_MS);
     bool tlsOk = mqttWifiClient.connect(mqtt_host, MQTT_PORT);
-    esp_task_wdt_add(NULL);     // Riabilita WDT
+    configureLoopWdt(ScaleConfig::LOOP_WDT_TIMEOUT_MS);
     if (!tlsOk) {
       Serial.println(F("[MQTT] TLS handshake fallito"));
       return false;
@@ -476,6 +521,8 @@ void mqttSetup() {
   mqttWifiClient.setHandshakeTimeout(10);  // 10s per TLS handshake
   mqttClient.setServer(mqtt_host, MQTT_PORT);
   mqttClient.setCallback(mqttCallback);
+  mqttClient.setKeepAlive(MQTT_KEEPALIVE_SEC);
+  mqttClient.setSocketTimeout(MQTT_SOCKET_TIMEOUT_SEC);
 
   mqtt_setupDone = true;
   mqtt_wasPrevConnected = false;
@@ -489,6 +536,7 @@ void mqttSetup() {
 
 void mqttSuspend() {
   if (!mqtt_setupDone) return;
+  bool hadActiveState = mqttClient.connected() || mqtt_wasPrevConnected || (mqtt_lastAttemptMs != 0) || mqtt_cmdActive;
   if (mqttClient.connected()) {
     mqttClient.disconnect();
   }
@@ -499,7 +547,9 @@ void mqttSuspend() {
   mqtt_cmdUuid[0] = '\0';
   mqtt_cmdName[0] = '\0';
   mqtt_cmdTargetWeight = 0.0f;
-  Serial.println(F("[MQTT] Sospeso"));
+  if (hadActiveState) {
+    Serial.println(F("[MQTT] Sospeso"));
+  }
 }
 
 bool isMqttConnected() {
@@ -656,6 +706,8 @@ void mqttReloadCreds() {
 
   // Riconfigura il client con il nuovo host
   mqttClient.setServer(mqtt_host, MQTT_PORT);
+  mqttClient.setKeepAlive(MQTT_KEEPALIVE_SEC);
+  mqttClient.setSocketTimeout(MQTT_SOCKET_TIMEOUT_SEC);
 
   // Reset backoff per tentare subito
   mqtt_wasPrevConnected = false;
@@ -727,6 +779,7 @@ void update() {
         if (wifiCredsN == 0) {
           wifiAttemptStartMs = 0;
           wifiRetryAtMs = 0;
+          wifiPendingAttemptAtMs = 0;
           wifiTriedThisRound = 0;
         } else {
           if (wifiRetryAtMs != 0 && (int32_t)(now - wifiRetryAtMs) < 0) {
@@ -738,15 +791,21 @@ void update() {
               wifiAttemptStartMs = 0;
             }
 
-            if (wifiAttemptStartMs == 0) {
+            if (wifiPendingAttemptAtMs != 0) {
+              if ((int32_t)(now - wifiPendingAttemptAtMs) >= 0) {
+                wifiKickAttempt(wifiPendingAttemptIdx);
+              }
+            } else if (wifiAttemptStartMs == 0) {
               wifiKickAttempt(0);
             } else {
               if ((now - wifiAttemptStartMs) >= WIFI_CONNECT_TIMEOUT_MS) {
                 if (wifiTriedThisRound < wifiCredsN) {
-                  wifiKickAttempt(wifiTriedThisRound);
+                  wifiScheduleAttempt(wifiTriedThisRound, now);
                 } else {
+                  WiFi.disconnect(false, false);
                   wifiAttemptStartMs = 0;
                   wifiRetryAtMs = now + WIFI_BACKOFF_MS;
+                  wifiPendingAttemptAtMs = 0;
                   wifiTriedThisRound = 0;
                 }
               }
@@ -756,6 +815,7 @@ void update() {
       } else {
         wifiAttemptStartMs = 0;
         wifiRetryAtMs = 0;
+        wifiPendingAttemptAtMs = 0;
         wifiTriedThisRound = 0;
       }
     }

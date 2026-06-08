@@ -220,6 +220,7 @@ Obiettivo: evitare tara che finisce a **±1 g** a causa di rumore/assestamento.
 
 Se INA non viene trovato:
 - prima cosa: controlla **SDA/SCL non invertiti**.
+- Il bus I2C usa un timeout `Wire` di **50 ms** per limitare blocchi su transazioni INA219 anomale.
 
 ### 8.2 Soglie tacche (default firmware, tensione filtrata)
 Soglie “pratiche” (dipendono da carico/temperatura). Sono tarate per **usabilità UI** (tacche), non per SoC perfetto:
@@ -296,6 +297,7 @@ Dove si configura:
 Note pratiche:
 - di default è attivo **ENABLE_WIFI_OTA = 1**
 - l’icona WiFi sul display segue lo stato di connessione (se WiFi è abilitato a compile-time)
+- con due reti configurate, il firmware prova gli slot in sequenza; prima di passare allo slot successivo interrompe il tentativo STA corrente e attende una breve pausa non bloccante, cosi il nuovo SSID viene applicato davvero dal driver ESP32
 
 Configurazione credenziali (max 2 reti, via seriale):
 - `wifi set 1 "SSID" "PASS"`
@@ -397,8 +399,10 @@ La bilancia si identifica con il MAC address WiFi (lowercase, senza separatori, 
 
 - Alla disconnessione dal broker: **doppio beep** buzzer + icona MQTT lampeggiante
 - Riconnessione automatica con **backoff esponenziale** (2s → 4s → 8s → 16s → 30s max)
-- Il **WDT viene disabilitato** durante il TLS handshake (può durare >8 secondi)
+- Durante il TLS handshake MQTT il WDT resta attivo ma viene portato temporaneamente a **20s**; finito l'handshake torna a **8s**
+- PubSubClient usa keepalive **15s** e socket timeout **2s**, così una connessione half-open non blocca a lungo il loop
 - Alla sospensione (light-sleep per inattività o batteria scarica): MQTT viene disconnesso. Al wake, viene ristabilito (se le credenziali sono configurate)
+- Il log di sospensione (`[MQTT] Sospeso`) viene emesso solo se c'era stato MQTT attivo da chiudere, evitando spam seriale quando il WiFi e' giu
 
 ### NTP
 
@@ -511,7 +515,9 @@ firmware/esp32_hx711_serial/
 - `ScaleConfig::` / `AudioConfig::` / `BatteryConfig::` — parametri configurabili (soglie, timing, tracce)
 
 ### Task Watchdog
-Il firmware include un **Task Watchdog** (8 secondi) che provoca un reboot automatico se il loop si blocca (es. I2C lock, HX711 hang). Il WDT viene resettato a ogni iterazione del loop principale.
+Il firmware include un **Task Watchdog** (8 secondi) attivo già durante il setup, con reset esplicito nei loop di boot intenzionali. Nel loop principale viene resettato a ogni iterazione; durante il TLS MQTT viene esteso temporaneamente a 20s.
+
+Dopo un reset WDT, il firmware ripristina da memoria RTC l'ultima tara runtime (`offsetRaw` + zero-tracking) e salta l'auto-tare di boot, così una pesata in corso può ripartire con la stessa tara. Su accensione normale, reset manuale o power loss la recovery viene scartata e resta l'auto-tare standard.
 
 ### DFPlayer Mini (audio eventi) + power-gating solo in standby
 Il firmware può suonare file MP3 (es. avviso sleep). Per evitare click e stati strani, **non fa power-cycle a fine brano**.
