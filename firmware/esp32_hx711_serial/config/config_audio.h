@@ -20,6 +20,7 @@ static const uint32_t TAIL_OFF_MS      = 150;   // Evita click post-stop
 static const uint32_t RESTART_GAP_MS   = 200;   // Gap minimo stop->play (anti-troncamento)
 static const uint32_t MIN_PLAY_MS      = 300;   // Ignora BUSY=idle nei primi ms
 static const uint32_t PLAY_TIMEOUT_MS  = 30000; // Paracadute se BUSY non funziona
+static const uint32_t RECOVERY_OFF_MS  = 800;   // Hard power-cycle window after DFPlayer lockup
 
 // ========================= CODA AUDIO =========================
 static const uint8_t QUEUE_MAX_SIZE = 16;

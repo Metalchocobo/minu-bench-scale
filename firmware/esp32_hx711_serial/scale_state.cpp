@@ -566,13 +566,15 @@ void loadFromNVS() {
   Serial.println(g_scaleCpg, 4);
 }
 
-void saveToNVS() {
+bool saveToNVS() {
   g_prefs.begin("hxscale", false);
-  g_prefs.putLong("offset_counts", g_offsetRaw);
-  g_prefs.putFloat("scale_cpg", g_scaleCpg);
+  size_t wroteOffset = g_prefs.putLong("offset_counts", g_offsetRaw);
+  size_t wroteScale  = g_prefs.putFloat("scale_cpg", g_scaleCpg);
   g_prefs.end();
 
-  Serial.println(F("[NVS] Salvato"));
+  bool ok = (wroteOffset > 0 && wroteScale > 0);
+  Serial.println(ok ? F("[NVS] Salvato") : F("[NVS] ERRORE save"));
+  return ok;
 }
 
 // ========================= MODALITÀ PRESET =========================

@@ -7,6 +7,7 @@ namespace CalWizard {
 
 // ========================= STATO INTERNO =========================
 static CalStep g_step = CAL_IDLE;
+static uint32_t g_messageUntilMs = 0;
 
 // Long press tracking: SKIP tenuto per 5 secondi
 static uint32_t g_longPressStartMs = 0;
@@ -23,6 +24,7 @@ static uint8_t  g_sampleCount = 0;
 static const uint8_t SAMPLES_NEEDED = 32;
 static uint32_t g_sampleStartMs = 0;
 static const uint32_t SAMPLE_SETTLE_MS = 300;
+static const uint32_t SAVE_MESSAGE_MS = 2500;
 
 // Anti-duplicati: traccia ultimo raw visto
 static long g_lastSeenRaw = 0;
@@ -135,6 +137,7 @@ float getCalculatedCpg() {
 
 void abort() {
   g_step = CAL_IDLE;
+  g_messageUntilMs = 0;
   g_longPressStartMs = 0;
   g_longPressActive = false;
   buzzerError();
@@ -207,6 +210,14 @@ bool updateLongPress(uint32_t nowMs) {
 void update(uint32_t nowMs, KeyCode key) {
   // In IDLE non fa nulla - il long press è gestito da updateLongPress()
   if (g_step == CAL_IDLE) {
+    return;
+  }
+
+  if (g_step == CAL_STEP_SAVED || g_step == CAL_STEP_SAVE_ERROR) {
+    if (g_messageUntilMs != 0 && (int32_t)(nowMs - g_messageUntilMs) >= 0) {
+      g_step = CAL_IDLE;
+      g_messageUntilMs = 0;
+    }
     return;
   }
 
@@ -400,19 +411,38 @@ void update(uint32_t nowMs, KeyCode key) {
         return;
       }
 
-      ScaleState::setOffsetRaw(g_zeroRaw);
+      long expectedOffset = g_zeroRaw;
+      float expectedCpg = cpg;
+
+      ScaleState::setOffsetRaw(expectedOffset);
       ScaleState::setScaleCpg(cpg);
       ScaleState::setZtCounts(0);
-      ScaleState::saveToNVS();
+
+      bool saved = ScaleState::saveToNVS();
+      bool verified = false;
+      if (saved) {
+        ScaleState::loadFromNVS();
+        verified =
+          (ScaleState::getOffsetRaw() == expectedOffset) &&
+          (fabsf(ScaleState::getScaleCpg() - expectedCpg) <= 0.01f);
+      }
+      ScaleState::setZtCounts(0);
       ScaleState::resetFiltersAndState();
 
-      g_step = CAL_IDLE;
-      buzzerOk();
-      delay(100);
-      buzzerOk();
+      if (saved && verified) {
+        g_step = CAL_STEP_SAVED;
+        g_messageUntilMs = nowMs + SAVE_MESSAGE_MS;
+        buzzerOk();
+        delay(100);
+        buzzerOk();
+      } else {
+        g_step = CAL_STEP_SAVE_ERROR;
+        g_messageUntilMs = nowMs + SAVE_MESSAGE_MS;
+        buzzerError();
+      }
 
       // Verifica valori salvati
-      Serial.println(F("[CAL] CALIBRAZIONE SALVATA - VERIFICA:"));
+      Serial.println((saved && verified) ? F("[CAL] CALIBRAZIONE SALVATA - VERIFICA:") : F("[CAL] ERRORE SALVATAGGIO - VERIFICA:"));
       Serial.print(F("[CAL]   Offset salvato = ")); Serial.println(ScaleState::getOffsetRaw());
       Serial.print(F("[CAL]   CPG salvato    = ")); Serial.println(ScaleState::getScaleCpg(), 4);
       Serial.print(F("[CAL]   ZT counts      = ")); Serial.println(ScaleState::getZtCounts());

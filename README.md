@@ -528,7 +528,10 @@ Comportamento attuale:
 - La riproduzione MP3 è progettata per essere **non bloccante**: mentre l’audio suona, la bilancia continua a leggere HX711 e ad aggiornare UI/log.
 - **Gestione priorità audio**: alcuni MP3 sono **non interrompibili** e, se richiesti mentre un altro non interrompibile sta suonando, vengono messi in **coda FIFO** (solo fra loro). Tutti gli altri MP3 sono **interrompibili**: interrompono l’audio interrompibile in corso e ripartono subito, **senza accodarsi**. Se è in corso un non interrompibile, le richieste interrompibili vengono ignorate (resta il **bip** del buzzer sui tasti).
   - Non interrompibili: **0002, 0007, 0008, 0012, 0013, 0014, 0015, 0016**.
-- Durante l’uso resta alimentato.
+- Durante l’uso resta alimentato, salvo recovery automatico/manuale.
+- Se un brano supera il timeout di riproduzione, il firmware fa un **hard reset non bloccante** del DFPlayer: chiude UART, porta GPIO2 LOW per ~800 ms, riaccende il modulo, reinizializza UART/volume e svuota la coda audio.
+- **SLEEP tenuto per 2 secondi** forza lo stesso hard reset audio senza entrare in standby.
+- Il comando seriale `mp3 reset` forza lo stesso hard reset per debug da banco.
 - Viene spento **quando la bilancia entra in standby/light-sleep per inattività** e anche **prima del light-sleep per batteria scarica**.
 
 Nota: il firmware mantiene comunque il percorso “cold-start” sul primo `mp3` (utile se in futuro vuoi tornare all’accensione on-demand).
@@ -551,6 +554,7 @@ Nota: il firmware mantiene comunque il percorso “cold-start” sul primo `mp3`
 Per provare oggi:
 - collega **DFPlayer VCC direttamente a +5V** e **GND a GND**
 - lascia GPIO2 non connesso (o connesso ma senza circuito), il firmware funziona lo stesso
+- in bypass il comando `mp3 reset` può reinizializzare UART/stato firmware, ma **non può tagliare davvero VCC** al DFPlayer
 
 > Nota: non usiamo più il comando DFPlayer "sleep" (0x0A) durante i test perché su molti cloni non si risveglia in modo affidabile.
 > Per il risparmio energetico vero, la strada solida è tagliare VCC con MOSFET high-side.
@@ -561,6 +565,7 @@ Per provare oggi:
 - `stop` (stop della riproduzione; **non** spegne il DFPlayer)
 - `vol 20`
 - `mp3 status`
+- `mp3 reset` (hard reset DFPlayer via power-gate; richiede MOSFET/GPIO2 per tagliare VCC)
 
 ### Calibrazione
 
@@ -578,8 +583,8 @@ Il wizard si attiva tenendo premuto **SKIP** per 5 secondi.
 |---:|---|---|---|
 | 1/4 | ZERO | Piatto vuoto, acquisisci offset | **ENTER** = conferma, **CLEAR** = annulla |
 | 2/4 | PLACE | Appoggia peso di riferimento | **ENTER** = conferma, **CLEAR** = annulla |
-| 3/4 | VALUE | Seleziona peso in grammi | **SKIP** = +, **TARE** = -, **ENTER** = conferma |
-| 4/4 | CONFIRM | Verifica CPG calcolato | **ENTER** = salva, **CLEAR** = annulla |
+| 3/4 | VALUE | Seleziona peso in grammi | **SKIP** = +, **TARE** = -, **ENTER** = vai a conferma |
+| 4/4 | CONFIRM | Verifica CPG calcolato | **ENTER** = salva in NVS, **CLEAR** = annulla |
 
 **Selezione peso:**
 - Da 500g a 20kg
@@ -592,7 +597,8 @@ Il wizard si attiva tenendo premuto **SKIP** per 5 secondi.
 
 **Feedback:**
 - Beep singolo: conferma step
-- Beep doppio: calibrazione completata
+- Beep doppio + schermata **SALVATA**: calibrazione scritta e riletta da NVS
+- Schermata **ERRORE**: salvataggio o verifica NVS fallita
 - Doppio beep basso: errore/annullato
 
 #### Calibrazione via seriale
@@ -602,7 +608,7 @@ Per calibrazione remota o debug:
 - `cal status` — stampa offset, CPG, ZT counts, grammi attuali
 - `cal zero` — imposta il valore raw corrente come nuovo offset (tara "permanente")
 - `cal ref <grammi>` — con un peso noto posizionato, calcola il nuovo CPG
-- `cal save` — salva offset e CPG in NVS (persistono ai riavvii)
+- `cal save` — salva offset e CPG in NVS e segnala errore se `Preferences` fallisce
 - `cal load` — ricarica offset e CPG da NVS
 
 **Procedura di calibrazione seriale:**
@@ -655,3 +661,4 @@ La tastiera ha un debounce software (40 ms) e genera eventi **one-shot**: un tas
 **Long press:**
 - **SKIP tenuto per 5 secondi**: avvia il wizard di calibrazione on-display
 - **CLEAR tenuto per 2 secondi**: svuota completamente lo stack pesate
+- **SLEEP tenuto per 2 secondi**: resetta il DFPlayer via power-gate e annulla lo standby

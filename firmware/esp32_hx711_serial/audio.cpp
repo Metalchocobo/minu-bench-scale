@@ -95,6 +95,7 @@ static bool queuePop(uint16_t* outTrack, uint32_t* outCapSec, bool* outLow) {
 }
 
 static void startNow(uint16_t track, uint32_t capSeconds);
+static void beginRecovery(bool clearQueue);
 
 static void kickIfIdle() {
   if (g_state != IDLE) return;
@@ -105,6 +106,45 @@ static void kickIfIdle() {
     (void)low;
     startNow(t, cap);
   }
+}
+
+static inline bool isRecovering() {
+  return (g_state == RECOVERING_OFF) || (g_state == RECOVERING_ON);
+}
+
+static void beginRecovery(bool clearQueue) {
+  if (clearQueue) {
+    queueClear();
+  }
+
+  if (g_dfpUartReady) {
+    DFPlayer::end();
+    g_dfpUartReady = false;
+  }
+
+  pinMode(g_pins.tx, INPUT);
+  if (g_pins.rx >= 0) {
+    pinMode(g_pins.rx, INPUT);
+  }
+
+  dfpPowerSet(false);
+  g_dfpPowered = false;
+
+  g_gapTrack   = 0;
+  g_gapCapSec  = 0;
+  g_gapUntilMs = 0;
+
+  g_track     = 0;
+  g_startMs   = 0;
+  g_timeoutMs = 0;
+
+  g_busyIdle          = -1;
+  g_busyPlaying       = -1;
+  g_busyPolarityKnown = false;
+  g_busyIdleSinceMs   = 0;
+
+  g_state   = RECOVERING_OFF;
+  g_stateMs = millis();
 }
 
 static void startNow(uint16_t track, uint32_t capSeconds) {
@@ -220,6 +260,11 @@ void requestPlayMp3(uint16_t track, uint32_t capSeconds) {
   g_lastReqMs    = nowReq;
 
   const bool mustPlay    = AudioConfig::isMustPlayTrack(track);
+  if (isRecovering()) {
+    (void)queuePush(track, capSeconds, !mustPlay);
+    return;
+  }
+
   const bool playing     = (g_state != IDLE);
   const bool curMustPlay = playing && AudioConfig::isMustPlayTrack(g_track);
 
@@ -289,6 +334,11 @@ void stopNow(bool clearQueue) {
   g_busyPlaying       = -1;
   g_busyPolarityKnown = false;
   g_busyIdleSinceMs   = 0;
+}
+
+void hardReset(bool clearQueue) {
+  Serial.println(F("[MP3] reset"));
+  beginRecovery(clearQueue);
 }
 
 void powerOffNow() {
@@ -366,11 +416,8 @@ void task(uint32_t now) {
     case PLAYING: {
       // Timeout paracadute
       if (g_startMs != 0 && (now - g_startMs) >= g_timeoutMs) {
-        Serial.println(F("[MP3] timeout (BUSY non affidabile?) -> stop"));
-        DFPlayer::stop();
-        g_lastStopMs = now;
-        g_state      = TAILING;
-        g_stateMs    = now;
+        Serial.println(F("[MP3] timeout reset"));
+        beginRecovery(true);
         return;
       }
 
@@ -398,6 +445,32 @@ void task(uint32_t now) {
     case TAILING:
       if ((now - g_stateMs) < AudioConfig::TAIL_OFF_MS) return;
       stopNow();
+      return;
+
+    case RECOVERING_OFF:
+      if ((now - g_stateMs) < AudioConfig::RECOVERY_OFF_MS) return;
+
+      dfpPowerSet(true);
+      g_dfpPowered = true;
+
+      pinMode(g_pins.tx, OUTPUT);
+      digitalWrite(g_pins.tx, LOW);
+
+      g_state   = RECOVERING_ON;
+      g_stateMs = now;
+      return;
+
+    case RECOVERING_ON:
+      if ((now - g_stateMs) < AudioConfig::POWERUP_MS) return;
+
+      DFPlayer::restoreAfterEspWake(g_pins, g_volume);
+      g_dfpUartReady = true;
+      delay(20);
+
+      g_busyIdle = dfpBusyReadStable();
+      g_state    = IDLE;
+      g_stateMs  = now;
+      kickIfIdle();
       return;
   }
 }

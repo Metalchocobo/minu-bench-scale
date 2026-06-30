@@ -18,7 +18,9 @@ enum CalStep : uint8_t {
   CAL_STEP_ZERO,      // Acquisisci zero (piatto vuoto)
   CAL_STEP_PLACE,     // Appoggia peso di riferimento
   CAL_STEP_VALUE,     // Seleziona valore peso (500..20000 g)
-  CAL_STEP_CONFIRM    // Conferma e salva
+  CAL_STEP_CONFIRM,   // Conferma e salva
+  CAL_STEP_SAVED,     // Salvataggio confermato
+  CAL_STEP_SAVE_ERROR // Errore salvataggio/verifica
 };
 
 // ========================= CONFIG =========================

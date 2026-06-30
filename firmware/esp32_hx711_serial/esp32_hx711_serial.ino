@@ -112,6 +112,10 @@ static const uint32_t LONG_PRESS_MS = 2000;  // 2 seconds for long press
 static uint32_t g_clearPressStartMs   = 0;
 static bool     g_clearLongPressFired = false;
 
+// SLEEP key long press tracking: manual audio recovery without serial access
+static uint32_t g_sleepPressStartMs   = 0;
+static bool     g_sleepLongPressFired = false;
+
 // Overlay state (temporary display for TOTAL/NET/CLEAR feedback)
 enum OverlayType : uint8_t {
   OVERLAY_NONE = 0,
@@ -287,7 +291,7 @@ static void setupLoopWatchdog() {
 void printHelp() {
   Serial.println(F("\n--- COMANDI SERIALI ---"));
   Serial.println(F("hxlog on/off, hxlog rate <ms>"));
-  Serial.println(F("mp3 <track> [sec], stop, vol <0-30>, mp3 status"));
+  Serial.println(F("mp3 <track> [sec], mp3 status/reset, stop, vol <0-30>"));
   Serial.println(F("wifi set <slot> \"SSID\" \"PASS\", wifi creds, wifi apply"));
   Serial.println(F("ota status, ota set \"PASS\", ota clear"));
   Serial.println(F("mqtt set \"host\" \"user\" \"pass\", mqtt creds, mqtt clear, mqtt apply, mqtt status"));
@@ -341,6 +345,8 @@ void parseCommand(const char* cmd) {
     const char* arg = cmd + 4;
     if (strcmp(arg, "status") == 0) {
       Audio::debugStatus();
+    } else if (strcmp(arg, "reset") == 0) {
+      Audio::hardReset(true);
     } else {
       int track = 0, sec = 0;
       int n = sscanf(arg, "%d %d", &track, &sec);
@@ -696,8 +702,8 @@ void parseCommand(const char* cmd) {
     }
 
     if (strcmp(arg, "save") == 0) {
-      ScaleState::saveToNVS();
-      Serial.println(F("[CAL] Calibrazione salvata in NVS"));
+      bool saved = ScaleState::saveToNVS();
+      Serial.println(saved ? F("[CAL] Calibrazione salvata in NVS") : F("[CAL] ERRORE salvataggio NVS"));
       return;
     }
 
@@ -810,6 +816,8 @@ void handleKeyEvent(KeyCode key) {
     case KEY_SLEEP: {
       Serial.println(F("[KEYPAD] SLEEP pressed"));
       buzzerKeyClick();
+      g_sleepPressStartMs = millis();
+      g_sleepLongPressFired = false;
 
       ui_renderSleepZzz();
       Audio::requestPlayMp3(Track::SLEEP_ENTER);
@@ -1640,6 +1648,24 @@ void loop() {
     }
   }
 
+  // SLEEP held for 2s: audio hard reset, no standby.
+  if (g_sleepPressStartMs != 0) {
+    if (keypad_is_pressed(KEY_SLEEP)) {
+      if (!g_sleepLongPressFired && (int32_t)(now - g_sleepPressStartMs) >= (int32_t)LONG_PRESS_MS) {
+        g_sleepLongPressFired = true;
+        g_inactivitySleepStage = INACT_NONE;
+        g_inactivityStageStartMs = 0;
+        g_lastKeyPressMs = now;
+        Audio::hardReset(true);
+        buzzerOk();
+        lastOledMs = 0;
+      }
+    } else {
+      g_sleepPressStartMs = 0;
+      g_sleepLongPressFired = false;
+    }
+  }
+
   // Overlay timeout: auto-dismiss after 3 seconds or any key press
   if (g_overlayType != OVERLAY_NONE) {
     if ((int32_t)(now - g_overlayStartMs) >= (int32_t)OVERLAY_TIMEOUT_MS) {
@@ -1962,6 +1988,12 @@ void loop() {
           break;
         case CalWizard::CAL_STEP_CONFIRM:
           ui_renderCalStepConfirm(CalWizard::getRefWeightG(), CalWizard::getCalculatedCpg());
+          break;
+        case CalWizard::CAL_STEP_SAVED:
+          ui_renderCalSaveResult(true);
+          break;
+        case CalWizard::CAL_STEP_SAVE_ERROR:
+          ui_renderCalSaveResult(false);
           break;
         default:
           break;

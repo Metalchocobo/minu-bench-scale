@@ -18,7 +18,9 @@ enum State : uint8_t {
   POWERING,
   STARTING,
   PLAYING,
-  TAILING
+  TAILING,
+  RECOVERING_OFF,
+  RECOVERING_ON
 };
 
 // ========================= API PRINCIPALI =========================
@@ -40,6 +42,9 @@ void setVolume(uint8_t vol);
 
 // Stop riproduzione (senza spegnere DFPlayer)
 void stopNow(bool clearQueue = false);
+
+// Hard reset DFPlayer (power-cycle via MOSFET, non-blocking recovery)
+void hardReset(bool clearQueue = true);
 
 // Spegne completamente DFPlayer (per standby/light-sleep)
 void powerOffNow();

@@ -68,6 +68,9 @@ void ui_renderCalStepValue(uint16_t refWeightG);
 // refWeightG: peso di riferimento, cpg: count-per-gram calcolato
 void ui_renderCalStepConfirm(uint16_t refWeightG, float cpg);
 
+// Step SAVE RESULT: esito salvataggio calibrazione
+void ui_renderCalSaveResult(bool ok);
+
 // Long press progress: mostra barra di avanzamento durante long press
 // progress: 0-100 (0 = appena iniziato, 100 = wizard si attiva)
 void ui_renderCalLongPress(uint8_t progress);

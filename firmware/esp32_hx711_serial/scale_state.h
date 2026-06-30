@@ -111,7 +111,7 @@ void resetFiltersAndState();
 
 // ========================= PERSISTENZA NVS =========================
 void loadFromNVS();
-void saveToNVS();
+bool saveToNVS();
 
 // ========================= MODALITÀ PRESET =========================
 // Imposta preset: "work" o "live"

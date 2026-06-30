@@ -781,6 +781,21 @@ void ui_renderCalStepConfirm(uint16_t refWeightG, float cpg) {
   oled.sendBuffer();
 }
 
+void ui_renderCalSaveResult(bool ok) {
+  oled.clearBuffer();
+
+  oled.setFont(u8g2_font_logisoso16_tf);
+  drawCenteredText(ok ? "SALVATA" : "ERRORE", 22);
+
+  oled.setFont(u8g2_font_6x12_tr);
+  drawCenteredText(ok ? "NVS verificata" : "Salvataggio fallito", 42);
+
+  oled.setFont(u8g2_font_5x8_tr);
+  drawCenteredText(ok ? "Calibrazione attiva" : "Ripeti calibrazione", 60);
+
+  oled.sendBuffer();
+}
+
 void ui_renderCalLongPress(uint8_t progress) {
   oled.clearBuffer();
 
