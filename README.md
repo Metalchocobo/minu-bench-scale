@@ -518,6 +518,8 @@ firmware/esp32_hx711_serial/
 ### Task Watchdog
 Il firmware include un **Task Watchdog** (8 secondi) attivo già durante il setup, con reset esplicito nei loop di boot intenzionali. Nel loop principale viene resettato a ogni iterazione; durante il TLS MQTT viene esteso temporaneamente a 20s.
 
+All'avvio il firmware verifica che il `loopTask` sia davvero iscritto al WDT: in seriale stampa `[WDT] OK` se l'aggancio e' attivo, oppure `[WDT] FAIL i=... a=... s=...` se init/add/status falliscono. Il reset periodico del watchdog viene eseguito solo dopo questa verifica.
+
 Dopo un reset WDT, il firmware ripristina da memoria RTC l'ultima tara runtime (`offsetRaw` + zero-tracking) e salta l'auto-tare di boot, così una pesata in corso può ripartire con la stessa tara. Su accensione normale, reset manuale o power loss la recovery viene scartata e resta l'auto-tare standard.
 
 ### DFPlayer Mini (audio eventi) + power-gating solo in standby
@@ -526,6 +528,7 @@ Il firmware può suonare file MP3 (es. avviso sleep). Per evitare click e stati 
 Comportamento attuale:
 - DFPlayer viene portato in stato **pronto** automaticamente **all’avvio** e a ogni **wake** (alimentazione ON + UART init + volume), così un suono può partire subito.
 - La riproduzione MP3 è progettata per essere **non bloccante**: mentre l’audio suona, la bilancia continua a leggere HX711 e ad aggiornare UI/log.
+- I comandi UART verso DFPlayer vengono inviati senza `flush()` bloccanti: se il modulo audio o UART1 si pianta, il firmware non resta fermo in attesa infinita dello svuotamento TX.
 - **Gestione priorità audio**: alcuni MP3 sono **non interrompibili** e, se richiesti mentre un altro non interrompibile sta suonando, vengono messi in **coda FIFO** (solo fra loro). Tutti gli altri MP3 sono **interrompibili**: interrompono l’audio interrompibile in corso e ripartono subito, **senza accodarsi**. Se è in corso un non interrompibile, le richieste interrompibili vengono ignorate (resta il **bip** del buzzer sui tasti).
   - Non interrompibili: **0002, 0007, 0008, 0012, 0013, 0014, 0015, 0016**.
 - Durante l’uso resta alimentato, salvo recovery automatico/manuale.
@@ -657,6 +660,8 @@ Comandi:
 
 ### Tastiera: debounce + one-shot + long press
 La tastiera ha un debounce software (40 ms) e genera eventi **one-shot**: un tasto premuto produce **un solo evento**, anche se lo tieni premuto.
+
+Se un tasto o una linea resta chiusa per almeno 15 secondi, quel tasto viene soppresso fino al rilascio elettrico: il loop continua a girare e gli altri tasti restano leggibili.
 
 **Long press:**
 - **SKIP tenuto per 5 secondi**: avvia il wizard di calibrazione on-display

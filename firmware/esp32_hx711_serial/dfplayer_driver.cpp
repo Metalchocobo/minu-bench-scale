@@ -32,7 +32,6 @@ static void sendCmd(uint8_t cmd, uint16_t param, uint8_t ack = 0x00) {
     0xEF
   };
   g_ser.write(buf, sizeof(buf));
-  g_ser.flush();
 }
 
 bool begin(const Pins& pins, uint32_t baud) {
@@ -45,7 +44,6 @@ bool begin(const Pins& pins, uint32_t baud) {
 
 void end() {
   if (!g_started) return;
-  g_ser.flush();
   g_ser.end();
   g_started = false;
 }

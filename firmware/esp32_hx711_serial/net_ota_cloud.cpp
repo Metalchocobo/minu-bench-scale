@@ -48,8 +48,26 @@ static void configureLoopWdt(uint32_t timeoutMs) {
     .idle_core_mask = 0,
     .trigger_panic = true
   };
-  if (esp_task_wdt_reconfigure(&cfg) == ESP_OK) {
-    esp_task_wdt_reset();
+  esp_err_t cfgErr = esp_task_wdt_reconfigure(&cfg);
+  if (cfgErr != ESP_OK) {
+    Serial.print(F("[WDT] cfg fail "));
+    Serial.println((int)cfgErr);
+    return;
+  }
+
+  esp_err_t statusErr = esp_task_wdt_status(NULL);
+  if (statusErr != ESP_OK) {
+    esp_err_t addErr = esp_task_wdt_add(NULL);
+    statusErr = esp_task_wdt_status(NULL);
+    if (statusErr != ESP_OK) {
+      Serial.print(F("[WDT] add fail "));
+      Serial.println((int)addErr);
+      return;
+    }
+  }
+
+  if (esp_task_wdt_reset() != ESP_OK) {
+    Serial.println(F("[WDT] feed fail"));
   }
 }
 

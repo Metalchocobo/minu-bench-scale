@@ -205,6 +205,7 @@ static void runtimeTareRecoverySave();
 static bool runtimeTareRecoveryTryRestore();
 static void runtimeTareRecoveryClear();
 static void setupLoopWatchdog();
+static void feedLoopWatchdog();
 static void enterInactivityLightSleep();
 static bool maybeEnterSafeShutdown(uint32_t nowMs);
 
@@ -276,15 +277,41 @@ static bool runtimeTareRecoveryTryRestore() {
 }
 
 // ========================= WATCHDOG =========================
+static bool g_loopWdtActive = false;
+
 static void setupLoopWatchdog() {
   esp_task_wdt_config_t wdtCfg = {
     .timeout_ms = LOOP_WDT_TIMEOUT_MS,
     .idle_core_mask = 0,
     .trigger_panic = true
   };
-  esp_task_wdt_init(&wdtCfg);
-  esp_task_wdt_add(NULL);
-  Serial.println(F("[WDT] Task Watchdog attivo (8s)"));
+
+  esp_err_t initErr = esp_task_wdt_init(&wdtCfg);
+  if (initErr == ESP_ERR_INVALID_STATE) {
+    initErr = esp_task_wdt_reconfigure(&wdtCfg);
+  }
+
+  esp_err_t addErr = esp_task_wdt_add(NULL);
+  esp_err_t statusErr = esp_task_wdt_status(NULL);
+  g_loopWdtActive = (statusErr == ESP_OK);
+
+  if (g_loopWdtActive) {
+    feedLoopWatchdog();
+    Serial.println(F("[WDT] OK"));
+  } else {
+    Serial.print(F("[WDT] FAIL i="));
+    Serial.print((int)initErr);
+    Serial.print(F(" a="));
+    Serial.print((int)addErr);
+    Serial.print(F(" s="));
+    Serial.println((int)statusErr);
+  }
+}
+
+static void feedLoopWatchdog() {
+  if (g_loopWdtActive) {
+    (void)esp_task_wdt_reset();
+  }
 }
 
 // ========================= PRINT HELP =========================
@@ -1096,7 +1123,7 @@ static void wifiAudioUpdate(uint32_t now) {
 static void bootPump(uint32_t ms) {
   uint32_t start = millis();
   while (millis() - start < ms) {
-    esp_task_wdt_reset();
+    feedLoopWatchdog();
 #if ENABLE_WIFI_OTA
     Net::update();
     wifiAudioUpdate(millis());
@@ -1116,7 +1143,7 @@ static void bootShow(const char* line1, const char* line2, uint16_t holdMs = 350
 
 static void bootWaitTare() {
   while (true) {
-    esp_task_wdt_reset();
+    feedLoopWatchdog();
     uint32_t now = millis();
     keypad_update(now);
     Audio::task(now);
@@ -1537,7 +1564,7 @@ void setup() {
 // ========================= LOOP =========================
 void loop() {
   // Reset Task Watchdog (evita reboot se loop è vivo)
-  esp_task_wdt_reset();
+  feedLoopWatchdog();
 
 #if ENABLE_WIFI_OTA
   Net::update();

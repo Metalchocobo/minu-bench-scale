@@ -33,12 +33,35 @@ static KeyCode keyMap[4][2] = {
 static KeyCode rawKeyLast   = KEY_NONE;
 static uint32_t rawChangeMs = 0;
 static KeyCode stableKey    = KEY_NONE;
+static uint32_t stableSinceMs = 0;
+static KeyCode suppressedKey = KEY_NONE;
 
 // Ultimo evento "nuovo" da consegnare
 static KeyCode pendingEvent = KEY_NONE;
 
 // Debounce (ms): 30-50 ms è la forchetta tipica. Qui 40 ms.
 static const uint32_t DEBOUNCE_MS = 40;
+static const uint32_t STUCK_KEY_MS = 15000;
+
+static bool keypad_raw_is_pressed(KeyCode target) {
+  if (target == KEY_NONE) return false;
+
+  for (int r = 0; r < 4; r++) {
+    for (int rr = 0; rr < 4; rr++) {
+      digitalWrite(rowPins[rr], (rr == r) ? LOW : HIGH);
+    }
+
+    delayMicroseconds(200);
+
+    for (int c = 0; c < 2; c++) {
+      if (keyMap[r][c] == target && digitalRead(colPins[c]) == LOW) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
 
 // Scansione singola (senza debounce pesante)
 static KeyCode keypad_scan_once() {
@@ -53,7 +76,11 @@ static KeyCode keypad_scan_once() {
     for (int c = 0; c < 2; c++) {
       int val = digitalRead(colPins[c]);
       if (val == LOW) {
-        return keyMap[r][c];
+        KeyCode key = keyMap[r][c];
+        if (key == suppressedKey) {
+          continue;
+        }
+        return key;
       }
     }
   }
@@ -76,10 +103,16 @@ void keypad_init() {
   rawKeyLast   = KEY_NONE;
   rawChangeMs  = 0;
   stableKey    = KEY_NONE;
+  stableSinceMs = 0;
+  suppressedKey = KEY_NONE;
   pendingEvent = KEY_NONE;
 }
 
 void keypad_update(uint32_t nowMs) {
+  if (suppressedKey != KEY_NONE && !keypad_raw_is_pressed(suppressedKey)) {
+    suppressedKey = KEY_NONE;
+  }
+
   // 1) Legge il valore raw.
   const KeyCode raw = keypad_scan_once();
 
@@ -93,11 +126,23 @@ void keypad_update(uint32_t nowMs) {
   if (raw != stableKey && (uint32_t)(nowMs - rawChangeMs) >= DEBOUNCE_MS) {
     const KeyCode prev = stableKey;
     stableKey = raw;
+    stableSinceMs = nowMs;
 
     // Evento one-shot: solo su pressione (NONE -> KEY).
     if (prev == KEY_NONE && stableKey != KEY_NONE) {
       pendingEvent = stableKey;
     }
+  }
+
+  if (stableKey != KEY_NONE &&
+      suppressedKey == KEY_NONE &&
+      (uint32_t)(nowMs - stableSinceMs) >= STUCK_KEY_MS) {
+    suppressedKey = stableKey;
+    stableKey = KEY_NONE;
+    rawKeyLast = KEY_NONE;
+    rawChangeMs = nowMs;
+    stableSinceMs = nowMs;
+    pendingEvent = KEY_NONE;
   }
 }
 
