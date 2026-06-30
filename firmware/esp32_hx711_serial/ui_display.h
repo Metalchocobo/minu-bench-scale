@@ -35,6 +35,12 @@ void ui_renderWeight(long gDisp, const char* stateLabel,
                      const char* ingredientName = nullptr,
                      bool mqttConnected = false, bool mqttVisible = false);
 
+// Render LIVE fixed-point half grams (g * 2), always with .0/.5.
+void ui_renderWeightLiveHalf(long gDispX2, const char* stateLabel,
+                             bool showTarget = false, float targetWeight = 0.0f,
+                             const char* ingredientName = nullptr,
+                             bool mqttConnected = false, bool mqttVisible = false);
+
 // Overlay TARA: mostra testo + barra (0..100)
 void ui_renderTareProgress(uint8_t progressPct);
 

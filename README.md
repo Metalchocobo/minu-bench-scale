@@ -171,15 +171,16 @@ Impostazioni attuali (HX711=80 SPS):
 - LIVE: decimazione **N=3** + **EMA veloce** sul valore in grammi prima della quantizzazione (alpha ~0.45)
 
 
-### Display: anti-flicker (novità)
-In LIVE e WORK la visualizzazione è **quantizzata a grammo** ma con due accorgimenti per evitare tremolii:
-1) **Banda zero con isteresi** (enter/exit):
-   - **LIVE**: 0 finché `|g| < 1.0 g` (entry). Dopo che sei entrato, torna a 0 solo sotto ~`0.8 g` (exit).
-   - **WORK**: 0 finché `|g| < 1.3 g` (entry). Rientro a 0 solo sotto ~`0.9 g` (exit).
-2) **Isteresi tra interi**: riduce il flicker tra N e N+1 mentre pesi (senza introdurre filtri “lenti” sul segnale).
-3) **Reversal lock (solo LIVE)**: quando il display cambia valore, per una finestra breve ignora il rimbalzo immediato al valore precedente.
-   Effetto: elimina il flicker A↔B senza ritardare l’incremento progressivo mentre versi.
-   Eccezione: 0 → ±1 è **immediato** appena tocchi 1 g (anche per un istante).
+### Display: anti-flicker
+WORK e LIVE usano due visualizzazioni diverse:
+1) **LIVE**: il display usa mezzi grammi virtuali (`N.0` / `N.5`) solo sull'OLED. Il valore interno usato da stack/MQTT resta in grammi interi.
+2) **LIVE zero clamp**: resta a `0.0` finche' `|g| < 0.50 g`; una volta uscito dallo zero torna a `0.0` solo sotto ~`0.35 g`.
+3) **LIVE half window**: su circa **600 ms** analizza media filtrata e candidati interi:
+   - frazione bassa / prevalenza bassa (`<= 30%` verso l'intero alto) -> mostra `N.0`
+   - zona centrale / oscillazione bilanciata (`31-69%`) -> mostra `N.5`
+   - frazione alta / prevalenza alta (`>= 70%`) -> mostra `N+1.0`
+   - sticky band da ~`0.08 g` sui confini `.0/.5/1.0` per evitare rimbalzi continui
+4) **WORK**: resta quantizzato a grammo intero con banda zero a `1.3 g` / `0.9 g` e isteresi tra interi.
 
 ### Anti-spike guard (RAW, novità)
 Taglia i glitch singoli (es. un salto momentaneo a valori negativi/assurdi): se un campione fa un salto > **150 g**,

@@ -52,6 +52,9 @@ void   setDispWorkLast(long g);
 long   getDispWorkLast();
 void   setDispLiveLast(long g);
 long   getDispLiveLast();
+void   setDispLiveHalfLast(long gX2);
+long   getDispLiveHalfLast();
+long   halfToRoundedGram(long gX2);
 const char* getStateLabelWorkLast();
 void   setStateLabelWorkLast(const char* label);
 
@@ -62,6 +65,7 @@ long   getLastRawAvg();
 // ========================= DISPLAY QUANTIZZAZIONE =========================
 // Quantizza g con banda zero + isteresi (LIVE)
 long displayLiveStable(float gIn, long prevDisp, uint32_t nowMs);
+long displayLiveHalfStable(float gIn, long prevHalf, uint32_t nowMs);
 long displayLiveQuant(float gIn, long prevDisp);
 
 // Quantizza g con banda zero + isteresi (WORK)

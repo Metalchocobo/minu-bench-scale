@@ -20,6 +20,7 @@ static bool  g_dispInit     = false;
 
 static long  g_dispWorkLast = 0;
 static long  g_dispLiveLast = 0;
+static long  g_dispLiveHalfLast = 0;  // fixed point: grams * 2
 static const char* g_stateLabelWorkLast = "UNSTABLE";
 
 static float g_deadbandUnstable = ScaleConfig::DB_UNSTABLE_N;
@@ -34,6 +35,12 @@ static bool     g_wasZeroLive      = true;
 static bool     g_reversalLockLive = false;
 static long     g_reversalLockVal  = 0;
 static uint32_t g_reversalLockMs   = 0;
+static float    g_liveHalfSamples[ScaleConfig::DISP_LIVE_HALF_WIN_N];
+static long     g_liveHalfVotes[ScaleConfig::DISP_LIVE_HALF_WIN_N];
+static uint8_t  g_liveHalfIdx      = 0;
+static uint8_t  g_liveHalfCount    = 0;
+static bool     g_liveHalfHasLast  = false;
+static float    g_liveHalfLastIn   = 0.0f;
 
 // ========================= DISPLAY WORK STATE =========================
 static long g_lastDispWork = 0;
@@ -88,6 +95,12 @@ void setDispWorkLast(long g)  { g_dispWorkLast = g; }
 long getDispWorkLast()        { return g_dispWorkLast; }
 void setDispLiveLast(long g)  { g_dispLiveLast = g; }
 long getDispLiveLast()        { return g_dispLiveLast; }
+void setDispLiveHalfLast(long gX2) { g_dispLiveHalfLast = gX2; }
+long getDispLiveHalfLast()         { return g_dispLiveHalfLast; }
+
+long halfToRoundedGram(long gX2) {
+  return (gX2 >= 0) ? ((gX2 + 1) / 2) : ((gX2 - 1) / 2);
+}
 
 const char* getStateLabelWorkLast() { return g_stateLabelWorkLast; }
 void setStateLabelWorkLast(const char* label) { g_stateLabelWorkLast = label; }
@@ -96,6 +109,105 @@ void setLastRawAvg(long raw) { g_lastRawAvg = raw; }
 long getLastRawAvg()         { return g_lastRawAvg; }
 
 // ========================= DISPLAY QUANTIZZAZIONE =========================
+
+static void resetLiveHalfVote() {
+  g_liveHalfIdx = 0;
+  g_liveHalfCount = 0;
+  g_liveHalfHasLast = false;
+  g_liveHalfLastIn = 0.0f;
+}
+
+static long liveRoundGram(float g) {
+  return (g >= 0.0f) ? (long)(g + 0.5f) : (long)(g - 0.5f);
+}
+
+static void pushLiveHalfSample(float g, long vote) {
+  if (g_liveHalfHasLast && fabsf(g - g_liveHalfLastIn) >= 1.5f) {
+    resetLiveHalfVote();
+  }
+
+  g_liveHalfSamples[g_liveHalfIdx] = g;
+  g_liveHalfVotes[g_liveHalfIdx] = vote;
+  g_liveHalfIdx++;
+  if (g_liveHalfIdx >= ScaleConfig::DISP_LIVE_HALF_WIN_N) g_liveHalfIdx = 0;
+  if (g_liveHalfCount < ScaleConfig::DISP_LIVE_HALF_WIN_N) g_liveHalfCount++;
+
+  g_liveHalfLastIn = g;
+  g_liveHalfHasLast = true;
+}
+
+static float liveHalfAverage() {
+  if (g_liveHalfCount == 0) return 0.0f;
+
+  float sum = 0.0f;
+  for (uint8_t i = 0; i < g_liveHalfCount; i++) {
+    sum += g_liveHalfSamples[i];
+  }
+  return sum / (float)g_liveHalfCount;
+}
+
+static long liveHalfFromAverage(float avg) {
+  float mag = fabsf(avg);
+  long whole = (long)floorf(mag);
+  float frac = mag - (float)whole;
+
+  long magX2 = 0;
+  if (frac <= ScaleConfig::DISP_LIVE_HALF_LOW_RATIO) {
+    magX2 = whole * 2;
+  } else if (frac >= ScaleConfig::DISP_LIVE_HALF_HIGH_RATIO) {
+    magX2 = (whole + 1) * 2;
+  } else {
+    magX2 = whole * 2 + 1;
+  }
+
+  return (avg < 0.0f) ? -magX2 : magX2;
+}
+
+static long liveHalfVoteResult(float avg, long latestVote) {
+  if (g_liveHalfCount == 0) return latestVote * 2;
+
+  long low = g_liveHalfVotes[0];
+  long high = low;
+  uint8_t highCount = 0;
+
+  for (uint8_t i = 0; i < g_liveHalfCount; i++) {
+    long v = g_liveHalfVotes[i];
+    if (v < low) low = v;
+    if (v > high) high = v;
+  }
+
+  if ((high - low) > 1) {
+    return liveHalfFromAverage(avg);
+  }
+
+  if (high == low) {
+    return liveHalfFromAverage(avg);
+  }
+
+  for (uint8_t i = 0; i < g_liveHalfCount; i++) {
+    if (g_liveHalfVotes[i] == high) highCount++;
+  }
+
+  float highRatio = (float)highCount / (float)g_liveHalfCount;
+  if (highRatio <= ScaleConfig::DISP_LIVE_HALF_LOW_RATIO) return low * 2;
+  if (highRatio >= ScaleConfig::DISP_LIVE_HALF_HIGH_RATIO) return high * 2;
+  return low * 2 + 1;
+}
+
+static long applyLiveHalfSticky(long cand, long prevHalf, float avg) {
+  long diff = cand - prevHalf;
+  if (diff == 0) return cand;
+  if (diff > 1 || diff < -1) return cand;
+
+  float boundary = (float)(cand + prevHalf) * 0.25f;
+  if (diff > 0 && avg < (boundary + ScaleConfig::DISP_LIVE_HALF_STICKY_G)) {
+    return prevHalf;
+  }
+  if (diff < 0 && avg > (boundary - ScaleConfig::DISP_LIVE_HALF_STICKY_G)) {
+    return prevHalf;
+  }
+  return cand;
+}
 
 long displayLiveStable(float gIn, long prevDisp, uint32_t nowMs) {
   // Banda zero con isteresi
@@ -143,6 +255,34 @@ long displayLiveStable(float gIn, long prevDisp, uint32_t nowMs) {
   }
 
   g_lastDispLive   = cand;
+  g_lastDispLiveMs = nowMs;
+  return cand;
+}
+
+long displayLiveHalfStable(float gIn, long prevHalf, uint32_t nowMs) {
+  float absG = fabsf(gIn);
+  bool wantZero = g_wasZeroLive
+    ? (absG < ScaleConfig::DISP_ZERO_ENTER_LIVE_G)
+    : (absG < ScaleConfig::DISP_ZERO_EXIT_LIVE_G);
+
+  if (wantZero) {
+    g_wasZeroLive = true;
+    g_lastDispLive = 0;
+    g_lastDispLiveMs = nowMs;
+    g_reversalLockLive = false;
+    resetLiveHalfVote();
+    return 0;
+  }
+
+  g_wasZeroLive = false;
+  long latestVote = liveRoundGram(gIn);
+  pushLiveHalfSample(gIn, latestVote);
+
+  float avg = liveHalfAverage();
+  long cand = liveHalfVoteResult(avg, latestVote);
+  cand = applyLiveHalfSticky(cand, prevHalf, avg);
+
+  g_lastDispLive = halfToRoundedGram(cand);
   g_lastDispLiveMs = nowMs;
   return cand;
 }
@@ -396,10 +536,12 @@ void resetFiltersAndState() {
   g_dispInit     = false;
   g_dispWorkLast = 0;
   g_dispLiveLast = 0;
+  g_dispLiveHalfLast = 0;
 
   g_lastDispLive     = 0;
   g_wasZeroLive      = true;
   g_reversalLockLive = false;
+  resetLiveHalfVote();
 
   g_lastDispWork = 0;
   g_wasZeroWork  = true;

@@ -1746,7 +1746,9 @@ void loop() {
         gFastDisp = gLiveEma;
       }
 
-      long dispLive = ScaleState::displayLiveStable(gFastDisp, ScaleState::getDispLiveLast(), now);
+      long dispLiveHalf = ScaleState::displayLiveHalfStable(gFastDisp, ScaleState::getDispLiveHalfLast(), now);
+      long dispLive = ScaleState::halfToRoundedGram(dispLiveHalf);
+      ScaleState::setDispLiveHalfLast(dispLiveHalf);
       ScaleState::setDispLiveLast(dispLive);
 
       if (!stEnable) {
@@ -2005,8 +2007,8 @@ void loop() {
         bool mqttVis    = false;
 #endif
         if (!stEnable) {
-          ui_renderWeight(ScaleState::getDispLiveLast(), "LIVE",
-                          mqttTarget, mqttTW, mqttName, mqttConn, mqttVis);
+          ui_renderWeightLiveHalf(ScaleState::getDispLiveHalfLast(), "LIVE",
+                                  mqttTarget, mqttTW, mqttName, mqttConn, mqttVis);
         } else {
           ui_renderWeight(ScaleState::getDispWorkLast(), ScaleState::getStateLabelWorkLast(),
                           mqttTarget, mqttTW, mqttName, mqttConn, mqttVis);

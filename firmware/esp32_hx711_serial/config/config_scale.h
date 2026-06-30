@@ -93,11 +93,15 @@ static const uint32_t RAW_SPIKE_TIMEOUT_MS = 250;     // Timeout pending
 
 // ========================= DISPLAY QUANTIZZAZIONE =========================
 // LIVE
-static const float    DISP_ZERO_ENTER_LIVE_G  = 1.00f;
-static const float    DISP_ZERO_EXIT_LIVE_G   = 0.80f;
+static const float    DISP_ZERO_ENTER_LIVE_G  = 0.50f;
+static const float    DISP_ZERO_EXIT_LIVE_G   = 0.35f;
 static const float    DISP_STEP_HYS_LIVE_G    = 0.12f;
 static const uint16_t DISP_LIVE_REVERSAL_LOCK_MS = 160;
 static const float    LIVE_EMA_ALPHA          = 0.45f;
+static const uint8_t  DISP_LIVE_HALF_WIN_N    = 16;     // ~600 ms at 80 SPS / N=3
+static const float    DISP_LIVE_HALF_LOW_RATIO  = 0.30f;
+static const float    DISP_LIVE_HALF_HIGH_RATIO = 0.70f;
+static const float    DISP_LIVE_HALF_STICKY_G = 0.08f;  // Hysteresis around half-step midpoint
 
 // WORK
 static const float    DISP_ZERO_ENTER_WORK_G  = 1.30f;

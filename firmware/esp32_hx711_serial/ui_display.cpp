@@ -456,10 +456,27 @@ void ui_renderSleepZzz() {
 // -----------------------------------------------------------------------------
 // LAYOUT PRINCIPALE PESO
 // -----------------------------------------------------------------------------
-void ui_renderWeight(long gDisp, const char* stateLabel,
-                     bool showTarget, float targetWeight,
-                     const char* ingredientName,
-                     bool mqttConnected, bool mqttVisible) {
+static void formatLiveHalfGrams(long gDispX2, char* buf, size_t len) {
+  long value = gDispX2;
+  bool neg = false;
+  if (value < 0) {
+    neg = true;
+    value = -value;
+  }
+
+  long whole = value / 2;
+  int decimal = (value % 2) ? 5 : 0;
+  if (neg) {
+    snprintf(buf, len, "-%ld.%d", whole, decimal);
+  } else {
+    snprintf(buf, len, "%ld.%d", whole, decimal);
+  }
+}
+
+static void renderWeightString(const char* weightStr, const char* stateLabel,
+                               bool showTarget, float targetWeight,
+                               const char* ingredientName,
+                               bool mqttConnected, bool mqttVisible) {
   oled.clearBuffer();
   const int16_t BASELINE_Y = 56;   // baseline comune per le "g"
 
@@ -535,10 +552,6 @@ void ui_renderWeight(long gDisp, const char* stateLabel,
     oled.drawStr(gTargetX, BASELINE_Y, "g");
   }
 
-  // ------- Peso principale: gDisp formattato come 12.250 -------
-  char weightStr[16];
-  formatGramsWithDot(gDisp, weightStr, sizeof(weightStr));
-
   oled.setFont(u8g2_font_logisoso46_tn);
   int16_t weightWidth = oled.getStrWidth(weightStr);
 
@@ -558,6 +571,26 @@ void ui_renderWeight(long gDisp, const char* stateLabel,
   oled.drawStr(weightX, BASELINE_Y, weightStr);
 
   oled.sendBuffer();
+}
+
+void ui_renderWeight(long gDisp, const char* stateLabel,
+                     bool showTarget, float targetWeight,
+                     const char* ingredientName,
+                     bool mqttConnected, bool mqttVisible) {
+  char weightStr[16];
+  formatGramsWithDot(gDisp, weightStr, sizeof(weightStr));
+  renderWeightString(weightStr, stateLabel, showTarget, targetWeight,
+                     ingredientName, mqttConnected, mqttVisible);
+}
+
+void ui_renderWeightLiveHalf(long gDispX2, const char* stateLabel,
+                             bool showTarget, float targetWeight,
+                             const char* ingredientName,
+                             bool mqttConnected, bool mqttVisible) {
+  char weightStr[16];
+  formatLiveHalfGrams(gDispX2, weightStr, sizeof(weightStr));
+  renderWeightString(weightStr, stateLabel, showTarget, targetWeight,
+                     ingredientName, mqttConnected, mqttVisible);
 }
 
 
