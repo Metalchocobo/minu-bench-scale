@@ -15,6 +15,25 @@ enum WeighState : uint8_t {
   STATE_UNSTABLE
 };
 
+enum TareMode : uint8_t {
+  TARE_MODE_MANUAL = 0,
+  TARE_MODE_AUTO
+};
+
+enum TareResult : uint8_t {
+  TARE_RESULT_IDLE = 0,
+  TARE_RESULT_PENDING,
+  TARE_RESULT_APPLIED,
+  TARE_RESULT_FAILED
+};
+
+enum TareUiState : uint8_t {
+  TARE_UI_IDLE = 0,
+  TARE_UI_SETTLING,
+  TARE_UI_OK,
+  TARE_UI_FAILED
+};
+
 // ========================= GETTERS/SETTERS GLOBALI =========================
 // Offset e scale (calibrazione)
 void   setOffsetRaw(long offset);
@@ -86,9 +105,12 @@ bool trySnapOnUnload(float gLive, float slopeGps, bool quietNow);
 void tareAccumSample(long rawUse);
 
 // Avvia raccolta tara
-void tareStart(uint32_t nowMs);
+void tareStart(uint32_t nowMs, TareMode mode = TARE_MODE_MANUAL);
 
-// Applica offset se pronto
+// Aggiorna/applica tara. La tara cambia offset solo se la finestra e' stabile.
+TareResult tareUpdate(uint32_t nowMs);
+
+// Compat: true solo quando la tara viene applicata con successo.
 bool tareMaybeApply(uint32_t nowMs);
 
 // UI tara attiva?
@@ -98,6 +120,8 @@ uint32_t getTareUiStartMs();
 void setTareUiStartMs(uint32_t ms);
 uint32_t getTareUiEndMs();
 void setTareUiEndMs(uint32_t ms);
+TareMode getTareMode();
+TareUiState getTareUiState();
 
 // ========================= INATTIVITÀ =========================
 // Nota attività peso (reset timer se variazione > soglia)

@@ -134,6 +134,7 @@ static char g_overlayMsg[12]  = {0};
 
 // Manual TARE reference capture: save ref offset only after tare is applied
 static bool g_captureReferenceAfterTare = false;
+static bool g_clearStackAfterTare = false;
 
 // Runtime recovery survives WDT resets but is lost on power loss.
 struct RuntimeTareRecovery {
@@ -789,12 +790,9 @@ void handleKeyEvent(KeyCode key) {
 
       // Mark reference capture to happen after tare is actually applied
       g_captureReferenceAfterTare = true;
+      g_clearStackAfterTare = true;
 
-      // Reset weigh stack (new weighing session)
-      WeighStack::clear();
-      Serial.println(F("[STACK] Stack cleared (new session)"));
-
-      ScaleState::tareStart(millis());
+      ScaleState::tareStart(millis(), ScaleState::TARE_MODE_MANUAL);
       break;
 
     case KEY_MODE:
@@ -901,7 +899,7 @@ void handleKeyEvent(KeyCode key) {
 
       // Auto-tare (working tare: does NOT reset stack, does NOT update reference)
       if (!hxHealth_isError(&g_hxHealth)) {
-        ScaleState::tareStart(millis());
+        ScaleState::tareStart(millis(), ScaleState::TARE_MODE_AUTO);
         Serial.println(F("[STACK] Auto-tare (working)"));
       }
       break;
@@ -1927,17 +1925,27 @@ void loop() {
     }
   }
 
-  // Tara apply
-  bool tareApplied = ScaleState::tareMaybeApply(millis());
+  // Tara apply / fail
+  ScaleState::TareResult tareResult = ScaleState::tareUpdate(millis());
+  bool tareApplied = (tareResult == ScaleState::TARE_RESULT_APPLIED);
   if (tareApplied) {
     runtimeTareRecoverySave();
   }
   if (tareApplied && g_captureReferenceAfterTare) {
+    if (g_clearStackAfterTare) {
+      WeighStack::clear();
+      Serial.println(F("[STACK] Stack cleared (new session)"));
+    }
     long ref = ScaleState::effectiveOffsetCounts();
     WeighStack::setReferenceOffset(ref);
     g_captureReferenceAfterTare = false;
+    g_clearStackAfterTare = false;
     Serial.print(F("[STACK] Ref offset saved: "));
     Serial.println(ref);
+  } else if (tareResult == ScaleState::TARE_RESULT_FAILED) {
+    g_captureReferenceAfterTare = false;
+    g_clearStackAfterTare = false;
+    buzzerError();
   }
 
   // HX health update
@@ -2029,9 +2037,10 @@ void loop() {
       bool drewTare = false;
 
       if (ScaleState::isTareUiActive()) {
-        uint32_t elapsed = now - ScaleState::getTareUiStartMs();
-        uint8_t pct = (elapsed >= TARE_UI_CLAMP_MS) ? 100 : (uint8_t)((elapsed * 100UL) / TARE_UI_CLAMP_MS);
-        ui_renderTareProgress(pct);
+        ui_renderTareStatus(
+          ScaleState::getTareUiState(),
+          ScaleState::getTareMode() == ScaleState::TARE_MODE_AUTO
+        );
         drewTare = true;
 
         if (now >= ScaleState::getTareUiEndMs()) {

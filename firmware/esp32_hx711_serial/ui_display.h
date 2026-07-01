@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Arduino.h>
+#include "scale_state.h"
 
 // Inizializza l'hardware display (SPI + OLED)
 void ui_init();
@@ -41,8 +42,8 @@ void ui_renderWeightLiveHalf(long gDispX2, const char* stateLabel,
                              const char* ingredientName = nullptr,
                              bool mqttConnected = false, bool mqttVisible = false);
 
-// Overlay TARA: mostra testo + barra (0..100)
-void ui_renderTareProgress(uint8_t progressPct);
+// Overlay TARA: mostra stato stabilizzazione, senza barra a tempo.
+void ui_renderTareStatus(ScaleState::TareUiState state, bool autoMode);
 
 // Schermata ERROR runtime HX711 (bloccante)
 // - hard=true  -> non fidarsi del valore (non mostra last)

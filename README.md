@@ -21,7 +21,7 @@ Target:
 Funzioni principali (firmware HX711):
 - Lettura HX711 con filtri + stati **STABLE / UNSTABLE / LIVE**
 - **Zero-tracking** vicino allo zero + **snap-to-zero** allo scarico
-- **TARA** con UI dedicata (testo + barra), blocco pesata durante l’operazione
+- **TARA** con UI dedicata a stato/animazione, verifica stabilità e blocco pesata durante l’operazione
 - Monitor batteria con **tacche** + stato **charging** (stabilizzato)
 - Protezione “batteria scarica” con **avviso + beep + light-sleep**, anti-flapping (debounce 10 s, recovery stabile 30 s) e cooldown avvisi 5 min
 - **HX health** runtime: stati **OK / WARN / ERROR / ERROR HARD**, badge **"Errore Cella"** (testo piccolo + triangolino) in alto a destra in WARN, schermata error bloccante (senza mostrare l'ultimo peso), blocco tara/calib, audio 0015.mp3 una sola volta all’ingresso in ERROR
@@ -190,7 +190,7 @@ così non rallentiamo i carichi rapidi).
 Nota: la guard scarta solo **frame singoli** (o confermati) e quindi non cambia la logica WORK/zt/stati, se non in presenza di glitch reali.
 
 ### TARE (novità)
-- Rimossa la fallback **blocking**: se per qualsiasi motivo arrivano pochi campioni, l’offset viene applicato con quelli disponibili senza congelare UI/audio.
+- Tara runtime **non-blocking**: raccoglie campioni in finestra mobile, applica trimmed-mean solo se range e pendenza sono stabili, altrimenti lascia invariato l’offset e mostra errore.
 
 ### Auto-TARE al boot (novità)
 - Approccio “robusto”: discard iniziale + fino a **64 campioni** e **trimmed-mean** (taglia outlier) per ridurre i casi di “0 → +1 g” dopo l’avvio.
@@ -202,11 +202,17 @@ I parametri (N di media, isteresi, ecc.) sono nel firmware e sono pensati per es
 ## 7) TARA (UI e logica)
 
 Tasto **TARE**:
-- avvia tara e mostra “**- TARA -**” + barra di stabilizzazione
+- avvia tara manuale e mostra “**- TARA -**” con animazione a tre step, senza barra di caricamento
+- usa una finestra mobile di campioni, scarta gli outlier con trimmed-mean e verifica range + pendenza
+- se il peso è stabile può chiudere prima del timeout; se resta instabile mostra “**INSTABILE** / Ripeti a peso fermo” e non modifica l’offset
 - durante la tara la pesata è “bloccata” a display (l’utente non deve pesare)
-- al termine torna alla UI normale
+- se la tara manuale riesce, azzera lo stack e salva la tara di riferimento della sessione
 
-Obiettivo: evitare tara che finisce a **±1 g** a causa di rumore/assestamento.
+Tara automatica post-**ENTER**:
+- usa un profilo più rapido perché arriva dopo una pesata già confermata
+- non azzera lo stack e non aggiorna il riferimento della sessione
+
+Obiettivo: evitare tara sbagliate se la cella si muove durante l’operazione, senza rendere lunga la tara quando il peso è già fermo.
 
 ---
 
@@ -417,7 +423,7 @@ Stack pesate in RAM (LIFO, max 50 elementi, perso al riavvio — corretto). Perm
 
 ### Workflow tipico
 
-1. Metti contenitore, premi **TARA** → avvia tara, azzera stack, salva la tara di riferimento quando la tara termina
+1. Metti contenitore, premi **TARA** → avvia tara manuale; se riesce azzera stack e salva la tara di riferimento
 2. Aggiungi ingrediente, premi **ENTER** → peso viene registrato nello stack + tara automatica (display torna a 0)
 3. Ripeti per ogni ingrediente
 4. **TOTAL** (breve) → mostra overlay di controllo con **Registrato**, **Effettivo** e **Differenza** (3 secondi)
@@ -428,7 +434,7 @@ Stack pesate in RAM (LIFO, max 50 elementi, perso al riavvio — corretto). Perm
 
 | Tasto | Breve | Lungo (2s) |
 |---|---|---|
-| **TARE** | Tara + azzera stack (salva riferimento a fine tara) | — |
+| **TARE** | Tara manuale; se riesce azzera stack e salva riferimento | — |
 | **ENTER** | Push peso + MQTT confirm + auto-tare | — |
 | **TOTAL** | Mostra overlay confronto: Registrato / Effettivo / Differenza | — |
 | **CLEAR** | Pop ultimo (LIFO) | Svuota tutto lo stack |
@@ -436,6 +442,7 @@ Stack pesate in RAM (LIFO, max 50 elementi, perso al riavvio — corretto). Perm
 **Note:**
 - ENTER con peso <= 0: ignorato (nessun push, nessuna tara, nessun MQTT)
 - La tara automatica post-ENTER NON azzera lo stack e NON aggiorna il riferimento
+- Se la tara manuale fallisce per instabilità, offset, riferimento e stack restano invariati
 - Le overlay si chiudono dopo 3 secondi o alla pressione di un qualsiasi tasto
 - Long press "solido" usato su CLEAR: l'azione breve scatta al rilascio solo se la soglia non è stata raggiunta
 

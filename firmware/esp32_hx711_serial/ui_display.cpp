@@ -86,6 +86,13 @@ static void drawCenteredText(const char *str, int16_t y) {
   oled.drawStr(x, y, str);
 }
 
+static void drawCenteredTextInArea(const char* str, int16_t areaX, int16_t areaW, int16_t y) {
+  int16_t w = oled.getStrWidth(str);
+  int16_t x = areaX + (areaW - w) / 2;
+  if (x < areaX) x = areaX;
+  oled.drawStr(x, y, str);
+}
+
 static void drawCenteredTextUTF8(const char *str, int16_t y) {
   int16_t w = oled.getUTF8Width(str);
   int16_t x = (256 - w) / 2;
@@ -594,9 +601,7 @@ void ui_renderWeightLiveHalf(long gDispX2, const char* stateLabel,
 }
 
 
-void ui_renderTareProgress(uint8_t progressPct) {
-  if (progressPct > 100) progressPct = 100;
-
+void ui_renderTareStatus(ScaleState::TareUiState state, bool autoMode) {
   oled.clearBuffer();
 
   // ------- Riga alta: batteria + wifi -------
@@ -613,7 +618,12 @@ void ui_renderTareProgress(uint8_t progressPct) {
 
   // ------- Colonna sinistra: Mode / State (manteniamo la UI come prima) -------
   const char* modeValue  = uiGetModeLabel();   // es: WORK / LIVE
-  const char* stateValue = "TARE";            // durante barra tara
+  const char* stateValue = "TARE";
+  if (state == ScaleState::TARE_UI_OK) {
+    stateValue = "OK";
+  } else if (state == ScaleState::TARE_UI_FAILED) {
+    stateValue = "NO";
+  }
 
   const int16_t LABEL_X = 2;
   const int16_t VALUE_X = 44;
@@ -628,25 +638,42 @@ void ui_renderTareProgress(uint8_t progressPct) {
   oled.drawStr(LABEL_X, 36, "State:");
   oled.drawStr(VALUE_X, 36, stateValue);
 
-// ------- Barra di stabilizzazione (10px più corta, allineata a destra) -------
-  const int16_t BAR_RIGHT = 250;
-  const int16_t BAR_W = 170;     // prima 180
-  const int16_t BAR_H = 8;
-  const int16_t BAR_X = BAR_RIGHT - BAR_W;
-  const int16_t BAR_Y = 54;
+  // ------- Stato TARA: stabilizzazione, non countdown -------
+  const int16_t TARE_AREA_X = 86;
+  const int16_t TARE_AREA_W = 166;
 
-  // ------- Testo "- TARA -" centrato orizzontalmente sopra la barra -------
   oled.setFont(u8g2_font_logisoso24_tf);
   const char* txt = "- TARA -";
-  int16_t wTxt = oled.getStrWidth(txt);
-  int16_t xTxt = BAR_X + (BAR_W - wTxt) / 2;
-  oled.drawStr(xTxt, 40, txt);
+  if (state == ScaleState::TARE_UI_OK) {
+    txt = "TARA OK";
+  } else if (state == ScaleState::TARE_UI_FAILED) {
+    txt = "INSTABILE";
+  }
+  drawCenteredTextInArea(txt, TARE_AREA_X, TARE_AREA_W, 40);
 
-  oled.drawFrame(BAR_X, BAR_Y, BAR_W, BAR_H);
-  int16_t fillW = (int16_t)((BAR_W - 2) * (int32_t)progressPct / 100);
-  if (fillW < 0) fillW = 0;
-  if (fillW > (BAR_W - 2)) fillW = BAR_W - 2;
-  if (fillW > 0) oled.drawBox(BAR_X + 1, BAR_Y + 1, fillW, BAR_H - 2);
+  oled.setFont(u8g2_font_6x12_tr);
+  if (state == ScaleState::TARE_UI_FAILED) {
+    drawCenteredTextInArea("Ripeti a peso fermo", TARE_AREA_X, TARE_AREA_W, 58);
+  } else if (state == ScaleState::TARE_UI_OK) {
+    drawCenteredTextInArea("Zero aggiornato", TARE_AREA_X, TARE_AREA_W, 58);
+  } else {
+    drawCenteredTextInArea(autoMode ? "Auto" : "Manuale", TARE_AREA_X, TARE_AREA_W, 52);
+
+    const uint8_t phase = (millis() / 180) % 3;
+    const int16_t dotY = 57;
+    const int16_t dotW = 5;
+    const int16_t gap = 8;
+    const int16_t dotsW = dotW * 3 + gap * 2;
+    const int16_t x0 = TARE_AREA_X + (TARE_AREA_W - dotsW) / 2;
+    for (uint8_t i = 0; i < 3; i++) {
+      int16_t x = x0 + i * (dotW + gap);
+      if (i == phase) {
+        oled.drawBox(x, dotY, dotW, dotW);
+      } else {
+        oled.drawFrame(x, dotY, dotW, dotW);
+      }
+    }
+  }
 
   oled.sendBuffer();
 }

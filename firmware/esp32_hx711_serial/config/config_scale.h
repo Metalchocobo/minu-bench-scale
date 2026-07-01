@@ -36,9 +36,25 @@ static const float    AUTO_TARE_RANGE_G    = 0.40f; // Finestra quiete
 static const uint32_t AUTO_TARE_QUIET_MS   = 400;   // Tempo in range per fermarsi
 
 // ========================= TARE UI =========================
-static const uint32_t TARE_UI_CLAMP_MS  = 1500;     // Durata UI "- TARA -"
-static const uint32_t TARE_SETTLE_MS    = 250;      // Ignora vibrazioni iniziali
-static const uint32_t TARE_MIN_SAMPLES  = 40;       // Minimo campioni per offset
+static const uint8_t  TARE_SAMPLE_BUF_N      = 64;    // Finestra mobile campioni tara
+static const uint32_t TARE_OK_HOLD_MS        = 350;   // Feedback breve a tara applicata
+static const uint32_t TARE_FAIL_HOLD_MS      = 1200;  // Feedback errore tara instabile
+
+// Tara manuale: sicura, ma con uscita anticipata se il peso e' stabile.
+static const uint32_t TARE_MANUAL_SETTLE_MS      = 250;
+static const uint32_t TARE_MANUAL_MIN_MS         = 800;
+static const uint32_t TARE_MANUAL_MAX_MS         = 4000;
+static const uint8_t  TARE_MANUAL_MIN_SAMPLES    = 24;
+static const float    TARE_MANUAL_RANGE_G        = 3.0f;
+static const float    TARE_MANUAL_SLOPE_GPS      = 1.0f;
+
+// Auto-tare post ENTER: piu' snella, perche' arriva dopo una pesata gia' stabilizzata.
+static const uint32_t TARE_AUTO_SETTLE_MS        = 150;
+static const uint32_t TARE_AUTO_MIN_MS           = 500;
+static const uint32_t TARE_AUTO_MAX_MS           = 2000;
+static const uint8_t  TARE_AUTO_MIN_SAMPLES      = 16;
+static const float    TARE_AUTO_RANGE_G          = 4.0f;
+static const float    TARE_AUTO_SLOPE_GPS        = 1.5f;
 
 // ========================= LIMITE DISPLAY =========================
 static const float MAX_DISPLAY_G   = 16000.0f;      // Clamp ±16 kg

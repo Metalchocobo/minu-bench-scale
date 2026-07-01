@@ -59,7 +59,10 @@ static bool     g_tareUiActive    = false;
 static uint32_t g_tareStartMs     = 0;
 static uint32_t g_tareUiStartMs   = 0;
 static uint32_t g_tareUiEndMs     = 0;
-static long     g_tareSamples[64];
+static TareMode g_tareMode        = TARE_MODE_MANUAL;
+static TareUiState g_tareUiState  = TARE_UI_IDLE;
+static long     g_tareSamples[ScaleConfig::TARE_SAMPLE_BUF_N];
+static uint32_t g_tareSampleMs[ScaleConfig::TARE_SAMPLE_BUF_N];
 static uint8_t  g_tareSampleCount = 0;
 
 // ========================= GETTERS/SETTERS =========================
@@ -415,91 +418,210 @@ bool trySnapOnUnload(float gLive, float slopeGps, bool quietNow) {
 
 // ========================= TARA =========================
 
-void tareAccumSample(long rawUse) {
-  if (!g_tareActive) return;
-  if (g_tareSampleCount >= 64) return;
+struct TareParams {
+  uint32_t settleMs;
+  uint32_t minMs;
+  uint32_t maxMs;
+  uint8_t minSamples;
+  float maxRangeG;
+  float maxSlopeGps;
+};
 
-  uint32_t now = millis();
-  if ((now - g_tareStartMs) < ScaleConfig::TARE_SETTLE_MS) return;
-
-  g_tareSamples[g_tareSampleCount++] = rawUse;
-}
-
-void tareStart(uint32_t nowMs) {
-  g_tareActive      = true;
-  g_tareStartMs     = nowMs;
-  g_tareSampleCount = 0;
-  g_tareUiActive    = true;
-  g_tareUiStartMs   = nowMs;
-  g_tareUiEndMs     = nowMs + ScaleConfig::TARE_UI_CLAMP_MS;
-}
-
-bool tareMaybeApply(uint32_t nowMs) {
-  if (!g_tareActive) return false;
-  if ((nowMs - g_tareStartMs) < ScaleConfig::TARE_UI_CLAMP_MS) return false;
-
-  g_tareActive = false;
-
-  if (g_tareSampleCount < ScaleConfig::TARE_MIN_SAMPLES) {
-    Serial.print(F("[TARE] pochi campioni: "));
-    Serial.println(g_tareSampleCount);
-
-    if (g_tareSampleCount > 0) {
-      int64_t sum = 0;
-      for (uint8_t i = 0; i < g_tareSampleCount; i++) sum += g_tareSamples[i];
-      g_offsetRaw = (long)(sum / g_tareSampleCount);
-      g_ztCounts  = 0;
-    }
-    ScaleFilters::resetAll();
-    return true;
+static TareParams tareParamsForMode(TareMode mode) {
+  if (mode == TARE_MODE_AUTO) {
+    return {
+      ScaleConfig::TARE_AUTO_SETTLE_MS,
+      ScaleConfig::TARE_AUTO_MIN_MS,
+      ScaleConfig::TARE_AUTO_MAX_MS,
+      ScaleConfig::TARE_AUTO_MIN_SAMPLES,
+      ScaleConfig::TARE_AUTO_RANGE_G,
+      ScaleConfig::TARE_AUTO_SLOPE_GPS
+    };
   }
 
-  // Insertion sort
-  for (uint8_t i = 1; i < g_tareSampleCount; i++) {
-    long key = g_tareSamples[i];
+  return {
+    ScaleConfig::TARE_MANUAL_SETTLE_MS,
+    ScaleConfig::TARE_MANUAL_MIN_MS,
+    ScaleConfig::TARE_MANUAL_MAX_MS,
+    ScaleConfig::TARE_MANUAL_MIN_SAMPLES,
+    ScaleConfig::TARE_MANUAL_RANGE_G,
+    ScaleConfig::TARE_MANUAL_SLOPE_GPS
+  };
+}
+
+static bool tareBuildStableOffset(const TareParams& p, long* offsetOut, float* rangeGOut, float* slopeGpsOut, uint8_t* useNOut) {
+  if (offsetOut) *offsetOut = 0;
+  if (rangeGOut) *rangeGOut = 999999.0f;
+  if (slopeGpsOut) *slopeGpsOut = 999999.0f;
+  if (useNOut) *useNOut = 0;
+
+  uint8_t n = g_tareSampleCount;
+  if (n < p.minSamples) return false;
+  if (g_scaleCpg <= 0.01f) return false;
+
+  long sorted[ScaleConfig::TARE_SAMPLE_BUF_N];
+  for (uint8_t i = 0; i < n; i++) sorted[i] = g_tareSamples[i];
+
+  for (uint8_t i = 1; i < n; i++) {
+    long key = sorted[i];
     int j = (int)i - 1;
-    while (j >= 0 && g_tareSamples[j] > key) {
-      g_tareSamples[j + 1] = g_tareSamples[j];
+    while (j >= 0 && sorted[j] > key) {
+      sorted[j + 1] = sorted[j];
       j--;
     }
-    g_tareSamples[j + 1] = key;
+    sorted[j + 1] = key;
   }
 
-  uint8_t trim = (g_tareSampleCount >= 40) ? (g_tareSampleCount / 10) : 0;
-  uint8_t i0   = trim;
-  uint8_t i1   = g_tareSampleCount - trim;
+  uint8_t trim = (n >= 20) ? (n / 10) : 0;
+  uint8_t i0 = trim;
+  uint8_t i1 = n - trim;
+  if (i1 <= i0) return false;
 
-  int64_t s = 0;
+  long centralMin = sorted[i0];
+  long centralMax = sorted[i1 - 1];
+  float rangeG = fabsf((float)(centralMax - centralMin) / g_scaleCpg);
+
+  int64_t sum = 0;
   uint8_t useN = 0;
   for (uint8_t i = i0; i < i1; i++) {
-    s += g_tareSamples[i];
+    sum += sorted[i];
     useN++;
   }
+  if (useN == 0) return false;
 
-  if (useN == 0) {
-    Serial.println(F("[TARE] errore useN=0"));
-    return false;
+  uint8_t edgeN = n / 6;
+  if (edgeN < 3) edgeN = 3;
+  if ((uint8_t)(edgeN * 2) > n) edgeN = n / 2;
+  if (edgeN == 0) return false;
+
+  int64_t firstSum = 0;
+  int64_t lastSum = 0;
+  for (uint8_t i = 0; i < edgeN; i++) {
+    firstSum += g_tareSamples[i];
+    lastSum += g_tareSamples[n - edgeN + i];
   }
 
-  g_offsetRaw = (long)(s / useN);
-  g_ztCounts  = 0;
+  float firstAvg = (float)firstSum / (float)edgeN;
+  float lastAvg = (float)lastSum / (float)edgeN;
+  uint32_t dtMs = g_tareSampleMs[n - 1] - g_tareSampleMs[0];
+  float slopeGps = 999999.0f;
+  if (dtMs > 0) {
+    float deltaG = (lastAvg - firstAvg) / g_scaleCpg;
+    slopeGps = fabsf(deltaG) / ((float)dtMs / 1000.0f);
+  }
 
-  Serial.print(F("[TARE] OK. OFFSET="));
-  Serial.print(g_offsetRaw);
-  Serial.print(F(" n="));
-  Serial.println(useN);
+  if (rangeGOut) *rangeGOut = rangeG;
+  if (slopeGpsOut) *slopeGpsOut = slopeGps;
+  if (useNOut) *useNOut = useN;
 
-  ScaleFilters::resetAll();
-  resetFiltersAndState();
+  if (rangeG > p.maxRangeG) return false;
+  if (slopeGps > p.maxSlopeGps) return false;
+
+  if (offsetOut) *offsetOut = (long)(sum / useN);
   return true;
 }
 
+void tareAccumSample(long rawUse) {
+  if (!g_tareActive) return;
+
+  uint32_t now = millis();
+  TareParams p = tareParamsForMode(g_tareMode);
+  if ((now - g_tareStartMs) < p.settleMs) return;
+
+  uint8_t idx = g_tareSampleCount;
+  if (g_tareSampleCount >= ScaleConfig::TARE_SAMPLE_BUF_N) {
+    for (uint8_t i = 1; i < ScaleConfig::TARE_SAMPLE_BUF_N; i++) {
+      g_tareSamples[i - 1] = g_tareSamples[i];
+      g_tareSampleMs[i - 1] = g_tareSampleMs[i];
+    }
+    idx = ScaleConfig::TARE_SAMPLE_BUF_N - 1;
+  } else {
+    g_tareSampleCount++;
+  }
+
+  g_tareSamples[idx] = rawUse;
+  g_tareSampleMs[idx] = now;
+}
+
+void tareStart(uint32_t nowMs, TareMode mode) {
+  TareParams p = tareParamsForMode(mode);
+
+  g_tareActive      = true;
+  g_tareMode        = mode;
+  g_tareStartMs     = nowMs;
+  g_tareSampleCount = 0;
+  g_tareUiActive    = true;
+  g_tareUiState     = TARE_UI_SETTLING;
+  g_tareUiStartMs   = nowMs;
+  g_tareUiEndMs     = nowMs + p.maxMs + ScaleConfig::TARE_FAIL_HOLD_MS;
+}
+
+TareResult tareUpdate(uint32_t nowMs) {
+  if (!g_tareActive) return TARE_RESULT_IDLE;
+
+  TareParams p = tareParamsForMode(g_tareMode);
+  uint32_t elapsedMs = nowMs - g_tareStartMs;
+
+  long newOffset = 0;
+  float rangeG = 0.0f;
+  float slopeGps = 0.0f;
+  uint8_t useN = 0;
+
+  if (elapsedMs >= p.minMs &&
+      tareBuildStableOffset(p, &newOffset, &rangeG, &slopeGps, &useN)) {
+    g_tareActive = false;
+    g_tareUiState = TARE_UI_OK;
+    g_tareUiEndMs = nowMs + ScaleConfig::TARE_OK_HOLD_MS;
+
+    g_offsetRaw = newOffset;
+    g_ztCounts = 0;
+
+    Serial.print(F("[TARE] OK off="));
+    Serial.print(g_offsetRaw);
+    Serial.print(F(" n="));
+    Serial.print(useN);
+    Serial.print(F(" r="));
+    Serial.print(rangeG, 2);
+    Serial.print(F(" s="));
+    Serial.println(slopeGps, 2);
+
+    resetFiltersAndState();
+    return TARE_RESULT_APPLIED;
+  }
+
+  if (elapsedMs >= p.maxMs) {
+    g_tareActive = false;
+    g_tareUiState = TARE_UI_FAILED;
+    g_tareUiEndMs = nowMs + ScaleConfig::TARE_FAIL_HOLD_MS;
+
+    (void)tareBuildStableOffset(p, &newOffset, &rangeG, &slopeGps, &useN);
+    Serial.print(F("[TARE] FAIL n="));
+    Serial.print(g_tareSampleCount);
+    Serial.print(F(" r="));
+    Serial.print(rangeG, 2);
+    Serial.print(F(" s="));
+    Serial.println(slopeGps, 2);
+    return TARE_RESULT_FAILED;
+  }
+
+  return TARE_RESULT_PENDING;
+}
+
+bool tareMaybeApply(uint32_t nowMs) {
+  return tareUpdate(nowMs) == TARE_RESULT_APPLIED;
+}
+
 bool isTareUiActive()        { return g_tareUiActive; }
-void setTareUiActive(bool v) { g_tareUiActive = v; }
+void setTareUiActive(bool v) {
+  g_tareUiActive = v;
+  if (!v && !g_tareActive) g_tareUiState = TARE_UI_IDLE;
+}
 uint32_t getTareUiStartMs()  { return g_tareUiStartMs; }
 void setTareUiStartMs(uint32_t ms) { g_tareUiStartMs = ms; }
 uint32_t getTareUiEndMs()    { return g_tareUiEndMs; }
 void setTareUiEndMs(uint32_t ms)   { g_tareUiEndMs = ms; }
+TareMode getTareMode()       { return g_tareMode; }
+TareUiState getTareUiState() { return g_tareUiState; }
 
 // ========================= INATTIVITÀ =========================
 static long g_inactLastWeightG = 0;
