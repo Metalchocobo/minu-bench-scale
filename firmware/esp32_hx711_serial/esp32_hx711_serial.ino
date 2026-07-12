@@ -135,6 +135,9 @@ static char g_overlayMsg[12]  = {0};
 // Manual TARE reference capture: save ref offset only after tare is applied
 static bool g_captureReferenceAfterTare = false;
 static bool g_clearStackAfterTare = false;
+static bool g_manualTareArmed = false;
+static uint32_t g_manualTareArmMs = 0;
+static uint32_t g_tareKeyLockUntilMs = 0;
 
 // Runtime recovery survives WDT resets but is lost on power loss.
 struct RuntimeTareRecovery {
@@ -771,6 +774,16 @@ static void saveWifiUserEnabledToNVS(bool en) {
 
 // ========================= KEYPAD HANDLER =========================
 void handleKeyEvent(KeyCode key) {
+  // Keep the behavioral lock separate from UI state. This prevents duplicate
+  // ENTER events, tare restarts, and stack changes during the real operation.
+  uint32_t keyNow = millis();
+  bool timedTareLock = g_tareKeyLockUntilMs != 0 &&
+    (int32_t)(g_tareKeyLockUntilMs - keyNow) > 0;
+  if (g_manualTareArmed || ScaleState::isTareActive() || timedTareLock) {
+    Serial.println(F("[KEYPAD] Ignorato durante TARE"));
+    return;
+  }
+
   switch (key) {
     case KEY_TARE:
       Serial.println(F("[KEYPAD] TARE pressed"));
@@ -787,12 +800,20 @@ void handleKeyEvent(KeyCode key) {
         buzzerError();
         return;
       }
+#if ENABLE_WIFI_OTA
+      if (Net::isOtaInProgress()) {
+        Serial.println(F("[TARE] Disabilitata (OTA in corso)"));
+        buzzerWarn();
+        return;
+      }
+#endif
 
       // Mark reference capture to happen after tare is actually applied
       g_captureReferenceAfterTare = true;
       g_clearStackAfterTare = true;
-
-      ScaleState::tareStart(millis(), ScaleState::TARE_MODE_MANUAL);
+      g_manualTareArmed = true;
+      g_manualTareArmMs = millis();
+      Serial.println(F("[TARE] Attendo rilascio tasto"));
       break;
 
     case KEY_MODE:
@@ -862,46 +883,122 @@ void handleKeyEvent(KeyCode key) {
         lastOledMs = 0;
       }
 
-      // Read current display weight
+      if (hxHealth_state(&g_hxHealth) != HX_HEALTH_OK) {
+        Serial.println(F("[STACK] ENTER bloccato (HX non OK)"));
+        buzzerError();
+        break;
+      }
+
+      uint32_t commitNow = millis();
+      if (lastSampleMs == 0 ||
+          (uint32_t)(commitNow - lastSampleMs) > (SAMPLE_MS * 2UL)) {
+        Serial.println(F("[STACK] ENTER bloccato (snapshot vecchio)"));
+        buzzerWarn();
+        break;
+      }
+
+      // WORK accepts only weights already validated by the state machine.
+      // LIVE still requires a short quiet window on the WORK sample stream.
+      if (stEnable) {
+        int nStable = constrain((int)ceil((float)ST_TO_STABLE_MS / SAMPLE_MS), 2, 64);
+        if (ScaleState::getWeighState() != ScaleState::STATE_STABLE ||
+            ScaleFilters::histCount() < nStable) {
+          Serial.println(F("[STACK] ENTER bloccato (peso instabile)"));
+          buzzerWarn();
+          break;
+        }
+      } else {
+        int nQuiet = constrain((int)ceil(400.0f / SAMPLE_MS), 2, 64);
+        if (ScaleFilters::histCount() < nQuiet ||
+            ScaleFilters::rangeLastNSamples(nQuiet) > TARE_MANUAL_RANGE_G ||
+            fabsf(ScaleFilters::slopeLastNSamples(nQuiet)) > TARE_MANUAL_SLOPE_GPS) {
+          Serial.println(F("[STACK] ENTER bloccato (LIVE instabile)"));
+          buzzerWarn();
+          break;
+        }
+      }
+
+      // Read current display weight and the matching filtered RAW snapshot.
       float currentWeight = (float)(stEnable ? ScaleState::getDispWorkLast() : ScaleState::getDispLiveLast());
+      long workingOffset = g_lastRawFiltered;
 
       // If weight <= 0, ignore everything (no push, no tare, no MQTT)
-      if (currentWeight <= 0.0f) {
+      if (currentWeight <= 0.0f || workingOffset == 0) {
         Serial.println(F("[STACK] Weight <= 0, ignoring ENTER"));
         buzzerWarn();
         break;
       }
 
-      // Push to stack
-      bool pushed = WeighStack::push(currentWeight);
-      if (pushed) {
-        Serial.print(F("[STACK] Push: "));
-        Serial.print(currentWeight, 0);
-        Serial.print(F("g (count="));
-        Serial.print(WeighStack::count());
-        Serial.println(F(")"));
-      } else {
+      // Preflight: do not tare if the stack cannot record the weight.
+      if (WeighStack::count() >= WeighStack::MAX_ITEMS) {
         Serial.println(F("[STACK] Full, cannot push"));
         buzzerError();
+        break;
       }
 
-      Audio::requestPlayMp3(Track::ENTER_PRESSED);
-
-      // MQTT confirm (if active)
 #if ENABLE_MQTT
-      if (pushed && Net::isMqttCommandActive() && Net::isMqttConnected()) {
-        // Send exactly the registered weight to Laravel payload actual_weight
-        float registeredWeight = WeighStack::get(WeighStack::count() - 1);
-        Net::mqttPublishConfirm(registeredWeight);
-        Net::mqttClearActiveCommand();
+      bool hadMqttCommand = Net::isMqttCommandActive();
+      char mqttUuid[37] = {0};
+      if (hadMqttCommand && !Net::isMqttConnected()) {
+        Serial.println(F("[STACK] ENTER bloccato (MQTT offline)"));
+        buzzerWarn();
+        break;
+      }
+      if (hadMqttCommand) {
+        strncpy(mqttUuid, Net::getMqttCommandUuid(), sizeof(mqttUuid) - 1);
       }
 #endif
 
-      // Auto-tare (working tare: does NOT reset stack, does NOT update reference)
-      if (!hxHealth_isError(&g_hxHealth)) {
-        ScaleState::tareStart(millis(), ScaleState::TARE_MODE_AUTO);
-        Serial.println(F("[STACK] Auto-tare (working)"));
+      // Atomic local commit: working zero uses the same filtered RAW snapshot
+      // as the stable weight. It does not open another fallible sample window.
+      long oldOffset = ScaleState::getOffsetRaw();
+      long oldZt = ScaleState::getZtCounts();
+      if (!ScaleState::tareApplyWorking(workingOffset, commitNow)) {
+        Serial.println(F("[STACK] Working tare failed"));
+        buzzerError();
+        break;
       }
+      gLiveEma = 0.0f;
+      gLiveEmaInit = false;
+      gLiveEmaPrevStEnable = stEnable;
+
+      bool pushed = WeighStack::push(currentWeight);
+      if (!pushed) {
+        // Defensive path: preflight makes this branch normally unreachable.
+        ScaleState::setOffsetRaw(oldOffset);
+        ScaleState::setZtCounts(oldZt);
+        ScaleState::resetFiltersAndState();
+        ScaleState::setTareUiActive(false);
+        Serial.println(F("[STACK] Push failed, tare rolled back"));
+        buzzerError();
+        break;
+      }
+
+      Serial.print(F("[STACK] Push: "));
+      Serial.print(currentWeight, 0);
+      Serial.print(F("g (count="));
+      Serial.print(WeighStack::count());
+      Serial.println(F(")"));
+
+#if ENABLE_MQTT
+      if (hadMqttCommand) {
+        // The browser may advance only after the new zero has been applied.
+        if (!Net::mqttConfirmActiveCommand(mqttUuid, currentWeight)) {
+          WeighStack::pop();
+          ScaleState::setOffsetRaw(oldOffset);
+          ScaleState::setZtCounts(oldZt);
+          ScaleState::resetFiltersAndState();
+          ScaleState::setTareUiActive(false);
+          Serial.println(F("[STACK] Confirm failed, commit rolled back"));
+          buzzerError();
+          break;
+        }
+      }
+#endif
+
+      runtimeTareRecoverySave();
+      g_tareKeyLockUntilMs = commitNow + TARE_OK_HOLD_MS;
+      Audio::requestPlayMp3(Track::ENTER_PRESSED);
       break;
     }
 
@@ -1564,21 +1661,34 @@ void loop() {
   // Reset Task Watchdog (evita reboot se loop è vivo)
   feedLoopWatchdog();
 
+  // MQTT/TLS reconnects and their beeps can block sampling. Defer them during
+  // the bounded manual-tare critical section; connected traffic tolerates it.
+  uint32_t loopStartMs = millis();
+  if (g_manualTareArmed &&
+      (uint32_t)(loopStartMs - g_manualTareArmMs) >= TARE_MANUAL_ARM_MAX_MS) {
+    g_manualTareArmed = false;
+    g_manualTareArmMs = 0;
+    g_captureReferenceAfterTare = false;
+    g_clearStackAfterTare = false;
+    Serial.println(F("[TARE] Annullata (tasto trattenuto)"));
+  }
+  bool tareCritical = g_manualTareArmed || ScaleState::isTareActive();
+
 #if ENABLE_WIFI_OTA
-  Net::update();
+  if (!tareCritical) Net::update();
   wifiAudioUpdate(millis());
 #endif
 
 #if ENABLE_MQTT
   // Due bip di avviso se MQTT si disconnette (WiFi ancora up)
-  if (Net::mqttPopDisconnectBeep() && WiFi.isConnected()) {
+  if (!tareCritical && Net::mqttPopDisconnectBeep() && WiFi.isConnected()) {
     buzzerWarn();
     delay(120);
     buzzerWarn();
   }
 
   // Bip distintivo quando arriva un nuovo comando weigh da MQTT
-  if (Net::mqttPopCommandRxBeep()) {
+  if (!tareCritical && Net::mqttPopCommandRxBeep()) {
     buzzerMqttRx();
   }
 #endif
@@ -1613,6 +1723,21 @@ void loop() {
       lastOledMs = 0;
     }
     handleKeyEvent(key);
+  }
+
+  // Start manual tare after the debounced release so press/release vibration
+  // stays outside the 32-sample evaluation window.
+  if (g_manualTareArmed && !keypad_is_pressed(KEY_TARE)) {
+    g_manualTareArmed = false;
+    g_manualTareArmMs = 0;
+    if (hxHealth_isError(&g_hxHealth)) {
+      g_captureReferenceAfterTare = false;
+      g_clearStackAfterTare = false;
+      Serial.println(F("[TARE] Annullata al rilascio (HX error)"));
+      buzzerError();
+    } else {
+      ScaleState::tareStart(millis(), ScaleState::TARE_MODE_MANUAL);
+    }
   }
 
   // Se il wizard è attivo o long press in corso, resetta timer inattività
@@ -1869,7 +1994,7 @@ void loop() {
 
         int nStab = constrain((int)ceil((float)ST_TO_STABLE_MS / SAMPLE_MS), 2, 64);
         float rngStab = ScaleFilters::rangeLastNSamples(nStab);
-        if (rngStab < ST_ENTER_RANGE_G) {
+        if (ScaleFilters::histCount() >= nStab && rngStab < ST_ENTER_RANGE_G) {
           ScaleState::setWeighState(ScaleState::STATE_STABLE);
           ScaleState::setGramsLatch(gLive);
           gDisp = ScaleState::displayWorkQuant(ScaleState::getGramsLatch(), ScaleState::getDispWorkLast());
@@ -1926,10 +2051,15 @@ void loop() {
   }
 
   // Tara apply / fail
-  ScaleState::TareResult tareResult = ScaleState::tareUpdate(millis());
+  uint32_t tareNow = millis();
+  ScaleState::TareResult tareResult = ScaleState::tareUpdate(tareNow);
   bool tareApplied = (tareResult == ScaleState::TARE_RESULT_APPLIED);
   if (tareApplied) {
     runtimeTareRecoverySave();
+    gLiveEma = 0.0f;
+    gLiveEmaInit = false;
+    gLiveEmaPrevStEnable = stEnable;
+    g_tareKeyLockUntilMs = tareNow + TARE_OK_HOLD_MS;
   }
   if (tareApplied && g_captureReferenceAfterTare) {
     if (g_clearStackAfterTare) {
@@ -1945,6 +2075,7 @@ void loop() {
   } else if (tareResult == ScaleState::TARE_RESULT_FAILED) {
     g_captureReferenceAfterTare = false;
     g_clearStackAfterTare = false;
+    g_tareKeyLockUntilMs = tareNow + TARE_FAIL_HOLD_MS;
     buzzerError();
   }
 

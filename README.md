@@ -1,4 +1,4 @@
-# Minù Bench Scale — ESP32 + HX711 + OLED SSD1322 + INA219 (SLA 6 V) · v2026-02-13
+# Minù Bench Scale — ESP32 + HX711 + OLED SSD1322 + INA219 (SLA 6 V) · v2026-07-12
 
 Bilancia da banco per uso interno in laboratorio (gelato/pasticceria), pensata per guidare e rendere affidabili le pesate ingredienti (non “pesatura legale”).
 
@@ -51,7 +51,7 @@ Scopo: gestire errori runtime dell’HX711 **senza blocchi in loop** (logica sol
 | Stato | Quando | UI | Audio | Azioni |
 |---|---|---|---|---|
 | OK | campioni regolari | UI normale | nessuno | tara/calib abilitate |
-| WARN | assenza campioni ≥ 500 ms | triangolino warning alto a destra | nessuno | nessun blocco UI/tasti |
+| WARN | assenza campioni ≥ 500 ms | triangolino warning alto a destra | nessuno | tara manuale abilitata; ENTER bloccato finché HX torna OK |
 | ERROR | assenza campioni ≥ 3.000 ms | schermata ERROR bloccante, mostra “Ultimo valore valido” se non più vecchio di 30 s | 0015.mp3 **una sola volta** all’ingresso | **tara/calib disabilitate** |
 | ERROR HARD | assenza campioni ≥ 30.000 ms o nessun valore valido mai registrato | schermata ERROR bloccante, **non** mostra valore | 0015.mp3 una sola volta all’ingresso | **tara/calib disabilitate** |
 
@@ -190,7 +190,8 @@ così non rallentiamo i carichi rapidi).
 Nota: la guard scarta solo **frame singoli** (o confermati) e quindi non cambia la logica WORK/zt/stati, se non in presenza di glitch reali.
 
 ### TARE (novità)
-- Tara runtime **non-blocking**: raccoglie campioni in finestra mobile, applica trimmed-mean solo se range e pendenza sono stabili, altrimenti lascia invariato l’offset e mostra errore.
+- Tara manuale **non-blocking** a 80 SPS: parte dal rilascio del tasto, valuta una finestra mobile fissa di 32 campioni con trimmed mean, range e pendenza robusta; se il segnale non è stabile lascia invariato l’offset.
+- La tara di lavoro post-**ENTER** è immediata: usa lo stesso RAW WORK filtrato della pesata già validata, senza avviare una seconda finestra fallibile.
 
 ### Auto-TARE al boot (novità)
 - Approccio “robusto”: discard iniziale + fino a **64 campioni** e **trimmed-mean** (taglia outlier) per ridurre i casi di “0 → +1 g” dopo l’avvio.
@@ -202,17 +203,22 @@ I parametri (N di media, isteresi, ecc.) sono nel firmware e sono pensati per es
 ## 7) TARA (UI e logica)
 
 Tasto **TARE**:
-- avvia tara manuale e mostra “**- TARA -**” con animazione a tre step, senza barra di caricamento
-- usa una finestra mobile di campioni, scarta gli outlier con trimmed-mean e verifica range + pendenza
-- se il peso è stabile può chiudere prima del timeout; se resta instabile mostra “**INSTABILE** / Ripeti a peso fermo” e non modifica l’offset
+- arma la tara alla pressione e avvia il campionamento dopo il rilascio debounced, così pressione e rilascio non contaminano la misura; una pressione trattenuta oltre 1,5 s annulla l'operazione
+- dopo 60 ms di assestamento valuta sempre gli ultimi 32 campioni (~400 ms a 80 SPS), taglia i 4 estremi per lato e verifica range + pendenza su valori robusti
+- richiede 7 finestre valide consecutive (~75 ms): normalmente applica il nuovo zero in circa 0,5–0,6 s dal rilascio; il timeout è 1,1 s
+- mostra “**- TARA -**” durante l’acquisizione; se resta instabile mostra “**INSTABILE** / Ripeti a peso fermo” e non modifica l’offset
 - durante la tara la pesata è “bloccata” a display (l’utente non deve pesare)
 - se la tara manuale riesce, azzera lo stack e salva la tara di riferimento della sessione
 
-Tara automatica post-**ENTER**:
-- usa un profilo più rapido perché arriva dopo una pesata già confermata
-- non azzera lo stack e non aggiorna il riferimento della sessione
+Zero di lavoro post-**ENTER**:
+- in WORK accetta ENTER solo con HX in stato OK, snapshot fresco e pesata realmente STABLE per la finestra configurata; in LIVE richiede almeno 400 ms di segnale quieto
+- applica immediatamente come offset lo stesso snapshot RAW filtrato che ha prodotto la pesata accettata
+- solo dopo il nuovo zero registra il peso nello stack e pubblica il `confirm` MQTT; il comando viene cancellato solo se il publish viene accettato
+- se una condizione fallisce, oppure MQTT è offline con un comando attivo, offset, stack e comando restano invariati
+- non azzera lo stack e non aggiorna la tara di riferimento della sessione
 
-Obiettivo: evitare tara sbagliate se la cella si muove durante l’operazione, senza rendere lunga la tara quando il peso è già fermo.
+Durante una tara o il breve commit post-ENTER gli altri tasti vengono ignorati, evitando doppi inserimenti e riavvii dell’operazione.
+La tara manuale è rifiutata durante un upload OTA, che continua quindi senza interruzioni.
 
 ---
 
@@ -390,7 +396,7 @@ La bilancia si identifica con il MAC address WiFi (lowercase, senza separatori, 
 
 ### Tasti (con MQTT attivo)
 
-- **ENTER**: se c'è un comando weigh attivo, pubblica `confirm` con il campo `actual_weight` uguale al peso registrato nello stack, poi torna in idle
+- **ENTER**: con peso valido e stabile applica lo zero di lavoro, registra il peso nello stack e infine pubblica `confirm`; solo dopo un publish accettato cancella il comando e torna in idle
 - **SKIP**: se c'è un comando weigh attivo, pubblica `skip`, poi torna in idle. Se non c'è nessun comando attivo, emette un buzzer di avviso
 
 ### Display MQTT
@@ -424,7 +430,7 @@ Stack pesate in RAM (LIFO, max 50 elementi, perso al riavvio — corretto). Perm
 ### Workflow tipico
 
 1. Metti contenitore, premi **TARA** → avvia tara manuale; se riesce azzera stack e salva la tara di riferimento
-2. Aggiungi ingrediente, premi **ENTER** → peso viene registrato nello stack + tara automatica (display torna a 0)
+2. Aggiungi ingrediente, attendi **STABLE** e premi **ENTER** → zero di lavoro immediato, registrazione nello stack e `confirm` MQTT (display torna a 0)
 3. Ripeti per ogni ingrediente
 4. **TOTAL** (breve) → mostra overlay di controllo con **Registrato**, **Effettivo** e **Differenza** (3 secondi)
 5. **CLEAR** (breve) → rimuove ultima pesata (LIFO pop)
@@ -435,13 +441,14 @@ Stack pesate in RAM (LIFO, max 50 elementi, perso al riavvio — corretto). Perm
 | Tasto | Breve | Lungo (2s) |
 |---|---|---|
 | **TARE** | Tara manuale; se riesce azzera stack e salva riferimento | — |
-| **ENTER** | Push peso + MQTT confirm + auto-tare | — |
+| **ENTER** | Valida peso + zero di lavoro + push + MQTT confirm | — |
 | **TOTAL** | Mostra overlay confronto: Registrato / Effettivo / Differenza | — |
 | **CLEAR** | Pop ultimo (LIFO) | Svuota tutto lo stack |
 
 **Note:**
 - ENTER con peso <= 0: ignorato (nessun push, nessuna tara, nessun MQTT)
-- La tara automatica post-ENTER NON azzera lo stack e NON aggiorna il riferimento
+- ENTER con HX non OK, snapshot vecchio o peso instabile: ignorato senza modificare offset, stack o comando MQTT
+- Lo zero di lavoro post-ENTER NON azzera lo stack e NON aggiorna il riferimento
 - Se la tara manuale fallisce per instabilità, offset, riferimento e stack restano invariati
 - Le overlay si chiudono dopo 3 secondi o alla pressione di un qualsiasi tasto
 - Long press "solido" usato su CLEAR: l'azione breve scatta al rilascio solo se la soglia non è stata raggiunta
@@ -455,7 +462,8 @@ Stack pesate in RAM (LIFO, max 50 elementi, perso al riavvio — corretto). Perm
 ### Interazione con MQTT
 
 - **Nessuna modifica ai messaggi MQTT.** Lo stack è puramente locale.
-- Il push nello stack avviene prima del publish MQTT confirm
+- L'ordine è: validazione → zero di lavoro → push nello stack → publish MQTT `confirm`
+- Se il publish non viene accettato, push e zero vengono annullati e il comando resta attivo
 - Il comando MQTT `clear` non tocca lo stack pesate (riguarda solo UUID/target)
 
 ---

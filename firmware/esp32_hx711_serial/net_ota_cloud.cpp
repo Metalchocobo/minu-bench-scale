@@ -601,8 +601,11 @@ void mqttClearActiveCommand() {
   mqtt_cmdTargetWeight = 0.0f;
 }
 
-void mqttPublishConfirm(float actualWeight) {
-  if (!mqttClient.connected() || !mqtt_cmdActive) return;
+bool mqttConfirmActiveCommand(const char* expectedUuid, float actualWeight) {
+  if (!mqttClient.connected() || !mqtt_cmdActive || !expectedUuid ||
+      strcmp(mqtt_cmdUuid, expectedUuid) != 0) {
+    return false;
+  }
 
   char buf[160];
   // Formatta con 1 decimale
@@ -610,11 +613,18 @@ void mqttPublishConfirm(float actualWeight) {
   dtostrf(actualWeight, 1, 1, weightStr);
   snprintf(buf, sizeof(buf),
     "{\"type\":\"confirm\",\"uuid\":\"%s\",\"actual_weight\":%s}",
-    mqtt_cmdUuid, weightStr);
+    expectedUuid, weightStr);
 
-  mqttClient.publish(mqtt_topicRsp, (const uint8_t*)buf, strlen(buf), false);
+  bool published = mqttClient.publish(mqtt_topicRsp, (const uint8_t*)buf, strlen(buf), false);
+  if (!published) {
+    Serial.println(F("[MQTT] Confirm publish fallito"));
+    return false;
+  }
+
   Serial.print(F("[MQTT] Pubblicato confirm: "));
   Serial.println(buf);
+  mqttClearActiveCommand();
+  return true;
 }
 
 void mqttPublishSkip() {

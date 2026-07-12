@@ -37,24 +37,26 @@ static const uint32_t AUTO_TARE_QUIET_MS   = 400;   // Tempo in range per fermar
 
 // ========================= TARE UI =========================
 static const uint8_t  TARE_SAMPLE_BUF_N      = 64;    // Finestra mobile campioni tara
-static const uint32_t TARE_OK_HOLD_MS        = 350;   // Feedback breve a tara applicata
-static const uint32_t TARE_FAIL_HOLD_MS      = 1200;  // Feedback errore tara instabile
+static const uint32_t TARE_OK_HOLD_MS        = 200;   // Feedback breve a tara applicata
+static const uint32_t TARE_FAIL_HOLD_MS      = 700;   // Visible after the blocking error beep
 
-// Tara manuale: sicura, ma con uscita anticipata se il peso e' stabile.
-static const uint32_t TARE_MANUAL_SETTLE_MS      = 250;
-static const uint32_t TARE_MANUAL_MIN_MS         = 800;
-static const uint32_t TARE_MANUAL_MAX_MS         = 4000;
-static const uint8_t  TARE_MANUAL_MIN_SAMPLES    = 24;
-static const float    TARE_MANUAL_RANGE_G        = 3.0f;
-static const float    TARE_MANUAL_SLOPE_GPS      = 1.0f;
+// Manual tare at 80 SPS. Timing starts after the debounced key release.
+// The latest 32 samples span ~400 ms; 7 confirmations add ~75 ms.
+static const uint32_t TARE_MANUAL_SETTLE_MS         = 60;
+static const uint32_t TARE_MANUAL_MIN_MS            = 450;
+static const uint32_t TARE_MANUAL_MAX_MS            = 1100;
+static const uint32_t TARE_MANUAL_ARM_MAX_MS        = 1500;
+static const uint8_t  TARE_MANUAL_WINDOW_SAMPLES    = 32;
+static const uint8_t  TARE_MANUAL_TRIM_SAMPLES      = 4;
+static const uint8_t  TARE_MANUAL_EDGE_SAMPLES      = 8;
+static const uint8_t  TARE_MANUAL_STABLE_SAMPLES    = 7;
+static const uint32_t TARE_MANUAL_SAMPLE_MAX_AGE_MS = 75;
+static const uint32_t TARE_MANUAL_WINDOW_MAX_MS     = 550;
+static const float    TARE_MANUAL_RANGE_G           = 2.5f;
+static const float    TARE_MANUAL_SLOPE_GPS         = 2.0f;
 
-// Auto-tare post ENTER: piu' snella, perche' arriva dopo una pesata gia' stabilizzata.
-static const uint32_t TARE_AUTO_SETTLE_MS        = 150;
-static const uint32_t TARE_AUTO_MIN_MS           = 500;
-static const uint32_t TARE_AUTO_MAX_MS           = 2000;
-static const uint8_t  TARE_AUTO_MIN_SAMPLES      = 16;
-static const float    TARE_AUTO_RANGE_G          = 4.0f;
-static const float    TARE_AUTO_SLOPE_GPS        = 1.5f;
+// The post-ENTER working tare does not open a new window: it applies the WORK
+// snapshot that was already filtered and validated as STABLE.
 
 // ========================= LIMITE DISPLAY =========================
 static const float MAX_DISPLAY_G   = 16000.0f;      // Clamp ±16 kg

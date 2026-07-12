@@ -107,6 +107,9 @@ void tareAccumSample(long rawUse);
 // Avvia raccolta tara
 void tareStart(uint32_t nowMs, TareMode mode = TARE_MODE_MANUAL);
 
+// Apply working zero immediately from the already filtered/stable RAW snapshot.
+bool tareApplyWorking(long rawOffset, uint32_t nowMs);
+
 // Aggiorna/applica tara. La tara cambia offset solo se la finestra e' stabile.
 TareResult tareUpdate(uint32_t nowMs);
 
@@ -114,6 +117,7 @@ TareResult tareUpdate(uint32_t nowMs);
 bool tareMaybeApply(uint32_t nowMs);
 
 // UI tara attiva?
+bool isTareActive();
 bool isTareUiActive();
 void setTareUiActive(bool v);
 uint32_t getTareUiStartMs();

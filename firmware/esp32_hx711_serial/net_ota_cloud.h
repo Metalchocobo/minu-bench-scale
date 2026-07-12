@@ -80,8 +80,9 @@ namespace Net {
   // True se connesso al broker MQTT
   bool isMqttConnected();
 
-  // Pubblica risposta confirm sul topic response
-  void mqttPublishConfirm(float actualWeight);
+  // Confirm the active command only while UUID and publish state are valid.
+  // Clear it only after PubSubClient accepts the payload.
+  bool mqttConfirmActiveCommand(const char* expectedUuid, float actualWeight);
 
   // Pubblica risposta skip sul topic response
   void mqttPublishSkip();
