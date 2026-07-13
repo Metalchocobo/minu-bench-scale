@@ -44,7 +44,7 @@ Scopo: gestire errori runtime dell’HX711 **senza blocchi in loop** (logica sol
 **Nota importante (cablaggio DOUT su ESP32)**
 - Se **DOUT è su GPIO34..39** (es. **GPIO35**), l’ESP32 **non ha pull-up interni**: a modulo scollegato il pin può fluttuare e risultare “ready” a caso.
 - In quel caso la rilevazione “modulo non trovato” non è affidabile solo via firmware.
-- Soluzioni robuste: spostare DOUT su un GPIO con pull-up (es. GPIO22) oppure aggiungere una pull-up esterna verso 3V3.
+- Una modifica robusta richiede un GPIO libero con pull-up o una rete esterna coerente con i livelli dell'HX711. **GPIO22 non è libero**: nel pinout corrente pilota il buzzer. Qualsiasi cambio di DOUT va quindi coordinato tra cablaggio, `config/config_pins.h` e documentazione.
 
 **Stati e comportamento**
 
@@ -52,7 +52,7 @@ Scopo: gestire errori runtime dell’HX711 **senza blocchi in loop** (logica sol
 |---|---|---|---|---|
 | OK | campioni regolari | UI normale | nessuno | tara/calib abilitate |
 | WARN | assenza campioni ≥ 500 ms | triangolino warning alto a destra | nessuno | tara manuale abilitata; ENTER bloccato finché HX torna OK |
-| ERROR | assenza campioni ≥ 3.000 ms | schermata ERROR bloccante, mostra “Ultimo valore valido” se non più vecchio di 30 s | 0015.mp3 **una sola volta** all’ingresso | **tara/calib disabilitate** |
+| ERROR | assenza campioni ≥ 3.000 ms | schermata ERROR bloccante, senza mostrare l'ultimo peso | 0015.mp3 **una sola volta** all’ingresso | **tara/calib disabilitate** |
 | ERROR HARD | assenza campioni ≥ 30.000 ms o nessun valore valido mai registrato | schermata ERROR bloccante, **non** mostra valore | 0015.mp3 una sola volta all’ingresso | **tara/calib disabilitate** |
 
 ---
@@ -111,6 +111,11 @@ Condensatori consigliati (stabilità rail 5 V):
 | Tastiera C1 | Keypad | 19 | |
 | Tastiera C2 | Keypad | 21 | |
 | Buzzer | buzzer passivo | 22 | LEDC |
+| DFPlayer TX | DFPlayer RX | 4 | resistenza 1 kΩ in serie consigliata |
+| DFPlayer RX | DFPlayer TX | 34 | opzionale, input-only |
+| DFPlayer power-gate | high-side esterno | 2 | HIGH = ON; non alimenta direttamente il modulo |
+| DFPlayer BUSY | DFPlayer | 39 | input-only; pull-up esterna consigliata |
+| LED standby | LED esterno | 15 | active-high, con resistenza in serie |
 
 ---
 
@@ -213,7 +218,7 @@ Tasto **TARE**:
 Zero di lavoro post-**ENTER**:
 - in WORK accetta ENTER solo con HX in stato OK, snapshot fresco e pesata realmente STABLE per la finestra configurata; in LIVE richiede almeno 400 ms di segnale quieto
 - applica immediatamente come offset lo stesso snapshot RAW filtrato che ha prodotto la pesata accettata
-- solo dopo il nuovo zero registra il peso nello stack e pubblica il `confirm` MQTT; il comando viene cancellato solo se il publish viene accettato
+- solo dopo il nuovo zero registra il peso nello stack e prepara il `confirm` MQTT; con un comando session-aware la response resta in retry e il comando viene chiuso soltanto dall'ACK del browser
 - se una condizione fallisce, oppure MQTT è offline con un comando attivo, offset, stack e comando restano invariati
 - non azzera lo stack e non aggiorna la tara di riferimento della sessione
 
@@ -353,7 +358,7 @@ Se non ti serve OTA/WiFi:
 
 ## 12) MQTT — Integrazione gestionale
 
-Il firmware supporta la comunicazione real-time con il gestionale (Laravel/Backpack) tramite un broker MQTT (Mosquitto) su TLS. Il browser invia comandi di pesatura alla bilancia via MQTT; la bilancia mostra il target sul display e risponde con il peso confermato o skip.
+Il firmware comunica in tempo reale con il browser del gestionale Laravel/Backpack tramite Mosquitto. Il browser usa WSS, la bilancia MQTTS; Laravel gestisce associazioni, UI e persistenza REST, ma non è nel percorso MQTT real-time.
 
 Abilitazione: `#define ENABLE_MQTT 1` in `net_ota_cloud.h` (richiede `ENABLE_WIFI_OTA 1`).
 
@@ -371,33 +376,74 @@ Comandi seriali:
 
 Se le credenziali non sono configurate, MQTT resta inattivo (nessun tentativo di connessione).
 
-Porta default: **8883** (MQTTS, TLS). Il certificato CA (ISRG Root X1 di Let's Encrypt) è nel firmware. Il nome bilancia (`MQTT_SCALE_NAME`) e la versione firmware (`MQTT_FW_VERSION`) sono nei define.
+Porta bilancia: **8883** (MQTTS/TLS). Porta browser: **8884** (WSS/TLS). Il certificato CA ISRG Root X1 è nel firmware. `MQTT_SCALE_NAME` e `MQTT_FW_VERSION` sono definiti in `net_ota_cloud.h`; la versione corrente è **1.1.0**.
 
-### Comportamento
+### Topic e QoS effettivo
 
 La bilancia si identifica con il MAC address WiFi (lowercase, senza separatori, 12 hex), usato come `scale_id` nei topic MQTT.
 
-**Topic:**
+| Topic | Direzione | QoS | Retain | Uso |
+|---|---|---:|---:|---|
+| `minu/scale/{scale_id}/command` | Browser → bilancia | 1 | sì | `weigh` e `clear` session-scoped |
+| `minu/scale/{scale_id}/response` | Bilancia → browser | 0 | no | `confirm` e `skip`; affidabilità tramite retry applicativo |
+| `minu/scale/{scale_id}/ack` | Browser → bilancia | 1 | no | `response_ack` applicativo |
+| `minu/scale/{scale_id}/status` | Bilancia → browser | online 0; LWT offline 1 | sì | stato, nome e versione firmware |
+| `minu/scale/{scale_id}/owner` | Browser → browser | 1 | sì | lease della scheda che controlla la bilancia |
 
-| Topic | Direzione | QoS | Retain | Descrizione |
-|---|---|---|---|---|
-| `minu/scale/{scale_id}/status` | Bilancia → Browser | 1 | si | Stato online/offline (include nome e versione firmware) |
-| `minu/scale/{scale_id}/command` | Browser → Bilancia | 1 | si | Comandi pesatura (`weigh`, `clear`) |
-| `minu/scale/{scale_id}/response` | Bilancia → Browser | 1 | no | Risposte (`confirm` con `actual_weight` registrato, `skip`) |
+PubSubClient pubblica a QoS 0: per questo una response non viene considerata consegnata dal solo risultato di `publish()`. Il buffer della libreria viene impostato e verificato a runtime con `mqttClient.setBufferSize(512)`; il solo define `MQTT_MAX_PACKET_SIZE` non è sufficiente.
+
+### Payload session-aware
+
+Comando di pesatura:
+
+```json
+{"type":"weigh","uuid":"...","name":"Zucchero","target_weight":450,"session_id":"..."}
+```
+
+Pulizia comando e LWT browser:
+
+```json
+{"type":"clear","session_id":"..."}
+```
+
+La bilancia accetta `clear` soltanto se il `session_id` coincide con quello del comando attivo. Un clear legacy senza sessione può pulire solo un comando legacy; il LWT di una vecchia scheda non può annullare il comando di una nuova sessione.
+
+Response firmware:
+
+```json
+{"type":"confirm","uuid":"...","session_id":"...","response_id":"a1b2c3d40000012300000001","actual_weight":448.0}
+{"type":"skip","uuid":"...","session_id":"...","response_id":"a1b2c3d40000012300000002"}
+```
+
+ACK browser:
+
+```json
+{"type":"response_ack","response_id":"a1b2c3d40000012300000001"}
+```
+
+Il firmware conserva una sola response session-aware in RAM e la ripubblica ogni **1 secondo** finché riceve l'ACK corrispondente. ENTER e SKIP restano bloccati durante questa attesa. Il browser deduplica `response_id`, esegue il callback una sola volta e ACKa nuovamente gli eventuali duplicati. Dopo un reload finale, una response della stessa sessione viene inoltre riconciliata senza ripetere il REST quando la pagina sa che non esiste più un ingrediente attivo. L'ACK conferma che il browser ha ricevuto l'evento, non che il successivo POST REST Laravel sia riuscito.
+
+Un nuovo `weigh` con sessione o UUID differenti sostituisce esplicitamente una response ancora pending. I browser legacy restano supportati: un comando privo di `session_id` riceve la vecchia response senza `response_id`, con singolo tentativo e senza attesa di ACK.
+
+### Ownership browser
+
+Ogni scheda browser usa un `session_id` stabile durante reload e reconnect, così può completare un'eventuale response pending. Un Web Lock esclusivo impedisce a una scheda duplicata di riusare l'ID copiato da `sessionStorage`; il fallback cross-tab ruota l'ID anche quando la presenza di un'altra istanza resta incerta. Il topic owner retained contiene `user_id`, nome operatore, `session_id` e timestamp. Il proprietario rinnova il lease ogni **10 secondi**; dopo **30 secondi** senza rinnovo un'altra scheda può reclamarlo. Anche due schede dello stesso utente sono quindi istanze distinte. Una scheda non proprietaria resta connessa, non pubblica comandi e mostra chi detiene il controllo.
 
 **Alla connessione:**
-- Pubblica status `online` (retained) con scale_id, nome e firmware_version
-- Registra LWT che pubblica status `offline` (retained) alla disconnessione imprevista
-- Si sottoscrive al topic command per ricevere comandi dal browser
+- la bilancia pubblica status `online` retained con scale ID, nome e firmware version;
+- registra un LWT `offline` retained;
+- si sottoscrive a `command` e `ack` richiedendo QoS 1;
+- il browser attende la conferma del lease owner prima di pubblicare o ripubblicare un comando attivo.
 
 **Comando `weigh`:** il browser invia UUID ingrediente, nome e peso target. La bilancia emette un bip distintivo di ricezione e mostra il target sul display (icona target + grammi).
 
-**Comando `clear`:** annulla il comando attivo, la bilancia torna in idle.
+**Comando `clear`:** annulla soltanto il comando della sessione corrispondente. Non modifica lo stack locale.
 
 ### Tasti (con MQTT attivo)
 
-- **ENTER**: con peso valido e stabile applica lo zero di lavoro, registra il peso nello stack e infine pubblica `confirm`; solo dopo un publish accettato cancella il comando e torna in idle
-- **SKIP**: se c'è un comando weigh attivo, pubblica `skip`, poi torna in idle. Se non c'è nessun comando attivo, emette un buzzer di avviso
+- **ENTER**: con peso valido e stabile applica lo zero di lavoro, registra il peso nello stack e prepara `confirm`; per un comando session-aware resta pending fino all'ACK browser
+- **SKIP**: prepara `skip` per il comando attivo e resta pending fino all'ACK browser; senza comando emette un buzzer di avviso
+- Un secondo ENTER/SKIP durante il pending viene rifiutato, evitando doppie registrazioni o risposte sovrapposte
 
 ### Display MQTT
 
@@ -414,7 +460,7 @@ La bilancia si identifica con il MAC address WiFi (lowercase, senza separatori, 
 - Riconnessione automatica con **backoff esponenziale** (2s → 4s → 8s → 16s → 30s max)
 - Durante il TLS handshake MQTT il WDT resta attivo ma viene portato temporaneamente a **20s**; finito l'handshake torna a **8s**
 - PubSubClient usa keepalive **15s** e socket timeout **2s**, così una connessione half-open non blocca a lungo il loop
-- Alla sospensione (light-sleep per inattività o batteria scarica): MQTT viene disconnesso. Al wake, viene ristabilito (se le credenziali sono configurate)
+- Alla sospensione MQTT viene disconnesso; comando e outbox RAM restano disponibili e, al wake, la connessione e gli eventuali retry vengono ripristinati
 - Il log di sospensione (`[MQTT] Sospeso`) viene emesso solo se c'era stato MQTT attivo da chiudere, evitando spam seriale quando il WiFi e' giu
 
 ### NTP
@@ -432,7 +478,7 @@ Stack pesate in RAM (LIFO, max 50 elementi, perso al riavvio — corretto). Perm
 1. Metti contenitore, premi **TARA** → avvia tara manuale; se riesce azzera stack e salva la tara di riferimento
 2. Aggiungi ingrediente, attendi **STABLE** e premi **ENTER** → zero di lavoro immediato, registrazione nello stack e `confirm` MQTT (display torna a 0)
 3. Ripeti per ogni ingrediente
-4. **TOTAL** (breve) → mostra overlay di controllo con **Registrato**, **Effettivo** e **Differenza** (3 secondi)
+4. **TOTAL** (breve) → mostra overlay di controllo con **Registrato**, **Effettivo** e **Differenza** (10 secondi)
 5. **CLEAR** (breve) → rimuove ultima pesata (LIFO pop)
 6. **CLEAR** (2 secondi) → svuota tutto lo stack
 
@@ -450,7 +496,7 @@ Stack pesate in RAM (LIFO, max 50 elementi, perso al riavvio — corretto). Perm
 - ENTER con HX non OK, snapshot vecchio o peso instabile: ignorato senza modificare offset, stack o comando MQTT
 - Lo zero di lavoro post-ENTER NON azzera lo stack e NON aggiorna il riferimento
 - Se la tara manuale fallisce per instabilità, offset, riferimento e stack restano invariati
-- Le overlay si chiudono dopo 3 secondi o alla pressione di un qualsiasi tasto
+- Le overlay si chiudono dopo 10 secondi; l'overlay TOTAL si chiude anche con TOTAL, TARE o ENTER
 - Long press "solido" usato su CLEAR: l'azione breve scatta al rilascio solo se la soglia non è stata raggiunta
 
 ### Comandi seriali
@@ -461,10 +507,11 @@ Stack pesate in RAM (LIFO, max 50 elementi, perso al riavvio — corretto). Perm
 
 ### Interazione con MQTT
 
-- **Nessuna modifica ai messaggi MQTT.** Lo stack è puramente locale.
-- L'ordine è: validazione → zero di lavoro → push nello stack → publish MQTT `confirm`
-- Se il publish non viene accettato, push e zero vengono annullati e il comando resta attivo
-- Il comando MQTT `clear` non tocca lo stack pesate (riguarda solo UUID/target)
+- Lo stack resta locale, ma ENTER può generare una response MQTT session-aware.
+- L'ordine è: validazione → zero di lavoro → push nello stack → staging/publish del `confirm`.
+- Se la response non può essere preparata, push e zero vengono annullati. Una response preparata resta invece in RAM e viene ritentata fino all'ACK del browser, anche se il primo publish QoS 0 fallisce.
+- Durante una response in attesa di ACK, nuovi ENTER e SKIP sono bloccati per evitare duplicazioni locali.
+- Il comando MQTT `clear` non modifica lo stack pesate; riguarda soltanto UUID, target e sessione MQTT attiva.
 
 ---
 
@@ -499,7 +546,7 @@ Il firmware è organizzato in moduli con namespace C++ per una migliore manuteni
 
 ```
 firmware/esp32_hx711_serial/
-├── esp32_hx711_serial.ino   # Main loop (~1,400 righe)
+├── esp32_hx711_serial.ino   # Main loop, comandi seriali e gestione tasti
 ├── config/
 │   ├── config_pins.h        # Pin hardware (HX711, I2C, SPI, keypad, buzzer, DFPlayer)
 │   ├── config_audio.h       # AudioConfig:: (volume, timing, tracce MP3)

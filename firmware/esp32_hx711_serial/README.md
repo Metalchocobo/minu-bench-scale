@@ -1,6 +1,6 @@
 # esp32_hx711_serial — Firmware HX711 (ESP32)
 
-La documentazione completa (cablaggi, pinout, comandi seriale, DFPlayer, sleep, debug) è stata consolidata nel README principale del progetto:
+Le fonti canoniche sono mantenute nella root del repository:
 
-- `README.md` nella root del repository.
-
+- `../../README.md` — comportamento firmware, comandi, MQTT, build e diagnostica.
+- `../../docs/WIRING.md` — pinout e cablaggio fisico.

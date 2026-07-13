@@ -939,6 +939,11 @@ void handleKeyEvent(KeyCode key) {
 #if ENABLE_MQTT
       bool hadMqttCommand = Net::isMqttCommandActive();
       char mqttUuid[37] = {0};
+      if (hadMqttCommand && Net::isMqttResponsePending()) {
+        Serial.println(F("[STACK] ENTER bloccato (response ACK pending)"));
+        buzzerWarn();
+        break;
+      }
       if (hadMqttCommand && !Net::isMqttConnected()) {
         Serial.println(F("[STACK] ENTER bloccato (MQTT offline)"));
         buzzerWarn();
@@ -1006,10 +1011,14 @@ void handleKeyEvent(KeyCode key) {
       Serial.println(F("[KEYPAD] SKIP pressed"));
       buzzerKeyClick();
 #if ENABLE_MQTT
-      if (Net::isMqttCommandActive() && Net::isMqttConnected()) {
-        Audio::requestPlayMp3(Track::SKIP_PRESSED);
-        Net::mqttPublishSkip();
-        Net::mqttClearActiveCommand();
+      if (Net::isMqttResponsePending()) {
+        buzzerWarn();
+      } else if (Net::isMqttCommandActive() && Net::isMqttConnected()) {
+        if (Net::mqttSkipActiveCommand()) {
+          Audio::requestPlayMp3(Track::SKIP_PRESSED);
+        } else {
+          buzzerError();
+        }
       } else if (Net::isMqttConnected() && !Net::isMqttCommandActive()) {
         // Nessun comando attivo: bip di avviso sordo
         buzzerWarn();

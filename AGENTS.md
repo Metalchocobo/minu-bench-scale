@@ -44,7 +44,7 @@
   "C:\Users\shado\arduino-cli\arduino-cli.exe" compile --fqbn esp32:esp32:esp32 -u -p COM3 "D:\xampp\htdocs\bench-scale\minu-bench-scale\firmware\esp32_hx711_serial"
   ```
 - After making firmware changes, **always verify the code compiles** if arduino-cli is available in the sandbox. If not, carefully check for syntax/type errors manually.
-- Flash usage is tight: ~91% program space. Be mindful of string literals and large const arrays.
+- Flash usage is tight: ~92% program space. Be mindful of string literals and large const arrays.
 
 ---
 
@@ -57,10 +57,10 @@ Two separate projects that communicate via MQTT:
 1. **Firmware (ESP32):** `firmware/esp32_hx711_serial/`
    - Arduino IDE project, compiled with arduino-cli
    - Board: `esp32:esp32:esp32` (ESP32 core v3.3.5)
-   - Flash: ~91% program, ~17% RAM (tight on flash, be mindful of string literals)
+   - Flash: ~92% program, ~17% RAM (tight on flash, be mindful of string literals)
 
 2. **Laravel gestionale:** External project at `D:\xampp\htdocs\minu\manager\` (not in this repo)
-   - Laravel 11, Backpack 6, Tabler theme, horizontal layout
+   - Laravel 11, Backpack 6, Tabler theme, vertical layout
    - MQTT credentials in `.env` (MQTT_HOST, MQTT_WSS_PORT, MQTT_USERNAME, MQTT_PASSWORD)
 
 ## Communication: MQTT via Mosquitto
@@ -73,12 +73,25 @@ Two separate projects that communicate via MQTT:
 - **Scale ID:** ESP32 WiFi MAC address, lowercase, no separators (12 hex chars). Example: `841fe838c774`
 
 ### MQTT Topics
-```
-minu/scale/{scale_id}/status    Bilancia -> Browser  (retained, QoS 1)
-minu/scale/{scale_id}/command   Browser -> Bilancia   (retained, QoS 1)
-minu/scale/{scale_id}/response  Bilancia -> Browser   (not retained, QoS 1)
-minu/scale/{scale_id}/owner     Browser -> Browser    (retained, QoS 1)
-```
+
+| Topic | Direzione | Retain | QoS effettivo |
+|---|---|---|---|
+| `minu/scale/{scale_id}/command` | Browser → bilancia | sì | 1 |
+| `minu/scale/{scale_id}/response` | Bilancia → browser | no | 0, con retry applicativo |
+| `minu/scale/{scale_id}/ack` | Browser → bilancia | no | 1 |
+| `minu/scale/{scale_id}/status` | Bilancia → browser | sì | online 0; LWT offline 1 |
+| `minu/scale/{scale_id}/owner` | Browser → browser | sì | 1 |
+
+Invarianti del protocollo corrente:
+
+- Ogni scheda mantiene il proprio `session_id` durante reload/reconnect per recuperare response pending. Un Web Lock esclusivo, con fallback cross-tab fail-safe, rileva una copia live dello stesso `sessionStorage` e ruota l'ID della scheda duplicata. `weigh`, `clear` e LWT restano session-scoped.
+- Un `clear` può annullare soltanto il comando della stessa sessione. Un vecchio LWT non deve cancellare il comando di una nuova scheda.
+- Le response session-aware `confirm`/`skip` contengono `session_id` e un `response_id` univoco.
+- PubSubClient pubblica le response a QoS 0: il firmware conserva una response in RAM e la ritenta ogni secondo finché riceve `response_ack` sul topic `ack`.
+- Il browser deduplica per `response_id`, sostituisce prima il retained `weigh` con un clear confermato dal broker, quindi invia l'ACK; esegue il callback una sola volta, ri-ACKa i duplicati e riconcilia senza callback un retry same-session quando la UI ha già uno stato noto senza ingrediente attivo.
+- L'ACK attesta la ricezione della response nel browser; non attesta il successivo salvataggio REST in Laravel.
+- I payload legacy privi di `session_id` restano compatibili, senza outbox/ACK applicativo.
+- Un nuovo `weigh` con sessione o UUID diversi è il takeover esplicito: sostituisce comando e outbox pending precedenti.
 
 ## Credential Storage Pattern (NVS)
 
@@ -115,25 +128,21 @@ All secrets follow the same pattern — **never hardcoded**, always in ESP32 NVS
 
 ### Watchdog Timer (WDT)
 - **8-second WDT** configured in firmware. If loop blocks > 8s, ESP32 reboots.
-- **TLS handshake can take > 8s.** Must disable WDT during handshake:
-  ```cpp
-  esp_task_wdt_delete(NULL);  // before handshake
-  // ... TLS handshake ...
-  esp_task_wdt_add(NULL);     // after handshake
-  ```
-- **Same for OTA uploads:** WDT disabled in `onStart`, re-enabled in `onEnd`/`onError`.
-- **Any new blocking operation > 2s** must handle WDT. Either disable/re-enable or break into non-blocking chunks.
+- **TLS handshake può superare 8 s:** `configureLoopWdt()` porta temporaneamente il timeout a `MQTT_TLS_WDT_TIMEOUT_MS` (20 s) e lo ripristina a `LOOP_WDT_TIMEOUT_MS` (8 s) subito dopo il tentativo.
+- **OTA upload:** il task viene rimosso dal WDT in `onStart` e riaggiunto/ripristinato in `onEnd` e `onError`.
+- **Ogni nuova operazione bloccante >2 s** deve essere spezzata in step non bloccanti, alimentare esplicitamente il WDT o usare la stessa reconfiguration temporanea con ripristino garantito.
 
 ### Light Sleep
 - **Do NOT call `esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_TIMER)`** if timer wakeup was never enabled. On ESP32 core v3.3.5 this causes a fatal error (`Incorrect wakeup source (4) to disable`). Just call `esp_sleep_enable_gpio_wakeup()` directly.
 
 ### PubSubClient
 - **Library:** PubSubClient v2.8
-- **MQTT_MAX_PACKET_SIZE** must be defined BEFORE including PubSubClient.h (set to 512 in `net_ota_cloud.h`). If you need larger packets, change it there.
+- Il define locale `MQTT_MAX_PACKET_SIZE` resta impostato a 512 prima dell'include, ma non garantisce da solo la dimensione del buffer della libreria compilata separatamente.
+- `mqttClient.setBufferSize(512)` deve essere chiamato e verificato a runtime in setup e dopo il reload delle credenziali. Se serve una dimensione diversa, aggiornare coerentemente define, chiamata runtime e payload buffer.
 - **ArduinoJson** v7.3.0
 
 ### General ESP32
-- **Flash is 91% full.** Every `F()` macro, every string literal counts. Avoid verbose log messages. Reuse format strings where possible.
+- **Flash is 92% full.** Every `F()` macro, every string literal counts. Avoid verbose log messages. Reuse format strings where possible.
 - **Loop must be non-blocking.** No `delay()` longer than ~50ms in the main loop. Use state machines and timestamp-based logic.
 - **GPIO34-39 are input-only** and have no internal pull-up/pull-down. If using these for digital input, add external pull resistors.
 
@@ -141,7 +150,7 @@ All secrets follow the same pattern — **never hardcoded**, always in ESP32 NVS
 
 ```
 firmware/esp32_hx711_serial/
-├── esp32_hx711_serial.ino    # Main loop + serial commands + key handlers (~1600 lines)
+├── esp32_hx711_serial.ino    # Main loop + serial commands + key handlers
 ├── config/
 │   ├── config_pins.h         # GPIO assignments
 │   ├── config_audio.h        # DFPlayer timing, tracks, volume
@@ -172,9 +181,12 @@ firmware/esp32_hx711_serial/
 
 ## Integration Spec Files
 
-- `minu-scale-integration-spec.md` — Overall architecture spec (firmware + browser + Laravel)
-- `prompt-fase1-firmware-mqtt.md` — Fase 1 prompt (COMPLETED: firmware MQTT client)
-- `prompt-fase2-3-browser-laravel.md` — Fase 2-3 prompt (READY: browser JS + Laravel CRUD)
+La specifica end-to-end e la documentazione operativa Laravel sono nel repository Manager esterno:
+
+- `D:\xampp\htdocs\minu\manager\minu-scale-integration-spec.md`
+- `D:\xampp\htdocs\minu\manager\docs\agent-knowledge\06-scale-mqtt.md`
+
+I file `prompt-fase*.md` del Manager sono riferimenti superati e non definiscono il protocollo corrente.
 
 ## Mosquitto Server Config
 
@@ -184,15 +196,11 @@ On DigitalOcean VPS, config at `/etc/mosquitto/conf.d/minu.conf`:
 - `tls_version tlsv1.2` required for ESP32 compatibility
 - Do NOT set `cafile` to the same file as `certfile` (causes Mosquitto error)
 
-## Current State (as of 2026-02-11)
+## Current State (as of 2026-07-12)
 
-### Completed
-- Fase 1: ESP32 firmware MQTT client (weigh/clear commands, confirm/skip responses, TLS, LWT, backoff reconnection, OLED icons, key handlers)
-- Credential storage in NVS for WiFi, OTA, MQTT (no secrets in source code)
-- Calibration wizard (on-display + serial)
-- Battery monitoring with shutdown protection
-- HX711 health monitoring
-
-### Not Started
-- Fase 2: ScaleMqttClient JavaScript module (browser-side MQTT via mqtt.js)
-- Fase 3: Laravel integration (scales CRUD, user-scale association, REST endpoints, weigh view integration)
+- Firmware ESP32 operativo: TLS/NTP, MQTT, LWT, backoff, `weigh`/`clear`, `confirm`/`skip`, session isolation e retry response con ACK applicativo.
+- Credenziali WiFi, OTA e MQTT persistite in NVS; nessun segreto nel sorgente.
+- Calibrazione, monitor batteria, protezione sleep, HX711 health, OLED, tastiera e audio operativi.
+- Browser MQTT operativo nel Manager con owner lease per scheda, identità operatore, deduplica response e compatibilità legacy.
+- Laravel operativo con CRUD bilance, associazione utente-bilancia, discovery MQTT, pagina pesatura e persistenza REST delle azioni.
+- `MQTT_FW_VERSION` corrente: `1.1.0`.

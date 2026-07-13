@@ -21,7 +21,7 @@
 #endif
 
 #if ENABLE_MQTT
-  // MQTT_MAX_PACKET_SIZE deve essere definito PRIMA dell'include di PubSubClient
+  // Header-side size; mqttSetup/mqttReloadCreds also enforce 512 at runtime.
   #define MQTT_MAX_PACKET_SIZE 512
   #include <WiFiClientSecure.h>
   #include <PubSubClient.h>
@@ -41,7 +41,7 @@
   // e vengono salvati in NVS (persistono tra aggiornamenti firmware).
   // Comandi: mqtt set "host" "user" "pass", mqtt creds, mqtt clear, mqtt apply
   #define MQTT_PORT       8883          // MQTTS (TLS)
-  #define MQTT_FW_VERSION "1.0.0"
+  #define MQTT_FW_VERSION "1.1.0"
   #define MQTT_SCALE_NAME "Minu Bench Scale"  // Nome visibile nel browser
 #endif
 
@@ -80,24 +80,22 @@ namespace Net {
   // True se connesso al broker MQTT
   bool isMqttConnected();
 
-  // Confirm the active command only while UUID and publish state are valid.
-  // Clear it only after PubSubClient accepts the payload.
+  // Stage a confirm for the active command. Session-aware commands stay active
+  // until the browser acknowledges the generated response_id.
   bool mqttConfirmActiveCommand(const char* expectedUuid, float actualWeight);
 
-  // Pubblica risposta skip sul topic response
-  void mqttPublishSkip();
+  // Stage/publish a skip for the active command.
+  bool mqttSkipActiveCommand();
 
   // Restituisce il scale_id (MAC formattato)
   const char* getScaleId();
 
   // Stato comando attivo
   bool   isMqttCommandActive();
+  bool   isMqttResponsePending();
   float  getMqttTargetWeight();
   const char* getMqttCommandUuid();
   const char* getMqttCommandName();
-
-  // Pulisce il comando attivo (usato internamente dopo confirm/skip)
-  void mqttClearActiveCommand();
 
   // Ritorna true una sola volta se MQTT si è disconnesso (per buzzer x2 nel .ino)
   bool mqttPopDisconnectBeep();
