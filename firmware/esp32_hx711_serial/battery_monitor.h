@@ -15,6 +15,8 @@ struct BatteryStatus {
   float current_mA;    // Corrente filtrata (mA), >0 = scarica, <0 = carica
   BatteryLevel level;  // Livello batteria (4 step)
   bool charging;       // true = in carica (corrente che entra nella batteria)
+  bool valid;          // true only when the latest attempted read is valid
+  uint32_t lastValidMs;
 };
 
 // Da chiamare dopo che il bus I2C è stato inizializzato (Wire.begin(...))
@@ -28,6 +30,9 @@ void battery_update(uint32_t nowMs);
 
 // Restituisce l'ultimo stato calcolato (copia per valore)
 BatteryStatus battery_get_status();
+
+// True only while the latest attempted sample is valid and recent enough.
+bool battery_has_fresh_sample(uint32_t nowMs);
 
 // Stampa su Serial una riga di debug leggibile
 void battery_debug_print(const BatteryStatus &st);

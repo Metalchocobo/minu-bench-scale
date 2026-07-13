@@ -18,12 +18,20 @@ static const float V_SAFE_SHUTDOWN_CLEAR_V = 5.90f;
 // Tensione di uscita dal countdown (con isteresi)
 static const float V_SAFE_SHUTDOWN_EXIT_V  = 5.85f;
 
-// Tensione critica: sleep immediato
+// Tensione critica: sleep dopo conferma temporale HARD_SLEEP_DEBOUNCE_MS
 static const float V_HARD_SLEEP_MIN_V      = 5.70f;
+
+// Reject broken-bus/out-of-range INA219 samples before filters and safety logic.
+static const float SENSOR_MIN_V             = 3.0f;
+static const float SENSOR_MAX_V             = 9.0f;
+static const float SENSOR_MAX_SHUNT_MV      = 330.0f;
+static const float SENSOR_MAX_CURRENT_MA    = 3500.0f;
 
 // ========================= TIMING SHUTDOWN =========================
 // Debounce prima di iniziare countdown (evita falsi positivi)
 static const uint32_t SAFE_SHUTDOWN_DEBOUNCE_MS   = 5000;
+static const uint32_t HARD_SLEEP_DEBOUNCE_MS      = 3000;
+static const uint32_t SAMPLE_FRESH_MAX_MS         = 1500;
 
 // Tempo stabile sopra EXIT_V per uscire dal countdown
 static const uint32_t SAFE_SHUTDOWN_EXIT_STABLE_MS = 15000;

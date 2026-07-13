@@ -29,11 +29,11 @@ static const uint16_t I2C_TIMEOUT_MS           = 50;     // Timeout transazioni 
 
 // ========================= AUTO-TARE BOOT =========================
 static const bool     AUTO_TARE_ON_BOOT    = true;
-static const uint16_t AUTO_TARE_SAMPLES    = 64;
-static const uint16_t AUTO_TARE_SETTLE_MS  = 400;   // Discard iniziale
-static const uint16_t AUTO_TARE_MIN_SAMPLES = 32;   // Minimo campioni
-static const float    AUTO_TARE_RANGE_G    = 0.40f; // Finestra quiete
-static const uint32_t AUTO_TARE_QUIET_MS   = 400;   // Tempo in range per fermarsi
+static const uint16_t AUTO_TARE_SETTLE_MS       = 300;
+static const uint16_t AUTO_TARE_MAX_MS          = 2000;
+static const uint8_t  AUTO_TARE_WINDOW_SAMPLES  = 32;
+static const uint8_t  AUTO_TARE_TRIM_SAMPLES    = 4;
+static const float    AUTO_TARE_RANGE_G         = 0.40f;
 
 // ========================= TARE UI =========================
 static const uint8_t  TARE_SAMPLE_BUF_N      = 64;    // Finestra mobile campioni tara
@@ -59,8 +59,8 @@ static const float    TARE_MANUAL_SLOPE_GPS         = 2.0f;
 // snapshot that was already filtered and validated as STABLE.
 
 // ========================= LIMITE DISPLAY =========================
-static const float MAX_DISPLAY_G   = 16000.0f;      // Clamp ±16 kg
-static const bool  FLAG_OVERLOAD   = true;          // Logga over=1 se clamp
+static const float MAX_DISPLAY_G   = 16000.0f;      // Soglia fault simmetrica ±16 kg
+static const float OVERLOAD_EXIT_G = 15950.0f;      // 50 g hysteresis
 
 // ========================= FILTRI =========================
 static const int   MA_DEFAULT      = 6;             // Media mobile (work)

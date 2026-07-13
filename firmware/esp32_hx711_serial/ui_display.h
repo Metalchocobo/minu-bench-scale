@@ -49,6 +49,9 @@ void ui_renderTareStatus(ScaleState::TareUiState state, bool autoMode);
 // - hard=true  -> non fidarsi del valore (non mostra last)
 // - showLast=true -> mostra lastG come "Ultimo valore valido"
 void ui_renderHxError(bool hard, bool showLast, long lastG);
+
+// Persistent positive/negative capacity fault; weight actions are blocked.
+void ui_renderOverload();
 // Schermata transizione standby (Zzz...)
 void ui_renderSleepZzz();
 

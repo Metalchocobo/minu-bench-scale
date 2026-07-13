@@ -52,6 +52,9 @@ CalStep getStep();
 // Ritorna true se il wizard è stato appena avviato.
 bool updateLongPress(uint32_t nowMs);
 
+// Cancel only the idle long-press tracker without entering/aborting the wizard.
+void cancelLongPress();
+
 // Ritorna true se il long press su SKIP è in corso
 bool isLongPressInProgress();
 

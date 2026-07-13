@@ -107,6 +107,9 @@ void tareAccumSample(long rawUse);
 // Avvia raccolta tara
 void tareStart(uint32_t nowMs, TareMode mode = TARE_MODE_MANUAL);
 
+// Abort an active tare without changing offset/zero tracking.
+bool tareCancel(uint32_t nowMs);
+
 // Apply working zero immediately from the already filtered/stable RAW snapshot.
 bool tareApplyWorking(long rawOffset, uint32_t nowMs);
 

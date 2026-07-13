@@ -856,6 +856,16 @@ void ui_renderCalLongPress(uint8_t progress) {
   oled.sendBuffer();
 }
 
+void ui_renderOverload() {
+  oled.clearBuffer();
+  oled.setFont(u8g2_font_logisoso16_tf);
+  drawCenteredText("SOVRACCARICO", 24);
+  oled.setFont(u8g2_font_6x12_tr);
+  drawCenteredText("Rimuovi peso dal piatto", 44);
+  drawCenteredText("ENTER e TARA bloccati", 59);
+  oled.sendBuffer();
+}
+
 // =============================================================================
 // WEIGH STACK OVERLAYS
 // =============================================================================

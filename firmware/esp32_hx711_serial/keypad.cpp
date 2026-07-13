@@ -35,6 +35,7 @@ static uint32_t rawChangeMs = 0;
 static KeyCode stableKey    = KEY_NONE;
 static uint32_t stableSinceMs = 0;
 static KeyCode suppressedKey = KEY_NONE;
+static uint32_t suppressedReleaseSinceMs = 0;
 
 // Ultimo evento "nuovo" da consegnare
 static KeyCode pendingEvent = KEY_NONE;
@@ -105,12 +106,30 @@ void keypad_init() {
   stableKey    = KEY_NONE;
   stableSinceMs = 0;
   suppressedKey = KEY_NONE;
+  suppressedReleaseSinceMs = 0;
+  pendingEvent = KEY_NONE;
+}
+
+void keypad_suppress_wake_key() {
+  suppressedKey = keypad_scan_once();
+  suppressedReleaseSinceMs = 0;
+  rawKeyLast = KEY_NONE;
+  rawChangeMs = millis();
+  stableKey = KEY_NONE;
+  stableSinceMs = rawChangeMs;
   pendingEvent = KEY_NONE;
 }
 
 void keypad_update(uint32_t nowMs) {
-  if (suppressedKey != KEY_NONE && !keypad_raw_is_pressed(suppressedKey)) {
-    suppressedKey = KEY_NONE;
+  if (suppressedKey != KEY_NONE) {
+    if (keypad_raw_is_pressed(suppressedKey)) {
+      suppressedReleaseSinceMs = 0;
+    } else if (suppressedReleaseSinceMs == 0) {
+      suppressedReleaseSinceMs = nowMs;
+    } else if ((uint32_t)(nowMs - suppressedReleaseSinceMs) >= DEBOUNCE_MS) {
+      suppressedKey = KEY_NONE;
+      suppressedReleaseSinceMs = 0;
+    }
   }
 
   // 1) Legge il valore raw.
@@ -138,6 +157,7 @@ void keypad_update(uint32_t nowMs) {
       suppressedKey == KEY_NONE &&
       (uint32_t)(nowMs - stableSinceMs) >= STUCK_KEY_MS) {
     suppressedKey = stableKey;
+    suppressedReleaseSinceMs = 0;
     stableKey = KEY_NONE;
     rawKeyLast = KEY_NONE;
     rawChangeMs = nowMs;

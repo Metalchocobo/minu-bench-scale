@@ -87,6 +87,7 @@ static bool     gLiveEmaPrevStEnable = true;
 
 // Peso corrente
 static float gLive = 0.0f;
+static bool  g_overloadActive = false;
 
 // Inattività
 enum InactivityStage : uint8_t { INACT_NONE = 0, INACT_ZZZ = 1 };
@@ -140,20 +141,10 @@ static bool g_clearStackAfterTare = false;
 static bool g_manualTareArmed = false;
 static uint32_t g_manualTareArmMs = 0;
 static uint32_t g_tareKeyLockUntilMs = 0;
-
-// Runtime recovery survives WDT resets but is lost on power loss.
-struct RuntimeTareRecovery {
-  uint32_t magic;
-  uint16_t version;
-  uint16_t valid;
-  long offsetRaw;
-  long ztCounts;
-  uint32_t crc;
-};
-
-static const uint32_t RECOVERY_MAGIC = 0x4D545245UL;  // MTRE
-static const uint16_t RECOVERY_VERSION = 1;
-RTC_NOINIT_ATTR static RuntimeTareRecovery g_runtimeTareRecovery;
+static bool g_skipShortPending = false;
+static bool g_skipBlockedUntilRelease = false;
+static bool g_remoteUndoAwaitingAck = false;
+static char g_remoteUndoConfirmId[WeighStack::RESPONSE_ID_CAP] = {0};
 
 static void showStackCompareOverlay(uint32_t nowMs) {
   float stackTotal = WeighStack::total();
@@ -187,6 +178,36 @@ static void showStackCompareOverlay(uint32_t nowMs) {
   Serial.println(F("g"));
 }
 
+static bool restoreTopStackEntryAfterUndo(uint32_t nowMs) {
+  const WeighStack::Entry* top = WeighStack::peek();
+  if (!top) return false;
+  WeighStack::Entry entry = *top;
+
+  ScaleState::setOffsetRaw(entry.oldOffset);
+  ScaleState::setZtCounts(entry.oldZt);
+  ScaleState::resetFiltersAndState();
+  ScaleState::setTareUiActive(false);
+  gLiveEma = 0.0f;
+  gLiveEmaInit = false;
+  gLiveEmaPrevStEnable = stEnable;
+  if (!WeighStack::pop()) return false;
+
+  g_overlayType = OVERLAY_CLEAR_FEEDBACK;
+  g_overlayStartMs = nowMs;
+  strlcpy(g_overlayMsg, "POP", sizeof(g_overlayMsg));
+  g_overlayCount = WeighStack::count();
+  g_tareKeyLockUntilMs = nowMs + TARE_OK_HOLD_MS;
+  g_lastKeyPressMs = nowMs;
+  lastOledMs = 0;
+
+  Serial.print(F("[STACK] UNDO: "));
+  Serial.print(entry.grams, 0);
+  Serial.print(F("g (remaining="));
+  Serial.print(g_overlayCount);
+  Serial.println(F(")"));
+  return true;
+}
+
 // Log HX
 static bool     g_hxLogEnabled  = false;
 static uint32_t g_hxLogPeriodMs = 250;
@@ -207,9 +228,7 @@ void handleKeyEvent(KeyCode key);
 bool autoTareOnBoot(uint16_t maxSamples);
 bool initHX711();
 long readRawHXOnceBlocking(uint32_t timeoutMs);
-static void runtimeTareRecoverySave();
-static bool runtimeTareRecoveryTryRestore();
-static void runtimeTareRecoveryClear();
+static bool wasWatchdogReset();
 static void setupLoopWatchdog();
 static void feedLoopWatchdog();
 static void enterInactivityLightSleep();
@@ -221,65 +240,11 @@ static void saveWifiUserEnabledToNVS(bool en);
 static void wifiAudioUpdate(uint32_t now);
 #endif
 
-// ========================= RUNTIME TARE RECOVERY =========================
-static uint32_t recoveryMix(uint32_t h, uint32_t v) {
-  h ^= v;
-  h *= 16777619UL;
-  return h;
-}
-
-static uint32_t runtimeTareRecoveryCrc(const RuntimeTareRecovery& r) {
-  uint32_t h = 2166136261UL;
-  h = recoveryMix(h, r.magic);
-  h = recoveryMix(h, ((uint32_t)r.version << 16) | r.valid);
-  h = recoveryMix(h, (uint32_t)r.offsetRaw);
-  h = recoveryMix(h, (uint32_t)r.ztCounts);
-  return h;
-}
-
-static bool runtimeTareRecoveryIsWdtReset() {
+static bool wasWatchdogReset() {
   esp_reset_reason_t reason = esp_reset_reason();
   return reason == ESP_RST_WDT ||
          reason == ESP_RST_TASK_WDT ||
          reason == ESP_RST_INT_WDT;
-}
-
-static bool runtimeTareRecoveryIsValid() {
-  if (g_runtimeTareRecovery.magic != RECOVERY_MAGIC) return false;
-  if (g_runtimeTareRecovery.version != RECOVERY_VERSION) return false;
-  if (g_runtimeTareRecovery.valid != 1) return false;
-  return g_runtimeTareRecovery.crc == runtimeTareRecoveryCrc(g_runtimeTareRecovery);
-}
-
-static void runtimeTareRecoveryClear() {
-  g_runtimeTareRecovery.magic = RECOVERY_MAGIC;
-  g_runtimeTareRecovery.version = RECOVERY_VERSION;
-  g_runtimeTareRecovery.valid = 0;
-  g_runtimeTareRecovery.offsetRaw = 0;
-  g_runtimeTareRecovery.ztCounts = 0;
-  g_runtimeTareRecovery.crc = runtimeTareRecoveryCrc(g_runtimeTareRecovery);
-}
-
-static void runtimeTareRecoverySave() {
-  g_runtimeTareRecovery.magic = RECOVERY_MAGIC;
-  g_runtimeTareRecovery.version = RECOVERY_VERSION;
-  g_runtimeTareRecovery.valid = 1;
-  g_runtimeTareRecovery.offsetRaw = ScaleState::getOffsetRaw();
-  g_runtimeTareRecovery.ztCounts = ScaleState::getZtCounts();
-  g_runtimeTareRecovery.crc = runtimeTareRecoveryCrc(g_runtimeTareRecovery);
-}
-
-static bool runtimeTareRecoveryTryRestore() {
-  if (!runtimeTareRecoveryIsWdtReset()) {
-    runtimeTareRecoveryClear();
-    return false;
-  }
-  if (!runtimeTareRecoveryIsValid()) return false;
-
-  ScaleState::setOffsetRaw(g_runtimeTareRecovery.offsetRaw);
-  ScaleState::setZtCounts(g_runtimeTareRecovery.ztCounts);
-  ScaleState::resetFiltersAndState();
-  return true;
 }
 
 // ========================= WATCHDOG =========================
@@ -353,6 +318,17 @@ void serial_task() {
 }
 
 void parseCommand(const char* cmd) {
+#if ENABLE_MQTT
+  if (Net::isMqttResponsePending()) {
+    bool stackMutation = strcmp(cmd, "stack clear") == 0;
+    bool calMutation = strncmp(cmd, "cal ", 4) == 0 && strcmp(cmd + 4, "status") != 0;
+    if (stackMutation || calMutation) {
+      Serial.println(F("[CMD] Bloccato: response ACK pending"));
+      return;
+    }
+  }
+#endif
+
   // hxlog
   if (strncmp(cmd, "hxlog ", 6) == 0) {
     const char* arg = cmd + 6;
@@ -695,7 +671,6 @@ void parseCommand(const char* cmd) {
       ScaleState::setOffsetRaw(newOffset);
       ScaleState::setZtCounts(0);
       ScaleState::resetFiltersAndState();
-      runtimeTareRecoverySave();
       Serial.print(F("[CAL] Zero impostato. Nuovo OFFSET=")); Serial.println(newOffset);
       Serial.println(F("[CAL] Usa 'cal save' per salvare in NVS"));
       return;
@@ -747,7 +722,6 @@ void parseCommand(const char* cmd) {
     if (strcmp(arg, "load") == 0) {
       ScaleState::loadFromNVS();
       ScaleState::resetFiltersAndState();
-      runtimeTareRecoverySave();
       Serial.println(F("[CAL] Calibrazione caricata da NVS"));
       return;
     }
@@ -783,10 +757,23 @@ void handleKeyEvent(KeyCode key) {
   // Keep the behavioral lock separate from UI state. This prevents duplicate
   // ENTER events, tare restarts, and stack changes during the real operation.
   uint32_t keyNow = millis();
+#if ENABLE_MQTT
+  if (Net::isMqttResponsePending() &&
+      (key == KEY_TARE || key == KEY_ENTER || key == KEY_SKIP || key == KEY_CLEAR)) {
+    Serial.println(F("[KEYPAD] Bloccato: response ACK pending"));
+    buzzerWarn();
+    return;
+  }
+#endif
   bool timedTareLock = g_tareKeyLockUntilMs != 0 &&
     (int32_t)(g_tareKeyLockUntilMs - keyNow) > 0;
   if (g_manualTareArmed || ScaleState::isTareActive() || timedTareLock) {
     Serial.println(F("[KEYPAD] Ignorato durante TARE"));
+    return;
+  }
+  if (g_overloadActive && (key == KEY_TARE || key == KEY_ENTER)) {
+    Serial.println(F("[KEYPAD] Bloccato: SOVRACCARICO"));
+    buzzerError();
     return;
   }
 
@@ -859,6 +846,9 @@ void handleKeyEvent(KeyCode key) {
       } else {
         Audio::requestPlayMp3(Track::WIFI_MODULE_OFF);
         Serial.println(F("[WIFI] OFF"));
+#if ENABLE_MQTT
+        Net::mqttSuspend("offline");
+#endif
         Net::wifiSuspend();
       }
       break;
@@ -939,18 +929,17 @@ void handleKeyEvent(KeyCode key) {
 #if ENABLE_MQTT
       bool hadMqttCommand = Net::isMqttCommandActive();
       char mqttUuid[37] = {0};
-      if (hadMqttCommand && Net::isMqttResponsePending()) {
-        Serial.println(F("[STACK] ENTER bloccato (response ACK pending)"));
-        buzzerWarn();
-        break;
-      }
+      char mqttSessionId[65] = {0};
+      uint32_t mqttProductId = 0;
       if (hadMqttCommand && !Net::isMqttConnected()) {
         Serial.println(F("[STACK] ENTER bloccato (MQTT offline)"));
         buzzerWarn();
         break;
       }
       if (hadMqttCommand) {
-        strncpy(mqttUuid, Net::getMqttCommandUuid(), sizeof(mqttUuid) - 1);
+        strlcpy(mqttUuid, Net::getMqttCommandUuid(), sizeof(mqttUuid));
+        strlcpy(mqttSessionId, Net::getMqttCommandSessionId(), sizeof(mqttSessionId));
+        mqttProductId = Net::getMqttCommandProductId();
       }
 #endif
 
@@ -967,7 +956,15 @@ void handleKeyEvent(KeyCode key) {
       gLiveEmaInit = false;
       gLiveEmaPrevStEnable = stEnable;
 
-      bool pushed = WeighStack::push(currentWeight);
+#if ENABLE_MQTT
+      bool pushed = WeighStack::pushCommit(
+        currentWeight, oldOffset, oldZt,
+        hadMqttCommand ? mqttUuid : nullptr,
+        hadMqttCommand ? mqttProductId : 0,
+        hadMqttCommand ? mqttSessionId : nullptr);
+#else
+      bool pushed = WeighStack::pushCommit(currentWeight, oldOffset, oldZt, nullptr, 0, nullptr);
+#endif
       if (!pushed) {
         // Defensive path: preflight makes this branch normally unreachable.
         ScaleState::setOffsetRaw(oldOffset);
@@ -988,7 +985,9 @@ void handleKeyEvent(KeyCode key) {
 #if ENABLE_MQTT
       if (hadMqttCommand) {
         // The browser may advance only after the new zero has been applied.
-        if (!Net::mqttConfirmActiveCommand(mqttUuid, currentWeight)) {
+        char confirmResponseId[WeighStack::RESPONSE_ID_CAP] = {0};
+        if (!Net::mqttConfirmActiveCommand(
+              mqttUuid, currentWeight, confirmResponseId, sizeof(confirmResponseId))) {
           WeighStack::pop();
           ScaleState::setOffsetRaw(oldOffset);
           ScaleState::setZtCounts(oldZt);
@@ -998,10 +997,12 @@ void handleKeyEvent(KeyCode key) {
           buzzerError();
           break;
         }
+        if (confirmResponseId[0] != '\0') {
+          (void)WeighStack::setLastConfirmResponseId(confirmResponseId);
+        }
       }
 #endif
 
-      runtimeTareRecoverySave();
       g_tareKeyLockUntilMs = commitNow + TARE_OK_HOLD_MS;
       Audio::requestPlayMp3(Track::ENTER_PRESSED);
       break;
@@ -1011,9 +1012,7 @@ void handleKeyEvent(KeyCode key) {
       Serial.println(F("[KEYPAD] SKIP pressed"));
       buzzerKeyClick();
 #if ENABLE_MQTT
-      if (Net::isMqttResponsePending()) {
-        buzzerWarn();
-      } else if (Net::isMqttCommandActive() && Net::isMqttConnected()) {
+      if (Net::isMqttCommandActive() && Net::isMqttConnected()) {
         if (Net::mqttSkipActiveCommand()) {
           Audio::requestPlayMp3(Track::SKIP_PRESSED);
         } else {
@@ -1060,90 +1059,66 @@ void handleKeyEvent(KeyCode key) {
 
 // ========================= AUTO-TARE BOOT =========================
 bool autoTareOnBoot(uint16_t maxSamples) {
+  (void)maxSamples;
   if (!AUTO_TARE_ON_BOOT) {
     Serial.println(F("[BOOT] Auto-TARE disattivata."));
     return true;
   }
 
   Serial.println(F("[BOOT] Auto-TARE (robusta) ..."));
-  delay(AUTO_TARE_SETTLE_MS);
+  const uint32_t startedMs = millis();
+  while ((millis() - startedMs) < AUTO_TARE_SETTLE_MS) {
+    feedLoopWatchdog();
+    delay(2);
+  }
 
-  const uint16_t minSamples = AUTO_TARE_MIN_SAMPLES;
-  const uint16_t MAX_BUF = 64;
-  if (maxSamples < minSamples) maxSamples = minSamples;
-  if (maxSamples > MAX_BUF)    maxSamples = MAX_BUF;
+  long window[AUTO_TARE_WINDOW_SAMPLES] = {0};
+  uint8_t count = 0;
+  uint8_t writeAt = 0;
 
-  long buf[MAX_BUF];
-  uint16_t n = 0;
-  uint32_t quietStart = 0;
+  while ((millis() - startedMs) < AUTO_TARE_MAX_MS) {
+    feedLoopWatchdog();
+    long raw = readRawHXOnceBlocking(60);
+    if (raw == 0) continue;
 
-  while (n < maxSamples) {
-    long r = readRawHXOnceBlocking(200);
-    if (r == 0) {
-      Serial.println(F("[BOOT] Auto-TARE FAIL (timeout)"));
-      return false;
-    }
+    window[writeAt] = raw;
+    writeAt = (uint8_t)((writeAt + 1) % AUTO_TARE_WINDOW_SAMPLES);
+    if (count < AUTO_TARE_WINDOW_SAMPLES) count++;
+    if (count < AUTO_TARE_WINDOW_SAMPLES) continue;
 
-    buf[n++] = r;
-
-    if (n >= minSamples) {
-      long mn = buf[n - minSamples], mx = mn;
-      for (uint16_t i = n - minSamples; i < n; i++) {
-        long v = buf[i];
-        if (v < mn) mn = v;
-        if (v > mx) mx = v;
+    long sorted[AUTO_TARE_WINDOW_SAMPLES];
+    memcpy(sorted, window, sizeof(sorted));
+    for (uint8_t i = 1; i < AUTO_TARE_WINDOW_SAMPLES; i++) {
+      long key = sorted[i];
+      int j = (int)i - 1;
+      while (j >= 0 && sorted[j] > key) {
+        sorted[j + 1] = sorted[j];
+        j--;
       }
-
-      float rangeG = 999999.0f;
-      float cpg = ScaleState::getScaleCpg();
-      if (cpg > 0.01f) rangeG = (float)(mx - mn) / cpg;
-
-      if (rangeG <= AUTO_TARE_RANGE_G) {
-        if (quietStart == 0) quietStart = millis();
-        if (millis() - quietStart >= AUTO_TARE_QUIET_MS) break;
-      } else {
-        quietStart = 0;
-      }
+      sorted[j + 1] = key;
     }
+
+    const uint8_t first = AUTO_TARE_TRIM_SAMPLES;
+    const uint8_t last = AUTO_TARE_WINDOW_SAMPLES - AUTO_TARE_TRIM_SAMPLES;
+    float cpg = fabsf(ScaleState::getScaleCpg());
+    if (cpg <= 0.01f || last <= first) break;
+    float rangeG = (float)(sorted[last - 1] - sorted[first]) / cpg;
+    if (rangeG > AUTO_TARE_RANGE_G) continue;
+
+    int64_t sum = 0;
+    for (uint8_t i = first; i < last; i++) sum += (int64_t)sorted[i];
+    long rawZero = (long)(sum / (int64_t)(last - first));
+    ScaleState::setOffsetRaw(rawZero);
+    ScaleState::setZtCounts(0);
+    ScaleState::resetFiltersAndState();
+
+    Serial.print(F("[BOOT] Auto-TARE OK. OFFSET_RAW="));
+    Serial.println(rawZero);
+    return true;
   }
 
-  // Trimmed mean
-  long tmp[MAX_BUF];
-  for (uint16_t i = 0; i < n; i++) tmp[i] = buf[i];
-
-  for (uint16_t i = 1; i < n; i++) {
-    long key = tmp[i];
-    int j = (int)i - 1;
-    while (j >= 0 && tmp[j] > key) {
-      tmp[j + 1] = tmp[j];
-      j--;
-    }
-    tmp[j + 1] = key;
-  }
-
-  uint16_t trim = (n >= 40) ? (n / 10) : 0;
-  uint16_t i0 = trim, i1 = n - trim;
-
-  int64_t s = 0;
-  uint16_t useN = 0;
-  for (uint16_t i = i0; i < i1; i++) {
-    s += (int64_t)tmp[i];
-    useN++;
-  }
-  if (useN == 0) {
-    Serial.println(F("[BOOT] Auto-TARE FAIL (useN=0)"));
-    return false;
-  }
-
-  long rawZero = (long)(s / (int64_t)useN);
-  ScaleState::setOffsetRaw(rawZero);
-  ScaleState::setZtCounts(0);
-  ScaleState::resetFiltersAndState();
-
-  Serial.print(F("[BOOT] Auto-TARE OK. OFFSET_RAW="));
-  Serial.println(rawZero);
-
-  return true;
+  Serial.println(F("[BOOT] Auto-TARE FAIL (nessuna finestra stabile)"));
+  return false;
 }
 
 // ========================= INIT HX711 =========================
@@ -1171,6 +1146,7 @@ bool initHX711() {
 long readRawHXOnceBlocking(uint32_t timeoutMs) {
   uint32_t t0 = millis();
   while (millis() - t0 < timeoutMs) {
+    feedLoopWatchdog();
     if (hx711_is_ready()) {
       return hx711_read();
     }
@@ -1246,6 +1222,7 @@ static void bootShow(const char* line1, const char* line2, uint16_t holdMs = 350
 }
 
 static void bootWaitTare() {
+  bool tarePressed = false;
   while (true) {
     feedLoopWatchdog();
     uint32_t now = millis();
@@ -1256,8 +1233,11 @@ static void bootWaitTare() {
     wifiAudioUpdate(now);
 #endif
     KeyCode k = keypad_get_event();
-    if (k == KEY_TARE) {
+    if (k == KEY_TARE && !tarePressed) {
       buzzerKeyClick();
+      tarePressed = true;
+    }
+    if (tarePressed && !keypad_is_pressed(KEY_TARE)) {
       return;
     }
     delay(10);
@@ -1302,6 +1282,7 @@ static void enterInactivityLightSleep() {
   ui_powerSave(false);
 
   keypad_init();
+  keypad_suppress_wake_key();
 
   Audio::begin();
   Audio::primeReady();
@@ -1334,6 +1315,7 @@ static bool     g_emptyWarnActive       = false;
 static uint32_t g_recoverySinceMs = 0;
 static uint32_t g_lastMp3BattLowMs  = 0;
 static uint32_t g_lastMp3BattCritMs = 0;
+static uint32_t g_hardLowSinceMs = 0;
 
 enum BattSleepStage : uint8_t { BATT_SLEEP_NONE = 0, BATT_SLEEP_ZZZ = 1 };
 static BattSleepStage g_battSleepStage = BATT_SLEEP_NONE;
@@ -1383,6 +1365,18 @@ static bool maybeEnterSafeShutdown(uint32_t nowMs) {
   if (!battery_is_available()) return false;
   BatteryStatus st = battery_get_status();
 
+  if (!battery_has_fresh_sample(nowMs)) {
+    g_lowBattSinceMs = 0;
+    g_preSleepStartMs = 0;
+    g_countdownExitSinceMs = 0;
+    g_emptyCandidateSinceMs = 0;
+    g_recoverySinceMs = 0;
+    g_hardLowSinceMs = 0;
+    g_battSleepStage = BATT_SLEEP_NONE;
+    g_battStageStartMs = 0;
+    return false;
+  }
+
   if (st.charging) {
     g_lowBattSinceMs = 0;
     g_preSleepStartMs = 0;
@@ -1397,8 +1391,17 @@ static bool maybeEnterSafeShutdown(uint32_t nowMs) {
     g_lastMp3BattCritMs = 0;
     g_battSleepStage = BATT_SLEEP_NONE;
     g_battStageStartMs = 0;
+    g_hardLowSinceMs = 0;
     return false;
   }
+
+  if (st.voltage_V <= V_HARD_SLEEP_MIN_V) {
+    if (g_hardLowSinceMs == 0) g_hardLowSinceMs = nowMs;
+  } else {
+    g_hardLowSinceMs = 0;
+  }
+  const bool hardLowConfirmed = g_hardLowSinceMs != 0 &&
+    (nowMs - g_hardLowSinceMs) >= HARD_SLEEP_DEBOUNCE_MS;
 
   if (st.voltage_V >= V_SAFE_SHUTDOWN_CLEAR_V) {
     g_lowBattSinceMs = 0;
@@ -1410,6 +1413,7 @@ static bool maybeEnterSafeShutdown(uint32_t nowMs) {
     g_emptyWarnActive = false;
     g_battSleepStage = BATT_SLEEP_NONE;
     g_battStageStartMs = 0;
+    g_hardLowSinceMs = 0;
 
     if (g_recoverySinceMs == 0) g_recoverySinceMs = nowMs;
     if ((nowMs - g_recoverySinceMs) >= BATT_RECOVERY_STABLE_MS) {
@@ -1425,7 +1429,7 @@ static bool maybeEnterSafeShutdown(uint32_t nowMs) {
 
   if (g_battSleepStage == BATT_SLEEP_ZZZ) {
     ui_renderSleepZzz();
-    if (st.voltage_V <= V_HARD_SLEEP_MIN_V || (nowMs - g_battStageStartMs) >= BATT_ZZZ_MS) {
+    if (hardLowConfirmed || (nowMs - g_battStageStartMs) >= BATT_ZZZ_MS) {
       enterLowBatteryLightSleep();
     }
     return true;
@@ -1456,7 +1460,7 @@ static bool maybeEnterSafeShutdown(uint32_t nowMs) {
     return false;
   }
 
-  if (st.voltage_V <= V_HARD_SLEEP_MIN_V) {
+  if (hardLowConfirmed) {
     if (g_lastMp3BattCritMs == 0 || (nowMs - g_lastMp3BattCritMs) >= BATT_ALERT_COOLDOWN_MS) {
       Audio::requestPlayMp3(Track::BATT_CRITICAL);
       g_lastMp3BattCritMs = nowMs;
@@ -1546,6 +1550,7 @@ static bool maybeEnterSafeShutdown(uint32_t nowMs) {
 void setup() {
   Serial.begin(115200);
   delay(50);
+  const bool wdtReset = wasWatchdogReset();
 
   pinMode(SLEEP_LED_PIN, OUTPUT);
   sleepLedOff();
@@ -1626,22 +1631,27 @@ void setup() {
   ScaleState::setMode("work");
   stEnable = true;
 
-  bool restoredRuntimeTare = runtimeTareRecoveryTryRestore();
-  if (restoredRuntimeTare) {
-    Serial.println(F("[RECOVERY] Tara runtime ripristinata dopo WDT"));
-    bootShow("Recovery", "Tara ripristinata");
+  if (wdtReset) {
+    WeighStack::clear();
+    WeighStack::clearReference();
+    ScaleState::setOffsetRaw(0);
+    ScaleState::setZtCounts(0);
+    ScaleState::resetFiltersAndState();
+    g_lastRawFiltered = 0;
+    Serial.println(F("[RECOVERY] WDT: stato transazionale e zero scartati"));
+    ui_showError("RESET WATCHDOG", "Svuota il piatto", "Premi TARA per ritentare");
+    Audio::requestPlayMp3(Track::ERROR_TARE);
+    bootWaitTare();
   }
 
   // Auto-TARE
-  if (AUTO_TARE_ON_BOOT && !restoredRuntimeTare) {
+  if (AUTO_TARE_ON_BOOT) {
     bootShow("Auto-TARE", "In corso...");
-    bool tareOk = autoTareOnBoot(AUTO_TARE_SAMPLES);
-    if (!tareOk) {
-      ui_showError("Auto-TARE", "Timeout/FAIL", "Premi TARA per continuare");
+    while (!autoTareOnBoot(AUTO_TARE_WINDOW_SAMPLES)) {
+      ui_showError("Auto-TARE", "Piatto non stabile", "Svuota e premi TARA");
       Audio::requestPlayMp3(Track::ERROR_TARE);
       bootWaitTare();
-    } else {
-      runtimeTareRecoverySave();
+      bootShow("Auto-TARE", "Ritentativo...");
     }
   }
 
@@ -1689,6 +1699,31 @@ void loop() {
 #endif
 
 #if ENABLE_MQTT
+  if (!tareCritical && Net::mqttPopActivity()) {
+    uint32_t activityNow = millis();
+    g_lastKeyPressMs = activityNow;
+    if (g_inactivitySleepStage != INACT_NONE) {
+      g_inactivitySleepStage = INACT_NONE;
+      g_inactivityStageStartMs = 0;
+      Audio::stopNow(true);
+      lastOledMs = 0;
+    }
+  }
+
+  if (!tareCritical && Net::mqttPopUndoAck()) {
+    const WeighStack::Entry* top = WeighStack::peek();
+    bool matchingEntry = g_remoteUndoAwaitingAck && top &&
+      strcmp(top->confirmResponseId, g_remoteUndoConfirmId) == 0;
+    bool restored = matchingEntry && restoreTopStackEntryAfterUndo(millis());
+    g_remoteUndoAwaitingAck = false;
+    g_remoteUndoConfirmId[0] = '\0';
+    if (restored) buzzerOk();
+    else {
+      Serial.println(F("[STACK] ACK undo senza entry staged"));
+      buzzerError();
+    }
+  }
+
   // Due bip di avviso se MQTT si disconnette (WiFi ancora up)
   if (!tareCritical && Net::mqttPopDisconnectBeep() && WiFi.isConnected()) {
     buzzerWarn();
@@ -1713,11 +1748,63 @@ void loop() {
   keypad_update(now);
   KeyCode key = keypad_get_event();
 
-  // Calibration Wizard: long press su SKIP per 5 secondi per avviare
-  CalWizard::updateLongPress(now);
+#if ENABLE_MQTT
+  bool mqttOutboxPending = Net::isMqttResponsePending();
+#else
+  bool mqttOutboxPending = false;
+#endif
+
+  // A RAM outbox is a locked transaction until durable browser ACK.
+  if (mqttOutboxPending) {
+    CalWizard::cancelLongPress();
+    g_skipShortPending = false;
+    if (keypad_is_pressed(KEY_SKIP)) g_skipBlockedUntilRelease = true;
+    if (key == KEY_TARE || key == KEY_ENTER || key == KEY_SKIP || key == KEY_CLEAR) {
+      Serial.println(F("[CAL] Tasto bloccato: response ACK pending"));
+      buzzerWarn();
+      key = KEY_NONE;
+    }
+  } else if (g_skipBlockedUntilRelease) {
+    CalWizard::cancelLongPress();
+    if (!keypad_is_pressed(KEY_SKIP)) g_skipBlockedUntilRelease = false;
+  } else {
+    // Calibration Wizard: long press su SKIP per 5 secondi per avviare
+    (void)CalWizard::updateLongPress(now);
+  }
+
+  // In idle SKIP is a release action: a 5-second hold starts calibration and
+  // must never emit the short SKIP command first.
+  if (key == KEY_SKIP && !CalWizard::isActive()) {
+    g_skipShortPending = true;
+    g_lastKeyPressMs = now;
+    key = KEY_NONE;
+  }
+
+  if (g_overloadActive && CalWizard::isActive() &&
+      (key == KEY_ENTER || key == KEY_TARE)) {
+    Serial.println(F("[CAL] Tasto bloccato: SOVRACCARICO"));
+    buzzerError();
+    key = KEY_NONE;
+  }
 
   // Aggiorna state machine del wizard, passando l'evento tastiera
   CalWizard::update(now, key);
+
+  if (g_skipShortPending) {
+    if (CalWizard::isActive()) {
+      g_skipShortPending = false;
+    } else if (!keypad_is_pressed(KEY_SKIP)) {
+      g_skipShortPending = false;
+      g_lastKeyPressMs = now;
+      if (g_inactivitySleepStage != INACT_NONE) {
+        g_inactivitySleepStage = INACT_NONE;
+        g_inactivityStageStartMs = 0;
+        Audio::stopNow(true);
+        lastOledMs = 0;
+      }
+      handleKeyEvent(KEY_SKIP);
+    }
+  }
 
   // Se il wizard è attivo, i tasti vengono gestiti da CalWizard::update()
   bool wizardHandledKey = CalWizard::isActive() &&
@@ -1739,10 +1826,14 @@ void loop() {
   if (g_manualTareArmed && !keypad_is_pressed(KEY_TARE)) {
     g_manualTareArmed = false;
     g_manualTareArmMs = 0;
-    if (hxHealth_isError(&g_hxHealth)) {
+    bool tareReleaseBlocked = hxHealth_isError(&g_hxHealth) || g_overloadActive;
+#if ENABLE_MQTT
+    tareReleaseBlocked = tareReleaseBlocked || Net::isMqttResponsePending();
+#endif
+    if (tareReleaseBlocked) {
       g_captureReferenceAfterTare = false;
       g_clearStackAfterTare = false;
-      Serial.println(F("[TARE] Annullata al rilascio (HX error)"));
+      Serial.println(F("[TARE] Annullata al rilascio (safety lock)"));
       buzzerError();
     } else {
       ScaleState::tareStart(millis(), ScaleState::TARE_MODE_MANUAL);
@@ -1761,8 +1852,15 @@ void loop() {
     if (keypad_is_pressed(KEY_CLEAR)) {
       // Still held
       if (!g_clearLongPressFired && (int32_t)(now - g_clearPressStartMs) >= (int32_t)LONG_PRESS_MS) {
-        // Long press fired: clear entire stack
         g_clearLongPressFired = true;
+#if ENABLE_MQTT
+        if (Net::isMqttResponsePending()) {
+          Serial.println(F("[STACK] CLEAR ALL bloccato (response ACK pending)"));
+          buzzerWarn();
+        } else
+#endif
+        {
+        // Long CLEAR abandons local history only; it does not change the zero.
         WeighStack::clear();
         Serial.println(F("[STACK] CLEAR long press -> stack cleared"));
 
@@ -1776,27 +1874,34 @@ void loop() {
         delay(80);
         buzzerOk();  // double beep for clear all
         Audio::requestPlayMp3(Track::CLEAR_PRESSED);
+        }
       }
     } else {
       // Released
       if (!g_clearLongPressFired) {
-        // Short press: pop last item
-        if (WeighStack::count() > 0) {
-          float popped = WeighStack::get(WeighStack::count() - 1);
-          WeighStack::pop();
-          Serial.print(F("[STACK] POP: "));
-          Serial.print(popped, 0);
-          Serial.print(F("g (remaining="));
-          Serial.print(WeighStack::count());
-          Serial.println(F(")"));
-
-          g_overlayType = OVERLAY_CLEAR_FEEDBACK;
-          g_overlayStartMs = now;
-          strlcpy(g_overlayMsg, "POP", sizeof(g_overlayMsg));
-          g_overlayCount = WeighStack::count();
-          lastOledMs = 0;
-
-          buzzerKeyClick();
+        const WeighStack::Entry* top = WeighStack::peek();
+        if (top) {
+          bool remoteUndo = top->confirmResponseId[0] != '\0';
+#if ENABLE_MQTT
+          if (remoteUndo) {
+            const char* sessionId = Net::getMqttLastSessionId();
+            if (!sessionId || sessionId[0] == '\0') sessionId = top->sessionId;
+            if (Net::mqttStageUndo(top->uuid, top->productId,
+                                   top->confirmResponseId, sessionId)) {
+              g_remoteUndoAwaitingAck = true;
+              strlcpy(g_remoteUndoConfirmId, top->confirmResponseId,
+                      sizeof(g_remoteUndoConfirmId));
+              Serial.println(F("[STACK] UNDO remoto staged; attendo ACK REST"));
+            } else {
+              Serial.println(F("[STACK] UNDO remoto non staged"));
+              buzzerError();
+            }
+          } else
+#endif
+          {
+            if (restoreTopStackEntryAfterUndo(now)) buzzerKeyClick();
+            else buzzerError();
+          }
         } else {
           Serial.println(F("[STACK] POP: stack empty"));
           buzzerWarn();
@@ -1993,7 +2098,7 @@ void loop() {
 
     // State machine
     long gDisp = 0;
-    bool overload = false;
+    bool overload = g_overloadActive;
     const char* modeLabel = stEnable ? (ScaleState::getWeighState() == ScaleState::STATE_STABLE ? "STABLE" : "UNSTABLE") : "LIVE";
 
     if (!stEnable) {
@@ -2051,10 +2156,15 @@ void loop() {
       }
     }
 
-    // Clamp
-    float base = (!stEnable ? ScaleState::getDispUnstable() : (ScaleState::getWeighState() == ScaleState::STATE_STABLE ? ScaleState::getGramsLatch() : ScaleState::getDispUnstable()));
-    if (fabsf(base) > MAX_DISPLAY_G) {
-      overload = FLAG_OVERLOAD;
+    // Persistent symmetric overload with hysteresis.
+    float capacityWeight = fabsf(gLive);
+    if (!g_overloadActive && capacityWeight > MAX_DISPLAY_G) {
+      g_overloadActive = true;
+    } else if (g_overloadActive && capacityWeight < OVERLOAD_EXIT_G) {
+      g_overloadActive = false;
+    }
+    overload = g_overloadActive;
+    if (overload) {
       if (gDisp > (long)MAX_DISPLAY_G)  gDisp = (long)MAX_DISPLAY_G;
       if (gDisp < -(long)MAX_DISPLAY_G) gDisp = -(long)MAX_DISPLAY_G;
     }
@@ -2082,10 +2192,15 @@ void loop() {
 
   // Tara apply / fail
   uint32_t tareNow = millis();
-  ScaleState::TareResult tareResult = ScaleState::tareUpdate(tareNow);
+  bool cancelActiveTare = g_overloadActive;
+#if ENABLE_MQTT
+  cancelActiveTare = cancelActiveTare || Net::isMqttResponsePending();
+#endif
+  bool tareCancelled = cancelActiveTare && ScaleState::tareCancel(tareNow);
+  ScaleState::TareResult tareResult = tareCancelled
+    ? ScaleState::TARE_RESULT_FAILED : ScaleState::tareUpdate(tareNow);
   bool tareApplied = (tareResult == ScaleState::TARE_RESULT_APPLIED);
   if (tareApplied) {
-    runtimeTareRecoverySave();
     gLiveEma = 0.0f;
     gLiveEmaInit = false;
     gLiveEmaPrevStEnable = stEnable;
@@ -2127,7 +2242,13 @@ void loop() {
 
   // Sleep per inattività
   bool allowInactivitySleep = g_inactivitySleepArmed;
+  if (g_overloadActive) allowInactivitySleep = false;
   if (g_inactivitySleepStage == INACT_NONE && Audio::isActive()) allowInactivitySleep = false;
+#if ENABLE_MQTT
+  if (Net::isMqttCommandActive() || Net::isMqttResponsePending()) {
+    allowInactivitySleep = false;
+  }
+#endif
 #if ENABLE_WIFI_OTA
   if (Net::isOtaInProgress()) allowInactivitySleep = false;
 #endif
@@ -2161,6 +2282,11 @@ void loop() {
     if (hxHealth_isError(&g_hxHealth)) {
       const bool hard = hxHealth_isHard(&g_hxHealth);
       ui_renderHxError(hard, false, 0);
+      return;
+    }
+
+    if (g_overloadActive) {
+      ui_renderOverload();
       return;
     }
 

@@ -70,7 +70,7 @@ Two separate projects that communicate via MQTT:
 - **Browser port:** 8884 (WSS, WebSocket over TLS)
 - **Auth:** username/password (stored in NVS on ESP32, in .env on Laravel)
 - **TLS cert:** ISRG Root X1 (Let's Encrypt), hardcoded in firmware as C string concatenation (NOT raw string literal)
-- **Scale ID:** ESP32 WiFi MAC address, lowercase, no separators (12 hex chars). Example: `841fe838c774`
+- **Scale ID:** MAC STA letto dall'eFuse ESP32, lowercase, senza separatori (12 hex chars). È disponibile anche con WiFi OFF; `000000000000` è invalido e blocca MQTT. Esempio: `841fe838c774`
 
 ### MQTT Topics
 
@@ -79,19 +79,22 @@ Two separate projects that communicate via MQTT:
 | `minu/scale/{scale_id}/command` | Browser → bilancia | sì | 1 |
 | `minu/scale/{scale_id}/response` | Bilancia → browser | no | 0, con retry applicativo |
 | `minu/scale/{scale_id}/ack` | Browser → bilancia | no | 1 |
-| `minu/scale/{scale_id}/status` | Bilancia → browser | sì | online 0; LWT offline 1 |
+| `minu/scale/{scale_id}/status` | Bilancia → browser | sì | online/sleeping 0; LWT offline 1 |
 | `minu/scale/{scale_id}/owner` | Browser → browser | sì | 1 |
 
 Invarianti del protocollo corrente:
 
 - Ogni scheda mantiene il proprio `session_id` durante reload/reconnect per recuperare response pending. Un Web Lock esclusivo, con fallback cross-tab fail-safe, rileva una copia live dello stesso `sessionStorage` e ruota l'ID della scheda duplicata. `weigh`, `clear` e LWT restano session-scoped.
-- Un `clear` può annullare soltanto il comando della stessa sessione. Un vecchio LWT non deve cancellare il comando di una nuova scheda.
-- Le response session-aware `confirm`/`skip` contengono `session_id` e un `response_id` univoco.
+- Senza outbox pending un `clear` può annullare soltanto il comando della stessa sessione. Durante un outbox pending non cancella nulla: un `clear` session-aware ritargetta alla propria sessione la response staged. Un vecchio LWT non deve cancellare il comando di una nuova scheda né cambiare la sessione usata da un successivo `undo`.
+- I `weigh` v1.2 contengono UUID ingrediente, `product_id` e `session_id`; `confirm`/`skip` riportano gli stessi identificativi più un `response_id` univoco.
+- CLEAR breve è un undo LIFO reale: lo stack conserva offset/zero-tracking precedenti e la provenienza remota. Per una voce session-aware il firmware emette `undo` con nuovo `response_id` e `undo_of_response_id`, poi applica pop e ripristino locale soltanto all'ACK successivo alla persistenza Laravel; una voce senza receipt viene annullata subito e solo localmente. CLEAR lungo svuota soltanto lo stack locale. Con un outbox pending entrambi i CLEAR restano bloccati.
 - PubSubClient pubblica le response a QoS 0: il firmware conserva una response in RAM e la ritenta ogni secondo finché riceve `response_ack` sul topic `ack`.
-- Il browser deduplica per `response_id`, sostituisce prima il retained `weigh` con un clear confermato dal broker, quindi invia l'ACK; esegue il callback una sola volta, ri-ACKa i duplicati e riconcilia senza callback un retry same-session quando la UI ha già uno stato noto senza ingrediente attivo.
-- L'ACK attesta la ricezione della response nel browser; non attesta il successivo salvataggio REST in Laravel.
+- Il browser passa prima la response a Laravel. Receipt e mutazione prodotto vengono salvate atomicamente; replay identico = successo idempotente, stesso ID con azione immutabile diversa = conflitto.
+- Solo dopo commit/replay Laravel il browser sostituisce il retained `weigh` con clear e attende il PUBACK QoS 1, poi pubblica `response_ack` e attende il relativo PUBACK. Su errore REST non invia né clear né ACK.
+- La coppia (`scale_id`, `response_id`) identifica univocamente la receipt. La fingerprint confronta `scale_id`, prodotto, UUID ingrediente, azione, peso e riferimento undo; esclude la `session_id`, che è routing/audit e può cambiare durante takeover.
 - I payload legacy privi di `session_id` restano compatibili, senza outbox/ACK applicativo.
-- Un nuovo `weigh` con sessione o UUID diversi è il takeover esplicito: sostituisce comando e outbox pending precedenti.
+- Durante un outbox pending, un nuovo `weigh` o `clear` session-aware ritargetta la stessa `response_id` staged alla nuova sessione senza cancellarla. Il `weigh` non diventa ancora comando attivo e il browser lo ripubblica dopo receipt/clear/ACK; il `clear` consente il recupero da una nuova scheda anche senza un ingrediente successivo. Un takeover legacy viene ignorato per non perdere l'outbox.
+- Finché l'outbox è pending sono bloccati TARE/ENTER/SKIP/CLEAR, long-press e mutazioni del wizard, `stack clear` seriale e tutti i `cal ...` mutanti; `cal status` resta ammesso.
 
 ## Credential Storage Pattern (NVS)
 
@@ -130,10 +133,14 @@ All secrets follow the same pattern — **never hardcoded**, always in ESP32 NVS
 - **8-second WDT** configured in firmware. If loop blocks > 8s, ESP32 reboots.
 - **TLS handshake può superare 8 s:** `configureLoopWdt()` porta temporaneamente il timeout a `MQTT_TLS_WDT_TIMEOUT_MS` (20 s) e lo ripristina a `LOOP_WDT_TIMEOUT_MS` (8 s) subito dopo il tentativo.
 - **OTA upload:** il task viene rimosso dal WDT in `onStart` e riaggiunto/ripristinato in `onEnd` e `onError`.
+- **Recovery coerente:** dopo WDT non ripristinare soltanto offset/zero-tracking da RTC. Stack, riferimento, zero runtime e filtri vengono invalidati insieme; la UI richiede piatto vuoto + TARE e il boot accetta soltanto una nuova auto-TARE stabile. La calibrazione NVS resta valida.
 - **Ogni nuova operazione bloccante >2 s** deve essere spezzata in step non bloccanti, alimentare esplicitamente il WDT o usare la stessa reconfiguration temporanea con ripristino garantito.
 
 ### Light Sleep
 - **Do NOT call `esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_TIMER)`** if timer wakeup was never enabled. On ESP32 core v3.3.5 this causes a fatal error (`Incorrect wakeup source (4) to disable`). Just call `esp_sleep_enable_gpio_wakeup()` directly.
+- Prima del DISCONNECT pulito MQTT pubblicare retained `state=sleeping`; il LWT `offline` copre solo le disconnessioni impreviste.
+- Un comando o una response outbox pending bloccano lo sleep per inattività; ogni comando accettato resetta il timer.
+- Il tasto che provoca il wake deve restare soppresso fino al rilascio, senza generare anche un'azione applicativa.
 
 ### PubSubClient
 - **Library:** PubSubClient v2.8
@@ -145,6 +152,9 @@ All secrets follow the same pattern — **never hardcoded**, always in ESP32 NVS
 - **Flash is 92% full.** Every `F()` macro, every string literal counts. Avoid verbose log messages. Reuse format strings where possible.
 - **Loop must be non-blocking.** No `delay()` longer than ~50ms in the main loop. Use state machines and timestamp-based logic.
 - **GPIO34-39 are input-only** and have no internal pull-up/pull-down. If using these for digital input, add external pull resistors.
+- INA219: soltanto letture I2C riuscite, finite, plausibili e fresche possono aggiornare filtri, charging o protezione sleep; la soglia hard-low richiede conferma temporale.
+- Il peso reale oltre il campo ±16 kg entra in **SOVRACCARICO** con isteresi e blocca ENTER/TARE; non registrare mai il valore clamped come una pesata valida.
+- SKIP breve scatta al rilascio; SKIP tenuto 5 s apre la calibrazione senza emettere prima uno skip MQTT.
 
 ## Firmware Module Structure
 
@@ -159,17 +169,18 @@ firmware/esp32_hx711_serial/
 ├── audio.h / .cpp            # Audio:: (DFPlayer FIFO, priority, power-gating)
 ├── scale_filters.h / .cpp    # ScaleFilters:: (median, MA, spike guard, history)
 ├── scale_state.h / .cpp      # ScaleState:: (offset, tare, states, ZT, display)
-├── net_ota_cloud.h / .cpp    # Net:: (WiFi/OTA/MQTT, TLS, reconnection)
+├── net_ota_cloud.h / .cpp    # Net:: (WiFi/OTA/MQTT, TLS, status, response outbox)
 ├── mqtt_store.h / .cpp       # MqttStore:: (MQTT credentials in NVS)
 ├── wifi_store.h / .cpp       # WifiStore:: (WiFi credentials in NVS)
 ├── ota_store.h / .cpp        # OtaStore:: (OTA password hash in NVS)
 ├── hx711_driver.h / .cpp     # HX711 low-level (SCK/DOUT, read)
 ├── hx_health.h / .cpp        # HxHealth:: (OK/WARN/ERROR/ERROR_HARD)
-├── battery_monitor.h / .cpp  # BatteryMonitor:: (INA219, levels, charging)
+├── battery_monitor.h / .cpp  # BatteryMonitor:: (INA219, validity/freshness, charging)
 ├── ui_display.h / .cpp       # UI:: (OLED SSD1322 256x64, icons, layouts)
-├── keypad.h / .cpp           # Keypad:: (4x2, debounce, one-shot)
+├── keypad.h / .cpp           # Keypad:: (4x2, debounce, one-shot, wake suppression)
 ├── buzzer.h / .cpp           # Buzzer:: (beep, tones)
 ├── dfplayer_driver.h / .cpp  # DFPlayer:: (UART, base commands)
+├── weigh_stack.h / .cpp      # WeighStack:: (reversible LIFO + response metadata)
 └── calibration_wizard.h/.cpp # CalWizard:: (on-display calibration wizard)
 ```
 
@@ -196,11 +207,11 @@ On DigitalOcean VPS, config at `/etc/mosquitto/conf.d/minu.conf`:
 - `tls_version tlsv1.2` required for ESP32 compatibility
 - Do NOT set `cafile` to the same file as `certfile` (causes Mosquitto error)
 
-## Current State (as of 2026-07-12)
+## Current State (as of 2026-07-13)
 
-- Firmware ESP32 operativo: TLS/NTP, MQTT, LWT, backoff, `weigh`/`clear`, `confirm`/`skip`, session isolation e retry response con ACK applicativo.
+- Firmware ESP32 operativo: TLS/NTP, MQTT, status `online/sleeping/offline`, backoff, `weigh`/`clear`, `confirm`/`skip`/`undo`, takeover con retarget sessione e retry response con ACK applicativo.
 - Credenziali WiFi, OTA e MQTT persistite in NVS; nessun segreto nel sorgente.
-- Calibrazione, monitor batteria, protezione sleep, HX711 health, OLED, tastiera e audio operativi.
-- Browser MQTT operativo nel Manager con owner lease per scheda, identità operatore, deduplica response e compatibilità legacy.
-- Laravel operativo con CRUD bilance, associazione utente-bilancia, discovery MQTT, pagina pesatura e persistenza REST delle azioni.
-- `MQTT_FW_VERSION` corrente: `1.1.0`.
+- Auto-TARE boot fail-closed, INA219 validato/fresh, hard-low debounced, sovraccarico esplicito, reset WDT coerente, wake key consumato e stack undo LIFO operativi.
+- Browser MQTT operativo nel Manager con owner lease per scheda, identità operatore, REST-before-ACK, deduplica response e compatibilità legacy.
+- Laravel operativo con CRUD bilance, associazione utente-bilancia, discovery MQTT, pagina pesatura e receipt idempotenti per confirm/skip/undo.
+- `MQTT_FW_VERSION` corrente: `1.2.0`.

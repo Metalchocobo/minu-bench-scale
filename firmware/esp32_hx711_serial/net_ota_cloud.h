@@ -41,7 +41,7 @@
   // e vengono salvati in NVS (persistono tra aggiornamenti firmware).
   // Comandi: mqtt set "host" "user" "pass", mqtt creds, mqtt clear, mqtt apply
   #define MQTT_PORT       8883          // MQTTS (TLS)
-  #define MQTT_FW_VERSION "1.1.0"
+  #define MQTT_FW_VERSION "1.2.0"
   #define MQTT_SCALE_NAME "Minu Bench Scale"  // Nome visibile nel browser
 #endif
 
@@ -75,17 +75,24 @@ namespace Net {
   void mqttSetup();
 
   // Sospende MQTT (prima di light-sleep)
-  void mqttSuspend();
+  void mqttSuspend(const char* state = "sleeping");
 
   // True se connesso al broker MQTT
   bool isMqttConnected();
 
   // Stage a confirm for the active command. Session-aware commands stay active
   // until the browser acknowledges the generated response_id.
-  bool mqttConfirmActiveCommand(const char* expectedUuid, float actualWeight);
+  bool mqttConfirmActiveCommand(const char* expectedUuid, float actualWeight,
+                                char* responseIdOut = nullptr,
+                                size_t responseIdOutSize = 0);
 
   // Stage/publish a skip for the active command.
   bool mqttSkipActiveCommand();
+
+  // Stage/publish an undo receipt before a reversible remote stack entry is
+  // removed locally. Session-aware only; the RAM outbox retries until ACK.
+  bool mqttStageUndo(const char* uuid, uint32_t productId,
+                     const char* undoOfResponseId, const char* sessionId);
 
   // Restituisce il scale_id (MAC formattato)
   const char* getScaleId();
@@ -96,6 +103,15 @@ namespace Net {
   float  getMqttTargetWeight();
   const char* getMqttCommandUuid();
   const char* getMqttCommandName();
+  const char* getMqttCommandSessionId();
+  const char* getMqttLastSessionId();
+  uint32_t getMqttCommandProductId();
+
+  // True once for every accepted weigh/clear command (including duplicates).
+  bool mqttPopActivity();
+
+  // True once after the browser ACKs a durable undo REST commit.
+  bool mqttPopUndoAck();
 
   // Ritorna true una sola volta se MQTT si è disconnesso (per buzzer x2 nel .ino)
   bool mqttPopDisconnectBeep();

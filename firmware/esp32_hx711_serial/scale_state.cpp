@@ -574,6 +574,18 @@ void tareStart(uint32_t nowMs, TareMode mode) {
   g_tareUiEndMs     = nowMs + p.maxMs + ScaleConfig::TARE_FAIL_HOLD_MS;
 }
 
+bool tareCancel(uint32_t nowMs) {
+  if (!g_tareActive) return false;
+  g_tareActive = false;
+  g_tareSampleCount = 0;
+  g_tareStableSampleCount = 0;
+  g_tareLastEvalSampleMs = 0;
+  g_tareUiActive = true;
+  g_tareUiState = TARE_UI_FAILED;
+  g_tareUiEndMs = nowMs + ScaleConfig::TARE_FAIL_HOLD_MS;
+  return true;
+}
+
 bool tareApplyWorking(long rawOffset, uint32_t nowMs) {
   if (g_tareActive || rawOffset == 0 || g_scaleCpg <= 0.01f) return false;
 

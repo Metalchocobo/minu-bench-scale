@@ -16,6 +16,9 @@ enum KeyCode {
 // Inizializza i pin e lo stato interno
 void keypad_init();
 
+// Suppress the key that is physically held after a GPIO wake until release.
+void keypad_suppress_wake_key();
+
 // Da chiamare nel loop principale con now = millis().
 // Debounce + evento one-shot su pressione (transizione stabile NONE -> KEY).
 void keypad_update(uint32_t nowMs);

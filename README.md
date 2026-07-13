@@ -16,13 +16,14 @@ Hardware di riferimento:
 
 Target:
 - Portata: **20 kg**
-- Lettura visualizzata: **1 g** (clamp display a ±16 kg per sicurezza)
+- Lettura visualizzata: **1 g** nel campo operativo fino a ±16 kg
+- Oltre il campo operativo il peso reale non viene trasformato in 16.000 g: compare lo stato bloccante **SOVRACCARICO**, con isteresi di rientro
 
 Funzioni principali (firmware HX711):
-- Lettura HX711 con filtri + stati **STABLE / UNSTABLE / LIVE**
+- Lettura HX711 con filtri + stati **STABLE / UNSTABLE / LIVE / SOVRACCARICO**
 - **Zero-tracking** vicino allo zero + **snap-to-zero** allo scarico
 - **TARA** con UI dedicata a stato/animazione, verifica stabilità e blocco pesata durante l’operazione
-- Monitor batteria con **tacche** + stato **charging** (stabilizzato)
+- Monitor batteria con **tacche** + stato **charging** stabilizzato; soltanto campioni INA219 validi, plausibili e freschi alimentano filtri e protezioni
 - Protezione “batteria scarica” con **avviso + beep + light-sleep**, anti-flapping (debounce 10 s, recovery stabile 30 s) e cooldown avvisi 5 min
 - **HX health** runtime: stati **OK / WARN / ERROR / ERROR HARD**, badge **"Errore Cella"** (testo piccolo + triangolino) in alto a destra in WARN, schermata error bloccante (senza mostrare l'ultimo peso), blocco tara/calib, audio 0015.mp3 una sola volta all’ingresso in ERROR
 
@@ -187,19 +188,21 @@ WORK e LIVE usano due visualizzazioni diverse:
    - sticky band da ~`0.08 g` sui confini `.0/.5/1.0` per evitare rimbalzi continui
 4) **WORK**: resta quantizzato a grammo intero con banda zero a `1.3 g` / `0.9 g` e isteresi tra interi.
 
-### Anti-spike guard (RAW, novità)
+### Anti-spike guard (RAW)
 Taglia i glitch singoli (es. un salto momentaneo a valori negativi/assurdi): se un campione fa un salto > **150 g**,
 viene scartato e accettato solo se il campione successivo conferma (oppure se anche il successivo resta oltre soglia,
 così non rallentiamo i carichi rapidi).
 
 Nota: la guard scarta solo **frame singoli** (o confermati) e quindi non cambia la logica WORK/zt/stati, se non in presenza di glitch reali.
 
-### TARE (novità)
+### TARE
 - Tara manuale **non-blocking** a 80 SPS: parte dal rilascio del tasto, valuta una finestra mobile fissa di 32 campioni con trimmed mean, range e pendenza robusta; se il segnale non è stabile lascia invariato l’offset.
 - La tara di lavoro post-**ENTER** è immediata: usa lo stesso RAW WORK filtrato della pesata già validata, senza avviare una seconda finestra fallibile.
 
-### Auto-TARE al boot (novità)
-- Approccio “robusto”: discard iniziale + fino a **64 campioni** e **trimmed-mean** (taglia outlier) per ridurre i casi di “0 → +1 g” dopo l’avvio.
+### Auto-TARE al boot
+- Dopo **300 ms** di assestamento cerca per un massimo di **2 s** una finestra stabile di **32 campioni**; calcola lo zero con trimmed mean eliminando i 4 estremi per lato e usando soltanto quella finestra.
+- Raggiungere il limite di campioni senza stabilità non equivale a successo: l'offset resta invariato e il boot entra in errore **Auto-TARE**.
+- Nella schermata di errore il tasto **TARE** avvia un nuovo tentativo reale. La bilancia non completa il boot finché non ottiene una tara stabile.
 
 I parametri (N di media, isteresi, ecc.) sono nel firmware e sono pensati per essere ritoccati in base al tuo rumore reale.
 
@@ -214,11 +217,13 @@ Tasto **TARE**:
 - mostra “**- TARA -**” durante l’acquisizione; se resta instabile mostra “**INSTABILE** / Ripeti a peso fermo” e non modifica l’offset
 - durante la tara la pesata è “bloccata” a display (l’utente non deve pesare)
 - se la tara manuale riesce, azzera lo stack e salva la tara di riferimento della sessione
+- è bloccato nello stato **SOVRACCARICO**, per evitare che un carico oltre il campo operativo venga nascosto impostandolo come zero
 
 Zero di lavoro post-**ENTER**:
-- in WORK accetta ENTER solo con HX in stato OK, snapshot fresco e pesata realmente STABLE per la finestra configurata; in LIVE richiede almeno 400 ms di segnale quieto
+- in WORK accetta ENTER solo con HX in stato OK, snapshot fresco, assenza di sovraccarico e pesata realmente STABLE per la finestra configurata; in LIVE richiede almeno 400 ms di segnale quieto
 - applica immediatamente come offset lo stesso snapshot RAW filtrato che ha prodotto la pesata accettata
-- solo dopo il nuovo zero registra il peso nello stack e prepara il `confirm` MQTT; con un comando session-aware la response resta in retry e il comando viene chiuso soltanto dall'ACK del browser
+- registra nello stack anche offset/zero-tracking precedenti e, per un comando session-aware, UUID, `product_id`, sessione e receipt del `confirm`; questi dati rendono reversibile il commit con CLEAR breve
+- solo dopo il nuovo zero registra il peso nello stack e prepara il `confirm` MQTT; la response resta in retry finché Laravel l'ha persistita e il browser completa clear + ACK
 - se una condizione fallisce, oppure MQTT è offline con un comando attivo, offset, stack e comando restano invariati
 - non azzera lo stack e non aggiorna la tara di riferimento della sessione
 
@@ -239,6 +244,12 @@ La tara manuale è rifiutata durante un upload OTA, che continua quindi senza in
 Se INA non viene trovato:
 - prima cosa: controlla **SDA/SCL non invertiti**.
 - Il bus I2C usa un timeout `Wire` di **50 ms** per limitare blocchi su transazioni INA219 anomale.
+
+Validità runtime:
+- tensione e corrente aggiornano stato, filtro e rilevamento charging soltanto se ogni lettura I2C termina con successo e i valori sono finiti e plausibili
+- un errore di lettura non viene convertito in una falsa tensione bassa: resta disponibile l'ultimo campione valido per la sola UI, marcato con la propria età
+- i limiti di plausibilità correnti sono 3–9 V sul bus, ±330 mV sullo shunt e ±3.500 mA
+- countdown e sleep di protezione richiedono sempre un campione valido più recente di **1,5 s**; un valore stale non può spegnere la bilancia
 
 ### 8.2 Soglie tacche (default firmware, tensione filtrata)
 Soglie “pratiche” (dipendono da carico/temperatura). Sono tarate per **usabilità UI** (tacche), non per SoC perfetto:
@@ -278,10 +289,12 @@ Comportamento:
   - **0012.mp3** (batteria critica) **subito all'ingresso countdown** e **di nuovo a metà** (a ~60 s)
   - beep ogni **10 s** per **120 s**
   - poi entra in **LIGHT-SLEEP**
+- La soglia hard-low deve restare confermata da campioni INA validi e freschi per circa **3 s** prima dello sleep. Questo lascia anche al debounce charging il tempo di riconoscere l'alimentatore.
 - Prima del light-sleep per batteria scarica: DFPlayer viene **spento** via MOSFET (zero consumo audio in sleep).
+- Prima della disconnessione pulita MQTT viene pubblicato retained lo stato `sleeping`, così il gestionale non conserva uno status `online` mentre la bilancia dorme.
 - Anti-troncamento audio (DFPlayer): applicato un gap ~200 ms tra stop → play e ignorati i primi ~300 ms di BUSY=idle dopo il play (evita tagli tipo 0001→0002).
   - Nota HW: BUSY su GPIO39 non ha pull-up interno; se il BUSY resta instabile, aggiungere pull-up esterno verso 3V3 (10k..47k).
-- Wake: premendo un tasto (la tastiera risveglia, poi l’ESP32 riparte con reboot pulito)
+- Wake: premendo un tasto la tastiera risveglia l'ESP32; quel tasto viene consumato fino al rilascio e non può avviare anche TARE, ENTER, CLEAR, SKIP o un nuovo sleep
 
 ---
 
@@ -289,11 +302,14 @@ Comportamento:
 ---
 
 ## 10) Risparmio energetico per inattività (5 minuti)
-Se per **5 minuti** non viene premuto alcun tasto **e il peso visualizzato resta fermo entro ±5 g**, la bilancia entra in **LIGHT-SLEEP**.
+Se per **5 minuti** non viene premuto alcun tasto, il peso visualizzato resta fermo entro ±5 g e non esistono comando MQTT o response outbox pending, la bilancia entra in **LIGHT-SLEEP**.
 
 Caratteristiche:
 - Wake: **qualsiasi tasto**.
 - L'inattività viene azzerata anche da una variazione del peso visualizzato **> 5 g** (in LIVE o WORK).
+- Ogni `weigh`/clear MQTT accettato azzera il timer; finché un comando o una response restano pending l'auto-sleep è bloccato.
+- Prima della sospensione MQTT viene pubblicato retained `state=sleeping`; il LWT `offline` resta riservato alle disconnessioni impreviste.
+- Il tasto che provoca il wake viene ignorato come comando finché non viene rilasciato.
 - **Nessun reset** dello stato/pesata: riprende esattamente dove era.
 - WiFi/OTA vengono sospesi prima dello sleep e riattivati dopo il wake **solo se l'utente ha lasciato il WiFi ON**.
 - **SLEEP breve**: al rilascio avvia la sequenza di standby (schermata **Zzz...** per ~5 s + audio 0003), poi light-sleep.
@@ -343,6 +359,7 @@ Tasti:
   - Feedback immediato al tasto: **bip** (buzzer). La connessione vera e propria avviene in background.
   - All’avvio il WiFi segue la preferenza utente, non l’ultimo stato momentaneo (es. WiFi spento in sleep).
   - Durante il light-sleep per inattività il WiFi viene comunque spento per consumi, ma al wake viene riattivato **solo** se la preferenza è ON.
+  - Lo `scale_id` non dipende dallo stato del modulo WiFi: viene letto dal MAC STA in eFuse anche se la preferenza parte OFF. Se l'identità hardware non è valida, MQTT resta disabilitato invece di usare `000000000000`.
   - Audio:
     - **0005.mp3**: Wi‑Fi modulo ON (toggle manuale)
     - **0006.mp3**: Wi‑Fi modulo OFF (toggle manuale)
@@ -377,18 +394,18 @@ Comandi seriali:
 
 Se le credenziali non sono configurate, MQTT resta inattivo (nessun tentativo di connessione).
 
-Porta bilancia: **8883** (MQTTS/TLS). Porta browser: **8884** (WSS/TLS). Il certificato CA ISRG Root X1 è nel firmware. `MQTT_SCALE_NAME` e `MQTT_FW_VERSION` sono definiti in `net_ota_cloud.h`; la versione corrente è **1.1.0**.
+Porta bilancia: **8883** (MQTTS/TLS). Porta browser: **8884** (WSS/TLS). Il certificato CA ISRG Root X1 è nel firmware. `MQTT_SCALE_NAME` e `MQTT_FW_VERSION` sono definiti in `net_ota_cloud.h`; la versione corrente è **1.2.0**.
 
 ### Topic e QoS effettivo
 
-La bilancia si identifica con il MAC address WiFi (lowercase, senza separatori, 12 hex), usato come `scale_id` nei topic MQTT.
+La bilancia si identifica con il MAC STA letto direttamente dall'eFuse ESP32 (lowercase, senza separatori, 12 hex), usato come `scale_id` nei topic MQTT. L'identità è disponibile anche con WiFi inizialmente OFF; il valore tutto zero è invalido e impedisce l'avvio MQTT.
 
 | Topic | Direzione | QoS | Retain | Uso |
 |---|---|---:|---:|---|
 | `minu/scale/{scale_id}/command` | Browser → bilancia | 1 | sì | `weigh` e `clear` session-scoped |
-| `minu/scale/{scale_id}/response` | Bilancia → browser | 0 | no | `confirm` e `skip`; affidabilità tramite retry applicativo |
+| `minu/scale/{scale_id}/response` | Bilancia → browser | 0 | no | `confirm`, `skip` e `undo`; affidabilità tramite retry applicativo |
 | `minu/scale/{scale_id}/ack` | Browser → bilancia | 1 | no | `response_ack` applicativo |
-| `minu/scale/{scale_id}/status` | Bilancia → browser | online 0; LWT offline 1 | sì | stato, nome e versione firmware |
+| `minu/scale/{scale_id}/status` | Bilancia → browser | online/sleeping 0; LWT offline 1 | sì | stato operativo, nome e versione firmware |
 | `minu/scale/{scale_id}/owner` | Browser → browser | 1 | sì | lease della scheda che controlla la bilancia |
 
 PubSubClient pubblica a QoS 0: per questo una response non viene considerata consegnata dal solo risultato di `publish()`. Il buffer della libreria viene impostato e verificato a runtime con `mqttClient.setBufferSize(512)`; il solo define `MQTT_MAX_PACKET_SIZE` non è sufficiente.
@@ -398,7 +415,7 @@ PubSubClient pubblica a QoS 0: per questo una response non viene considerata con
 Comando di pesatura:
 
 ```json
-{"type":"weigh","uuid":"...","name":"Zucchero","target_weight":450,"session_id":"..."}
+{"type":"weigh","uuid":"...","product_id":123,"name":"Zucchero","target_weight":450,"session_id":"..."}
 ```
 
 Pulizia comando e LWT browser:
@@ -407,14 +424,17 @@ Pulizia comando e LWT browser:
 {"type":"clear","session_id":"..."}
 ```
 
-La bilancia accetta `clear` soltanto se il `session_id` coincide con quello del comando attivo. Un clear legacy senza sessione può pulire solo un comando legacy; il LWT di una vecchia scheda non può annullare il comando di una nuova sessione.
+Senza response pending la bilancia accetta `clear` soltanto se il `session_id` coincide con quello del comando attivo. Un clear legacy senza sessione può pulire solo un comando legacy; il LWT di una vecchia scheda non può annullare il comando di una nuova sessione né cambiare la sessione usata da un successivo `undo`. Durante un outbox pending, invece, il `clear` non cancella nulla: se è session-aware ritargetta alla propria sessione la response già staged.
 
 Response firmware:
 
 ```json
-{"type":"confirm","uuid":"...","session_id":"...","response_id":"a1b2c3d40000012300000001","actual_weight":448.0}
-{"type":"skip","uuid":"...","session_id":"...","response_id":"a1b2c3d40000012300000002"}
+{"type":"confirm","uuid":"...","product_id":123,"session_id":"...","response_id":"a1b2c3d40000012300000001","actual_weight":448.0}
+{"type":"skip","uuid":"...","product_id":123,"session_id":"...","response_id":"a1b2c3d40000012300000002"}
+{"type":"undo","uuid":"...","product_id":123,"session_id":"...","response_id":"a1b2c3d40000012300000003","undo_of_response_id":"a1b2c3d40000012300000001"}
 ```
+
+`undo` è prodotto soltanto da un CLEAR breve su una voce session-aware reversibile. Fa riferimento alla receipt del `confirm` originario; una voce locale o legacy priva di tale receipt viene annullata soltanto sul firmware.
 
 ACK browser:
 
@@ -422,9 +442,19 @@ ACK browser:
 {"type":"response_ack","response_id":"a1b2c3d40000012300000001"}
 ```
 
-Il firmware conserva una sola response session-aware in RAM e la ripubblica ogni **1 secondo** finché riceve l'ACK corrispondente. ENTER e SKIP restano bloccati durante questa attesa. Il browser deduplica `response_id`, esegue il callback una sola volta e ACKa nuovamente gli eventuali duplicati. Dopo un reload finale, una response della stessa sessione viene inoltre riconciliata senza ripetere il REST quando la pagina sa che non esiste più un ingrediente attivo. L'ACK conferma che il browser ha ricevuto l'evento, non che il successivo POST REST Laravel sia riuscito.
+Il firmware conserva una sola response session-aware in RAM e la ripubblica ogni **1 secondo** finché riceve l'ACK corrispondente. Durante questa attesa ENTER, SKIP e altri commit reversibili sono bloccati.
 
-Un nuovo `weigh` con sessione o UUID differenti sostituisce esplicitamente una response ancora pending. I browser legacy restano supportati: un comando privo di `session_id` riceve la vecchia response senza `response_id`, con singolo tentativo e senza attesa di ACK.
+Per firmware/browser v1.2 l'ordine è transazionale:
+
+1. il browser invia a Laravel la response completa, inclusi `scale_id`, `response_id`, `product_id`, UUID e azione;
+2. Laravel registra una receipt durabile e applica la mutazione nella stessa transazione; il replay identico è idempotente;
+3. soltanto dopo commit o replay già processato il browser pubblica il `clear` retained e attende il PUBACK QoS 1;
+4. soltanto dopo il PUBACK del clear pubblica `response_ack` e ne attende il PUBACK QoS 1;
+5. infine aggiorna la UI. Su errore REST, conflitto o rete assente non invia clear/ACK: l'outbox firmware continua il retry.
+
+La `session_id` è routing di consegna, non identità immutabile della receipt. Se durante un outbox pending arriva un nuovo `weigh` o `clear` session-aware, il firmware ritargetta alla nuova sessione la stessa `response_id` già staged e la ripubblica, senza cancellare l'outbox. Il `weigh` non viene ancora attivato e il browser potrà ripubblicarlo dopo receipt/clear/ACK; il `clear` copre anche il recupero da una nuova scheda quando non esiste un ingrediente successivo da ripubblicare. Un takeover legacy senza sessione viene ignorato per non perdere l'outbox.
+
+I browser legacy restano supportati: un comando privo di `session_id` usa response one-shot senza `response_id`, senza receipt/ACK applicativo e senza undo remoto.
 
 ### Ownership browser
 
@@ -436,15 +466,17 @@ Ogni scheda browser usa un `session_id` stabile durante reload e reconnect, cos�
 - si sottoscrive a `command` e `ack` richiedendo QoS 1;
 - il browser attende la conferma del lease owner prima di pubblicare o ripubblicare un comando attivo.
 
-**Comando `weigh`:** il browser invia UUID ingrediente, nome e peso target. La bilancia emette un bip distintivo di ricezione e mostra il target sul display (icona target + grammi).
+**Comando `weigh`:** il browser invia UUID ingrediente, `product_id`, nome e peso target. La bilancia emette un bip distintivo di ricezione, azzera il timer inattività e mostra il target sul display (icona target + grammi).
 
 **Comando `clear`:** annulla soltanto il comando della sessione corrispondente. Non modifica lo stack locale.
 
 ### Tasti (con MQTT attivo)
 
-- **ENTER**: con peso valido e stabile applica lo zero di lavoro, registra il peso nello stack e prepara `confirm`; per un comando session-aware resta pending fino all'ACK browser
-- **SKIP**: prepara `skip` per il comando attivo e resta pending fino all'ACK browser; senza comando emette un buzzer di avviso
-- Un secondo ENTER/SKIP durante il pending viene rifiutato, evitando doppie registrazioni o risposte sovrapposte
+- **ENTER**: con peso valido, stabile e non in sovraccarico applica lo zero di lavoro, registra un commit reversibile e prepara `confirm`; per un comando session-aware resta pending fino alla receipt Laravel e all'ACK browser
+- **SKIP breve**: scatta al rilascio e prepara `skip` per il comando attivo; senza comando emette un buzzer di avviso
+- **SKIP tenuto 5 secondi**: apre il wizard calibrazione senza inviare prima uno `skip`
+- **CLEAR breve**: annulla subito una voce locale; per una voce con receipt session-aware prepara `undo` e ripristina offset/zero-tracking soltanto al relativo ACK
+- Un secondo ENTER/SKIP/CLEAR reversibile durante il pending viene rifiutato, evitando modifiche e response sovrapposte
 
 ### Display MQTT
 
@@ -461,7 +493,8 @@ Ogni scheda browser usa un `session_id` stabile durante reload e reconnect, cos�
 - Riconnessione automatica con **backoff esponenziale** (2s → 4s → 8s → 16s → 30s max)
 - Durante il TLS handshake MQTT il WDT resta attivo ma viene portato temporaneamente a **20s**; finito l'handshake torna a **8s**
 - PubSubClient usa keepalive **15s** e socket timeout **2s**, così una connessione half-open non blocca a lungo il loop
-- Alla sospensione MQTT viene disconnesso; comando e outbox RAM restano disponibili e, al wake, la connessione e gli eventuali retry vengono ripristinati
+- Prima di una sospensione pulita pubblica retained `sleeping`, poi esegue DISCONNECT; il retained non resta quindi falsamente `online`. Il LWT `offline` copre le cadute impreviste.
+- Comando e outbox RAM restano disponibili e, al wake, la connessione e gli eventuali retry vengono ripristinati
 - Il log di sospensione (`[MQTT] Sospeso`) viene emesso solo se c'era stato MQTT attivo da chiudere, evitando spam seriale quando il WiFi e' giu
 
 ### NTP
@@ -472,7 +505,7 @@ Il firmware sincronizza l'orologio via NTP (`pool.ntp.org`) all'avvio, necessari
 
 ## 13) Weigh Stack — Stack pesate locale
 
-Stack pesate in RAM (LIFO, max 50 elementi, perso al riavvio — corretto). Permette di pesare ingredienti in successione dentro lo stesso contenitore, sommandoli.
+Stack pesate in RAM (LIFO, max 50 elementi). Ogni voce conserva grammi, offset e zero-tracking precedenti; le pesate session-aware conservano inoltre UUID, `product_id`, sessione e `response_id` del confirm. Lo stack sopravvive al light-sleep ma viene azzerato a ogni reboot, incluso un reset WDT.
 
 ### Workflow tipico
 
@@ -480,8 +513,8 @@ Stack pesate in RAM (LIFO, max 50 elementi, perso al riavvio — corretto). Perm
 2. Aggiungi ingrediente, attendi **STABLE** e premi **ENTER** → zero di lavoro immediato, registrazione nello stack e `confirm` MQTT (display torna a 0)
 3. Ripeti per ogni ingrediente
 4. **TOTAL** (breve) → mostra overlay di controllo con **Registrato**, **Effettivo** e **Differenza** (10 secondi)
-5. **CLEAR** (breve) → rimuove ultima pesata (LIFO pop)
-6. **CLEAR** (2 secondi) → svuota tutto lo stack
+5. **CLEAR** (breve) → annulla realmente l'ultima pesata: subito se locale, oppure dopo receipt/ACK dell'`undo` se associata a Laravel; a quel punto ripristina offset/zero-tracking e rimuove la voce LIFO
+6. **CLEAR** (2 secondi) → svuota soltanto lo stack locale, senza produrre una serie di undo remoti
 
 ### Tasti
 
@@ -490,15 +523,16 @@ Stack pesate in RAM (LIFO, max 50 elementi, perso al riavvio — corretto). Perm
 | **TARE** | Tara manuale; se riesce azzera stack e salva riferimento | — |
 | **ENTER** | Valida peso + zero di lavoro + push + MQTT confirm | — |
 | **TOTAL** | Mostra overlay confronto: Registrato / Effettivo / Differenza | — |
-| **CLEAR** | Pop ultimo (LIFO) | Svuota tutto lo stack |
+| **CLEAR** | Avvia undo LIFO; per una voce remota applica il ripristino dello zero dopo l'ACK | Svuota solo lo stack locale |
 
 **Note:**
 - ENTER con peso <= 0: ignorato (nessun push, nessuna tara, nessun MQTT)
 - ENTER con HX non OK, snapshot vecchio o peso instabile: ignorato senza modificare offset, stack o comando MQTT
+- ENTER e TARE in **SOVRACCARICO**: bloccati senza modificare zero, stack o MQTT
 - Lo zero di lavoro post-ENTER NON azzera lo stack e NON aggiorna il riferimento
 - Se la tara manuale fallisce per instabilità, offset, riferimento e stack restano invariati
 - Le overlay si chiudono dopo 10 secondi; l'overlay TOTAL si chiude anche con TOTAL, TARE o ENTER
-- Long press "solido" usato su CLEAR: l'azione breve scatta al rilascio solo se la soglia non è stata raggiunta
+- Long press "solido" usato su CLEAR: l'azione breve scatta al rilascio solo se la soglia non è stata raggiunta. Il clear lungo è una manutenzione locale e non annulla in massa le azioni già persistite in Laravel.
 
 ### Comandi seriali
 
@@ -508,11 +542,11 @@ Stack pesate in RAM (LIFO, max 50 elementi, perso al riavvio — corretto). Perm
 
 ### Interazione con MQTT
 
-- Lo stack resta locale, ma ENTER può generare una response MQTT session-aware.
-- L'ordine è: validazione → zero di lavoro → push nello stack → staging/publish del `confirm`.
-- Se la response non può essere preparata, push e zero vengono annullati. Una response preparata resta invece in RAM e viene ritentata fino all'ACK del browser, anche se il primo publish QoS 0 fallisce.
-- Durante una response in attesa di ACK, nuovi ENTER e SKIP sono bloccati per evitare duplicazioni locali.
-- Il comando MQTT `clear` non modifica lo stack pesate; riguarda soltanto UUID, target e sessione MQTT attiva.
+- ENTER session-aware esegue: validazione → zero di lavoro → push reversibile → staging del `confirm` → associazione della receipt generata alla voce. Se lo staging non riesce, push e zero vengono annullati.
+- CLEAR breve legge la voce senza rimuoverla. Se contiene una receipt remota, prepara un nuovo outbox `undo` con `undo_of_response_id`; offset/zero-tracking vengono ripristinati e la voce viene rimossa soltanto dopo l'ACK browser, quindi dopo la persistenza Laravel. Se il primo publish QoS 0 fallisce, lo stato locale resta invariato e l'outbox continua i retry.
+- Una voce locale o legacy senza receipt viene annullata subito e solo localmente; non viene inventato un undo Laravel non correlabile.
+- Durante una response in attesa di receipt/ACK sono bloccati TARE, ENTER, SKIP, qualsiasi CLEAR incluso quello lungo e le mutazioni del wizard di calibrazione. Da seriale restano bloccati `stack clear` e tutti i comandi `cal ...` mutanti; `cal status` resta consultabile.
+- Il payload MQTT `clear` inviato dal browser non equivale al tasto CLEAR: pulisce soltanto UUID, target e sessione del comando retained e non modifica lo stack.
 
 ---
 
@@ -559,13 +593,13 @@ firmware/esp32_hx711_serial/
 ├── dfplayer_driver.h / .cpp # DFPlayer:: (UART, comandi base)
 ├── buzzer.h / .cpp          # Buzzer:: (beep, toni)
 ├── hx711_driver.h / .cpp    # HX711 low-level (SCK/DOUT, read)
-├── keypad.h / .cpp          # Keypad:: (4x2, debounce, one-shot)
-├── battery_monitor.h / .cpp # BatteryMonitor:: (INA219, tacche, charging)
+├── keypad.h / .cpp          # Keypad:: (4x2, debounce, one-shot, wake suppression)
+├── battery_monitor.h / .cpp # BatteryMonitor:: (INA219, validità/freshness, charging)
 ├── hx_health.h / .cpp       # HxHealth:: (OK/WARN/ERROR/ERROR_HARD)
 ├── ui_display.h / .cpp      # UiDisplay:: (OLED SSD1322, layout, icone)
-├── net_ota_cloud.h / .cpp   # Net:: (WiFi/OTA/MQTT, opzionale)
+├── net_ota_cloud.h / .cpp   # Net:: (WiFi/OTA/MQTT, outbox confirm/skip/undo)
 ├── mqtt_store.h / .cpp      # MqttStore:: (credenziali MQTT in NVS)
-├── weigh_stack.h / .cpp     # WeighStack:: (stack pesate locale, LIFO)
+├── weigh_stack.h / .cpp     # WeighStack:: (stack LIFO reversibile + receipt metadata)
 └── calibration_wizard.h/.cpp # CalWizard:: (wizard calibrazione on-display)
 ```
 
@@ -573,9 +607,9 @@ firmware/esp32_hx711_serial/
 - `Audio::` — gestione DFPlayer (coda FIFO, priorità, power-gating, anti-troncamento)
 - `ScaleFilters::` — filtri segnale (mediana 3, media mobile, spike guard, storico range/slope)
 - `ScaleState::` — macchina a stati (STABLE/UNSTABLE/LIVE), zero-tracking, tara, quantizzazione display
-- `Net::` — WiFi/OTA/MQTT (connessione non bloccante, TLS, comandi/risposte pesatura)
+- `Net::` — WiFi/OTA/MQTT (TLS, identity eFuse, status, comandi e outbox response)
 - `MqttStore::` — persistenza credenziali MQTT in NVS
-- `WeighStack::` — stack pesate locale (push/pop/clear/total, tara di riferimento)
+- `WeighStack::` — stack pesate locale reversibile (grammi, offset/ZT precedenti, provenienza e receipt)
 - `ScaleConfig::` / `AudioConfig::` / `BatteryConfig::` — parametri configurabili (soglie, timing, tracce)
 
 ### Task Watchdog
@@ -583,7 +617,7 @@ Il firmware include un **Task Watchdog** (8 secondi) attivo già durante il setu
 
 All'avvio il firmware verifica che il `loopTask` sia davvero iscritto al WDT: in seriale stampa `[WDT] OK` se l'aggancio e' attivo, oppure `[WDT] FAIL i=... a=... s=...` se init/add/status falliscono. Il reset periodico del watchdog viene eseguito solo dopo questa verifica.
 
-Dopo un reset WDT, il firmware ripristina da memoria RTC l'ultima tara runtime (`offsetRaw` + zero-tracking) e salta l'auto-tare di boot, così una pesata in corso può ripartire con la stessa tara. Su accensione normale, reset manuale o power loss la recovery viene scartata e resta l'auto-tare standard.
+Dopo un reset WDT la sessione runtime viene azzerata in modo coerente: stack, riferimento, offset di lavoro, zero-tracking e filtri. Nessuna tara runtime parziale viene recuperata da RTC. La UI chiede di liberare il piatto e premere TARE; il tasto avvia una nuova auto-TARE fail-closed e il boot resta fermo, ripetendo la richiesta finché l'acquisizione non è stabile. La calibrazione persistente in NVS resta valida.
 
 ### DFPlayer Mini (audio eventi) + power-gating controllato
 Il firmware può suonare file MP3 (es. avviso sleep). Per evitare click e stati strani, **non fa power-cycle a fine brano**.
@@ -696,8 +730,10 @@ Per calibrazione remota o debug:
 
 **Note:**
 - `cal zero` e `cal ref` sono disabilitati se HX health è in ERROR
+- tara/calibrazione sono bloccate durante **SOVRACCARICO**
 - `cal ref` rifiuta valori ≤ 0 e CPG fuori range 20-1000
 - Dopo `cal zero` o `cal ref` i filtri vengono resettati automaticamente
+- dopo WDT viene ricaricata la calibrazione NVS senza applicare una tara runtime RTC
 
 ### Legenda MP3 eventi (cartella /MP3)
 Metti i file in **SD:/MP3/** con nome a 4 cifre (es. `0001.mp3`).
@@ -717,7 +753,7 @@ Metti i file in **SD:/MP3/** con nome a 4 cifre (es. `0001.mp3`).
 | 0013.mp3 | Standby pre‑sleep per batteria scarica (schermata Zzz... 5s prima del light-sleep) |
 | 0014.mp3 | Errore lettura batteria (INA) |
 | 0015.mp3 | Errore sensore peso (HX) |
-| 0016.mp3 | Errore TARA al boot (Auto‑TARE fallita, richiede ACK) |
+| 0016.mp3 | Errore TARA al boot (Auto‑TARE fallita; piatto fermo + TARE per ritentare) |
 | 0017.mp3 | Modalità WORK |
 | 0018.mp3 | Modalità LIVE |
 
@@ -737,8 +773,12 @@ La tastiera ha un debounce software (40 ms) e genera eventi **one-shot**: un tas
 
 Se un tasto o una linea resta chiusa per almeno 15 secondi, quel tasto viene soppresso fino al rilascio elettrico: il loop continua a girare e gli altri tasti restano leggibili.
 
+Dopo un wake il tasto che ha risvegliato la bilancia resta soppresso fino al rilascio: il wake non genera una seconda azione applicativa.
+
 **Long press:**
-- **SKIP tenuto per 5 secondi**: avvia il wizard di calibrazione on-display
-- **CLEAR tenuto per 2 secondi**: svuota completamente lo stack pesate
+- **SKIP breve**: l'azione scatta al rilascio
+- **SKIP tenuto per 5 secondi**: avvia il wizard di calibrazione on-display senza eseguire prima lo SKIP breve/MQTT
+- **CLEAR breve**: al rilascio avvia l'undo LIFO reale
+- **CLEAR tenuto per 2 secondi**: svuota soltanto lo stack locale, senza undo Laravel multipli
 - **SLEEP breve**: entra in standby al rilascio
 - **SLEEP tenuto per 2 secondi**: commuta DFPlayer AUDIO OFF/ON, salva il log quando passa a OFF e annulla lo standby

@@ -1,7 +1,9 @@
 #include "battery_monitor.h"
+#include "config/config_battery.h"
 
 #include <Wire.h>
 #include <Adafruit_INA219.h>
+#include <math.h>
 
 // -----------------------------------------------------------------------------
 // CONFIGURAZIONE INA219 / FILTRI / SOGLIE
@@ -63,6 +65,7 @@ static float g_vFilt = 0.0f;
 static float g_iFilt = 0.0f;
 
 static uint32_t g_lastReadMs = 0;
+static bool g_invalidLogged = false;
 
 // Debounce per stato carica
 static uint32_t g_chargeCandidateSinceMs = 0;     // quando I indica "carica" (entry)
@@ -94,6 +97,16 @@ static BatteryLevel levelFromVoltage(float v) {
   }
 }
 
+static void invalidateSample() {
+  g_status.valid = false;
+  g_chargeCandidateSinceMs = 0;
+  g_dischargeCandidateSinceMs = 0;
+  if (!g_invalidLogged) {
+    Serial.println(F("[BATT] Lettura INA219 non valida"));
+    g_invalidLogged = true;
+  }
+}
+
 // -----------------------------------------------------------------------------
 // API
 // -----------------------------------------------------------------------------
@@ -107,6 +120,8 @@ void battery_init() {
     g_status.current_mA = 0.0f;
     g_status.level = BATT_LEVEL_EMPTY;
     g_status.charging = false;
+    g_status.valid = false;
+    g_status.lastValidMs = 0;
     g_inited = false;
     return;
   }
@@ -118,9 +133,12 @@ void battery_init() {
   g_status.current_mA = 0.0f;
   g_status.level = BATT_LEVEL_EMPTY;
   g_status.charging = false;
+  g_status.valid = false;
+  g_status.lastValidMs = 0;
 
   g_haveSample = false;
   g_lastReadMs = 0;
+  g_invalidLogged = false;
   g_inited = true;
 
   Serial.println(F("[BATT] INA219 inizializzato (32V / 2A, addr 0x40)"));
@@ -139,12 +157,35 @@ void battery_update(uint32_t nowMs) {
   g_lastReadMs = nowMs;
 
   // Letture base dal sensore
-  float busVoltage_V      = g_ina219.getBusVoltage_V();       // tensione tra GND e V-
-  float shuntVoltage_mV   = g_ina219.getShuntVoltage_mV();    // tra V- e V+
-  float current_mA        = g_ina219.getCurrent_mA();         // segno: V+ -> V-
+  float busVoltage_V = g_ina219.getBusVoltage_V();
+  if (!g_ina219.success()) {
+    invalidateSample();
+    return;
+  }
+  float shuntVoltage_mV = g_ina219.getShuntVoltage_mV();
+  if (!g_ina219.success()) {
+    invalidateSample();
+    return;
+  }
+  float current_mA = g_ina219.getCurrent_mA();
+  if (!g_ina219.success()) {
+    invalidateSample();
+    return;
+  }
 
   // Tensione reale batteria ≈ tensione lato carico + caduta sullo shunt
   float vBatt_V = busVoltage_V + (shuntVoltage_mV / 1000.0f);
+
+  if (!isfinite(busVoltage_V) || !isfinite(shuntVoltage_mV) ||
+      !isfinite(current_mA) || !isfinite(vBatt_V) ||
+      vBatt_V < BatteryConfig::SENSOR_MIN_V ||
+      vBatt_V > BatteryConfig::SENSOR_MAX_V ||
+      fabsf(shuntVoltage_mV) > BatteryConfig::SENSOR_MAX_SHUNT_MV ||
+      fabsf(current_mA) > BatteryConfig::SENSOR_MAX_CURRENT_MA) {
+    invalidateSample();
+    return;
+  }
+  g_invalidLogged = false;
 
   // Aggiorniamo i filtri
   g_vFilt = lowPassUpdate(g_vFilt, vBatt_V, ALPHA_VOLTAGE);
@@ -154,6 +195,8 @@ void battery_update(uint32_t nowMs) {
   g_status.voltage_V = g_vFilt;
   g_status.current_mA = g_iFilt;
   g_status.level = levelFromVoltage(g_vFilt);
+  g_status.valid = true;
+  g_status.lastValidMs = nowMs;
 
   // Logica "in carica": corrente verso la batteria (segno negativo) sopra soglia
   // Stato "in carica" calcolato dalla corrente filtrata, con isteresi + debounce
@@ -199,6 +242,11 @@ BatteryStatus battery_get_status() {
   return g_status;
 }
 
+bool battery_has_fresh_sample(uint32_t nowMs) {
+  return g_inited && g_status.valid && g_status.lastValidMs != 0 &&
+    (nowMs - g_status.lastValidMs) <= BatteryConfig::SAMPLE_FRESH_MAX_MS;
+}
+
 void battery_debug_print(const BatteryStatus &st) {
   Serial.print(F("[BATT] V="));
   Serial.print(st.voltage_V, 3);
@@ -215,5 +263,7 @@ void battery_debug_print(const BatteryStatus &st) {
   }
 
   Serial.print(F("  charging="));
-  Serial.println(st.charging ? F("YES") : F("NO"));
+  Serial.print(st.charging ? F("YES") : F("NO"));
+  Serial.print(F("  valid="));
+  Serial.println(st.valid ? F("YES") : F("NO"));
 }

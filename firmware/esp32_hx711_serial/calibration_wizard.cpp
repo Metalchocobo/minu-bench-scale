@@ -207,6 +207,13 @@ bool updateLongPress(uint32_t nowMs) {
   return false;
 }
 
+void cancelLongPress() {
+  if (g_step == CAL_IDLE) {
+    g_longPressActive = false;
+    g_longPressStartMs = 0;
+  }
+}
+
 void update(uint32_t nowMs, KeyCode key) {
   // In IDLE non fa nulla - il long press è gestito da updateLongPress()
   if (g_step == CAL_IDLE) {

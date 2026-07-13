@@ -1,5 +1,6 @@
 #include "net_ota_cloud.h"
 #include "config/config_scale.h"
+#include <esp_mac.h>
 #include <esp_system.h>
 #include <esp_task_wdt.h>
 
@@ -324,13 +325,22 @@ static char   mqtt_clientId[32] = {0};  // scale-{scaleId}
 static bool   mqtt_cmdActive       = false;
 static char   mqtt_cmdUuid[37]     = {0};  // UUID standard 36 chars + null
 static char   mqtt_cmdSessionId[65] = {0}; // Empty for legacy commands
+static char   mqtt_lastSessionId[65] = {0};
 static char   mqtt_cmdName[32]     = {0};  // Nome ingrediente (troncato)
 static float  mqtt_cmdTargetWeight = 0.0f;
+static uint32_t mqtt_cmdProductId  = 0;
 
 // Single-entry RAM outbox for session-aware responses.
+enum MqttResponseKind : uint8_t {
+  MQTT_RESPONSE_NONE = 0,
+  MQTT_RESPONSE_CONFIRM,
+  MQTT_RESPONSE_SKIP,
+  MQTT_RESPONSE_UNDO
+};
 static bool     mqtt_responsePending = false;
+static MqttResponseKind mqtt_responseKind = MQTT_RESPONSE_NONE;
 static char     mqtt_responseId[25] = {0};
-static char     mqtt_responsePayload[256] = {0};
+static char     mqtt_responsePayload[384] = {0};
 static uint32_t mqtt_responseLastPublishMs = 0;
 static uint32_t mqtt_responseCounter = 0;
 static const uint32_t MQTT_RESPONSE_RETRY_MS = 1000;
@@ -350,6 +360,9 @@ static bool     mqtt_disconnectBeep  = false;
 
 // Flag per segnalare ricezione di un nuovo comando weigh (bip distintivo)
 static bool     mqtt_commandRxBeep   = false;
+static bool     mqtt_activityFlag    = false;
+static bool     mqtt_undoAckFlag     = false;
+static bool     mqtt_identityValid   = false;
 
 // Forward declaration
 static void mqttCallback(char* topic, byte* payload, unsigned int length);
@@ -357,18 +370,23 @@ static bool mqttAttemptConnect();
 static void mqttResetCommand();
 static void mqttResetPendingResponse();
 static bool mqttPublishPendingResponse();
+static void mqttGenerateResponseId();
+static bool mqttRetargetPendingResponse(const char* sessionId);
+static bool mqttPublishStatus(const char* state);
 
 // ========================= HELPER: MAC → scale_id =========================
-static void buildScaleId() {
-  String mac = WiFi.macAddress();  // "AA:BB:CC:DD:EE:FF"
-  int j = 0;
-  for (unsigned int i = 0; i < mac.length() && j < 12; i++) {
-    char c = mac.charAt(i);
-    if (c != ':') {
-      mqtt_scaleId[j++] = (c >= 'A' && c <= 'F') ? (c + 32) : c;  // lowercase
-    }
-  }
-  mqtt_scaleId[j] = '\0';
+static bool buildScaleId() {
+  uint8_t mac[6] = {0};
+  if (esp_read_mac(mac, ESP_MAC_WIFI_STA) != ESP_OK) return false;
+
+  bool anyNonZero = false;
+  for (uint8_t value : mac) anyNonZero = anyNonZero || (value != 0);
+  if (!anyNonZero) return false;
+
+  snprintf(mqtt_scaleId, sizeof(mqtt_scaleId),
+    "%02x%02x%02x%02x%02x%02x",
+    mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+  return strlen(mqtt_scaleId) == 12;
 }
 
 static void buildTopics() {
@@ -385,13 +403,21 @@ static void mqttResetCommand() {
   mqtt_cmdSessionId[0] = '\0';
   mqtt_cmdName[0] = '\0';
   mqtt_cmdTargetWeight = 0.0f;
+  mqtt_cmdProductId = 0;
 }
 
 static void mqttResetPendingResponse() {
   mqtt_responsePending = false;
+  mqtt_responseKind = MQTT_RESPONSE_NONE;
   mqtt_responseId[0] = '\0';
   mqtt_responsePayload[0] = '\0';
   mqtt_responseLastPublishMs = 0;
+}
+
+static void mqttGenerateResponseId() {
+  snprintf(mqtt_responseId, sizeof(mqtt_responseId), "%08lx%08lx%08lx",
+    (unsigned long)esp_random(), (unsigned long)millis(),
+    (unsigned long)++mqtt_responseCounter);
 }
 
 static bool mqttPublishPendingResponse() {
@@ -405,6 +431,33 @@ static bool mqttPublishPendingResponse() {
   );
   if (!published) Serial.println(F("[MQTT] Response publish fallito; retry attivo"));
   return published;
+}
+
+static bool mqttPublishStatus(const char* state) {
+  if (!mqttClient.connected() || !state) return false;
+  char payload[256];
+  int written = snprintf(payload, sizeof(payload),
+    "{\"type\":\"status\",\"state\":\"%s\",\"scale_id\":\"%s\",\"name\":\"%s\",\"firmware_version\":\"%s\"}",
+    state, mqtt_scaleId, MQTT_SCALE_NAME, MQTT_FW_VERSION);
+  return written > 0 && written < (int)sizeof(payload) &&
+    mqttClient.publish(mqtt_topicSts, (const uint8_t*)payload, strlen(payload), true);
+}
+
+static bool mqttRetargetPendingResponse(const char* sessionId) {
+  if (!mqtt_responsePending || !sessionId || sessionId[0] == '\0' ||
+      strlen(sessionId) >= sizeof(mqtt_lastSessionId)) return false;
+
+  JsonDocument doc;
+  // Read-only input forces ArduinoJson to own strings before the same output
+  // buffer is overwritten by serializeJson().
+  if (deserializeJson(doc, static_cast<const char*>(mqtt_responsePayload))) return false;
+  doc["session_id"] = sessionId;
+  size_t written = serializeJson(doc, mqtt_responsePayload, sizeof(mqtt_responsePayload));
+  if (written == 0 || written >= sizeof(mqtt_responsePayload)) return false;
+  strlcpy(mqtt_lastSessionId, sessionId, sizeof(mqtt_lastSessionId));
+  mqtt_responseLastPublishMs = 0;
+  mqttPublishPendingResponse();
+  return true;
 }
 
 // ========================= CALLBACK RICEZIONE COMANDI =========================
@@ -434,6 +487,7 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length) {
         mqtt_responsePending && strcmp(responseId, mqtt_responseId) == 0) {
       Serial.print(F("[MQTT] Response ACK: "));
       Serial.println(responseId);
+      if (mqtt_responseKind == MQTT_RESPONSE_UNDO) mqtt_undoAckFlag = true;
       mqttResetPendingResponse();
       mqttResetCommand();
     }
@@ -444,6 +498,8 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length) {
     const char* uuid   = doc["uuid"];
     const char* sessionId = doc["session_id"] | "";
     float targetWeight = doc["target_weight"] | 0.0f;
+    uint32_t productId = doc["product_id"].is<uint32_t>()
+      ? doc["product_id"].as<uint32_t>() : 0;
     const char* name   = doc["name"] | "";
 
     if (!uuid || strlen(uuid) == 0 || strlen(uuid) >= sizeof(mqtt_cmdUuid) ||
@@ -451,20 +507,28 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length) {
       Serial.println(F("[MQTT] weigh con ID non valido, ignorato"));
       return;
     }
+    mqtt_activityFlag = true;
+    if (sessionId[0] != '\0') {
+      strlcpy(mqtt_lastSessionId, sessionId, sizeof(mqtt_lastSessionId));
+    }
 
     bool sameUuid = (strcmp(mqtt_cmdUuid, uuid) == 0);
     bool sameSession = (strcmp(mqtt_cmdSessionId, sessionId) == 0);
-    bool sameCommand = sameUuid && sameSession;
+    bool sameCommand = sameUuid && sameSession && mqtt_cmdProductId == productId;
 
     if (mqtt_responsePending) {
       if (sameCommand) {
         Serial.println(F("[MQTT] CMD weigh duplicato durante ACK, ignorato"));
         return;
       }
-      // A different command explicitly supersedes the unacknowledged response.
-      Serial.println(F("[MQTT] Nuovo comando: response pending superseded"));
-      mqttResetPendingResponse();
-      mqttResetCommand();
+      // The receipt already staged in RAM is authoritative. A new session may
+      // take ownership of its delivery, but cannot overwrite the transaction.
+      if (sessionId[0] != '\0' && mqttRetargetPendingResponse(sessionId)) {
+        Serial.println(F("[MQTT] Response pending trasferita alla nuova sessione"));
+      } else {
+        Serial.println(F("[MQTT] Nuovo comando ignorato: response ACK pending"));
+      }
+      return;
     }
 
     float targetDelta = targetWeight - mqtt_cmdTargetWeight;
@@ -480,6 +544,7 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length) {
     strncpy(mqtt_cmdName, name, sizeof(mqtt_cmdName) - 1);
     mqtt_cmdName[sizeof(mqtt_cmdName) - 1] = '\0';
     mqtt_cmdTargetWeight = targetWeight;
+    mqtt_cmdProductId = productId;
     mqtt_cmdActive = true;
 
     if (isNewWeigh) {
@@ -496,11 +561,16 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length) {
   } else if (strcmp(type, "clear") == 0) {
     const char* sessionId = doc["session_id"] | "";
     if (strlen(sessionId) >= sizeof(mqtt_cmdSessionId)) return;
+    mqtt_activityFlag = true;
 
     // The outbox is cleared only by its response_ack. A retained clear may
     // follow that ACK on the command topic.
     if (mqtt_responsePending) {
-      Serial.println(F("[MQTT] CMD clear ignorato: response ACK pending"));
+      if (sessionId[0] != '\0' && mqttRetargetPendingResponse(sessionId)) {
+        Serial.println(F("[MQTT] Response pending trasferita dal clear"));
+      } else {
+        Serial.println(F("[MQTT] CMD clear ignorato: response ACK pending"));
+      }
       return;
     }
 
@@ -509,6 +579,9 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length) {
     bool sessionMatches = (!activeLegacy && sessionId[0] != '\0' &&
                            strcmp(mqtt_cmdSessionId, sessionId) == 0);
     if (activeLegacy || sessionMatches) {
+      if (sessionMatches) {
+        strlcpy(mqtt_lastSessionId, sessionId, sizeof(mqtt_lastSessionId));
+      }
       mqttResetCommand();
       Serial.println(F("[MQTT] CMD clear: tornato in idle"));
     } else {
@@ -586,12 +659,11 @@ static bool mqttAttemptConnect() {
   }
 
   // Pubblica status online (retained) — include name per discovery dal browser
-  char statusPayload[256];
-  snprintf(statusPayload, sizeof(statusPayload),
-    "{\"type\":\"status\",\"state\":\"online\",\"scale_id\":\"%s\",\"name\":\"%s\",\"firmware_version\":\"%s\"}",
-    mqtt_scaleId, MQTT_SCALE_NAME, MQTT_FW_VERSION);
-  mqttClient.publish(mqtt_topicSts, (const uint8_t*)statusPayload, strlen(statusPayload), true);
-  Serial.println(F("[MQTT] Status 'online' pubblicato"));
+  if (mqttPublishStatus("online")) {
+    Serial.println(F("[MQTT] Status 'online' pubblicato"));
+  } else {
+    Serial.println(F("[MQTT] Status 'online' non pubblicato"));
+  }
 
   Serial.println(F("[MQTT] Subscribed command + ack"));
 
@@ -601,7 +673,14 @@ static bool mqttAttemptConnect() {
 // ========================= FUNZIONI PUBBLICHE MQTT =========================
 
 void mqttSetup() {
-  buildScaleId();
+  mqtt_identityValid = buildScaleId();
+  if (!mqtt_identityValid) {
+    mqtt_scaleId[0] = '\0';
+    mqtt_credsLoaded = false;
+    mqtt_setupDone = true;
+    Serial.println(F("[MQTT] eFuse MAC non valida; MQTT disabilitato"));
+    return;
+  }
   buildTopics();
 
   Serial.print(F("[MQTT] scale_id = "));
@@ -650,14 +729,20 @@ void mqttSetup() {
   mqtt_disconnectBeep = false;
   mqtt_commandRxBeep = false;
 
+  mqtt_activityFlag = false;
+  mqtt_undoAckFlag = false;
+
   Serial.println(F("[MQTT] Setup completato"));
 }
 
-void mqttSuspend() {
+void mqttSuspend(const char* state) {
   if (!mqtt_setupDone) return;
   bool hadActiveState = mqttClient.connected() || mqtt_wasPrevConnected || (mqtt_lastAttemptMs != 0) || mqtt_cmdActive;
   if (mqttClient.connected()) {
-    mqttClient.disconnect();
+    // Disconnect cleanly only after the retained sleeping state is accepted.
+    // Otherwise close the transport so the broker publishes the offline LWT.
+    if (mqttPublishStatus(state ? state : "offline")) mqttClient.disconnect();
+    else mqttWifiClient.stop();
   }
   mqtt_wasPrevConnected = false;
   mqtt_lastAttemptMs = 0;
@@ -668,7 +753,7 @@ void mqttSuspend() {
 }
 
 bool isMqttConnected() {
-  return mqtt_setupDone && mqttClient.connected();
+  return mqtt_setupDone && mqtt_identityValid && mqttClient.connected();
 }
 
 const char* getScaleId() {
@@ -695,7 +780,21 @@ const char* getMqttCommandName() {
   return mqtt_cmdName;
 }
 
-bool mqttConfirmActiveCommand(const char* expectedUuid, float actualWeight) {
+const char* getMqttCommandSessionId() {
+  return mqtt_cmdSessionId;
+}
+
+const char* getMqttLastSessionId() {
+  return mqtt_lastSessionId;
+}
+
+uint32_t getMqttCommandProductId() {
+  return mqtt_cmdProductId;
+}
+
+bool mqttConfirmActiveCommand(const char* expectedUuid, float actualWeight,
+                              char* responseIdOut, size_t responseIdOutSize) {
+  if (responseIdOut && responseIdOutSize > 0) responseIdOut[0] = '\0';
   if (!mqtt_cmdActive || mqtt_responsePending || !expectedUuid ||
       strcmp(mqtt_cmdUuid, expectedUuid) != 0) {
     return false;
@@ -707,10 +806,10 @@ bool mqttConfirmActiveCommand(const char* expectedUuid, float actualWeight) {
   // Legacy browser compatibility: one attempt and no ACK outbox.
   if (mqtt_cmdSessionId[0] == '\0') {
     if (!mqttClient.connected()) return false;
-    char legacyPayload[160];
+    char legacyPayload[192];
     snprintf(legacyPayload, sizeof(legacyPayload),
-      "{\"type\":\"confirm\",\"uuid\":\"%s\",\"actual_weight\":%s}",
-      expectedUuid, weightStr);
+      "{\"type\":\"confirm\",\"uuid\":\"%s\",\"product_id\":%lu,\"actual_weight\":%s}",
+      expectedUuid, (unsigned long)mqtt_cmdProductId, weightStr);
     bool published = mqttClient.publish(
       mqtt_topicRsp, (const uint8_t*)legacyPayload, strlen(legacyPayload), false);
     if (!published) return false;
@@ -718,19 +817,22 @@ bool mqttConfirmActiveCommand(const char* expectedUuid, float actualWeight) {
     return true;
   }
 
-  snprintf(mqtt_responseId, sizeof(mqtt_responseId), "%08lx%08lx%08lx",
-    (unsigned long)esp_random(), (unsigned long)millis(),
-    (unsigned long)++mqtt_responseCounter);
+  mqttGenerateResponseId();
   int written = snprintf(mqtt_responsePayload, sizeof(mqtt_responsePayload),
-    "{\"type\":\"confirm\",\"uuid\":\"%s\",\"session_id\":\"%s\",\"response_id\":\"%s\",\"actual_weight\":%s}",
-    expectedUuid, mqtt_cmdSessionId, mqtt_responseId, weightStr);
+    "{\"type\":\"confirm\",\"uuid\":\"%s\",\"product_id\":%lu,\"session_id\":\"%s\",\"response_id\":\"%s\",\"actual_weight\":%s}",
+    expectedUuid, (unsigned long)mqtt_cmdProductId, mqtt_cmdSessionId,
+    mqtt_responseId, weightStr);
   if (written < 0 || written >= (int)sizeof(mqtt_responsePayload)) {
     mqttResetPendingResponse();
     return false;
   }
+  mqtt_responseKind = MQTT_RESPONSE_CONFIRM;
   mqtt_responsePending = true;
   mqtt_responseLastPublishMs = 0;
   mqttPublishPendingResponse();
+  if (responseIdOut && responseIdOutSize > 0) {
+    strlcpy(responseIdOut, mqtt_responseId, responseIdOutSize);
+  }
   return true;
 }
 
@@ -739,9 +841,10 @@ bool mqttSkipActiveCommand() {
 
   if (mqtt_cmdSessionId[0] == '\0') {
     if (!mqttClient.connected()) return false;
-    char legacyPayload[96];
+    char legacyPayload[128];
     snprintf(legacyPayload, sizeof(legacyPayload),
-      "{\"type\":\"skip\",\"uuid\":\"%s\"}", mqtt_cmdUuid);
+      "{\"type\":\"skip\",\"uuid\":\"%s\",\"product_id\":%lu}",
+      mqtt_cmdUuid, (unsigned long)mqtt_cmdProductId);
     bool published = mqttClient.publish(
       mqtt_topicRsp, (const uint8_t*)legacyPayload, strlen(legacyPayload), false);
     if (!published) return false;
@@ -749,16 +852,46 @@ bool mqttSkipActiveCommand() {
     return true;
   }
 
-  snprintf(mqtt_responseId, sizeof(mqtt_responseId), "%08lx%08lx%08lx",
-    (unsigned long)esp_random(), (unsigned long)millis(),
-    (unsigned long)++mqtt_responseCounter);
+  mqttGenerateResponseId();
   int written = snprintf(mqtt_responsePayload, sizeof(mqtt_responsePayload),
-    "{\"type\":\"skip\",\"uuid\":\"%s\",\"session_id\":\"%s\",\"response_id\":\"%s\"}",
-    mqtt_cmdUuid, mqtt_cmdSessionId, mqtt_responseId);
+    "{\"type\":\"skip\",\"uuid\":\"%s\",\"product_id\":%lu,\"session_id\":\"%s\",\"response_id\":\"%s\"}",
+    mqtt_cmdUuid, (unsigned long)mqtt_cmdProductId,
+    mqtt_cmdSessionId, mqtt_responseId);
   if (written < 0 || written >= (int)sizeof(mqtt_responsePayload)) {
     mqttResetPendingResponse();
     return false;
   }
+  mqtt_responseKind = MQTT_RESPONSE_SKIP;
+  mqtt_responsePending = true;
+  mqtt_responseLastPublishMs = 0;
+  mqttPublishPendingResponse();
+  return true;
+}
+
+bool mqttStageUndo(const char* uuid, uint32_t productId,
+                   const char* undoOfResponseId, const char* sessionId) {
+  if (mqtt_responsePending || !mqtt_setupDone || !mqtt_identityValid ||
+      !uuid || uuid[0] == '\0' ||
+      strlen(uuid) >= sizeof(mqtt_cmdUuid) || productId == 0 ||
+      !undoOfResponseId || undoOfResponseId[0] == '\0' ||
+      strlen(undoOfResponseId) >= sizeof(mqtt_responseId)) return false;
+
+  const char* targetSession = (sessionId && sessionId[0] != '\0')
+    ? sessionId : mqtt_lastSessionId;
+  if (!targetSession || targetSession[0] == '\0' ||
+      strlen(targetSession) >= sizeof(mqtt_lastSessionId)) return false;
+
+  mqttGenerateResponseId();
+  int written = snprintf(mqtt_responsePayload, sizeof(mqtt_responsePayload),
+    "{\"type\":\"undo\",\"uuid\":\"%s\",\"product_id\":%lu,\"session_id\":\"%s\",\"response_id\":\"%s\",\"undo_of_response_id\":\"%s\"}",
+    uuid, (unsigned long)productId, targetSession, mqtt_responseId,
+    undoOfResponseId);
+  if (written < 0 || written >= (int)sizeof(mqtt_responsePayload)) {
+    mqttResetPendingResponse();
+    return false;
+  }
+  strlcpy(mqtt_lastSessionId, targetSession, sizeof(mqtt_lastSessionId));
+  mqtt_responseKind = MQTT_RESPONSE_UNDO;
   mqtt_responsePending = true;
   mqtt_responseLastPublishMs = 0;
   mqttPublishPendingResponse();
@@ -768,6 +901,7 @@ bool mqttSkipActiveCommand() {
 // Chiamata internamente da update() — gestisce riconnessione con backoff
 static void mqttUpdateInternal() {
   if (!mqtt_setupDone) return;
+  if (!mqtt_identityValid) return;
   if (!mqtt_credsLoaded) return;  // Credenziali non configurate: non tentare
   if (!WiFi.isConnected()) {
     // WiFi giù: reset stato MQTT
@@ -841,7 +975,23 @@ bool mqttPopCommandRxBeep() {
   return false;
 }
 
+bool mqttPopActivity() {
+  if (!mqtt_activityFlag) return false;
+  mqtt_activityFlag = false;
+  return true;
+}
+
+bool mqttPopUndoAck() {
+  if (!mqtt_undoAckFlag) return false;
+  mqtt_undoAckFlag = false;
+  return true;
+}
+
 void mqttReloadCreds() {
+  if (!mqtt_identityValid) {
+    Serial.println(F("[MQTT] eFuse MAC non valida; reload ignorato"));
+    return;
+  }
   // Disconnetti se connesso
   if (mqttClient.connected()) {
     mqttClient.disconnect();
@@ -880,6 +1030,7 @@ void mqttReloadCreds() {
   mqtt_backoffMs = MQTT_BACKOFF_INIT;
   mqtt_disconnectBeep = false;
   mqtt_commandRxBeep = false;
+  mqtt_activityFlag = false;
 
   // NTP (nel caso non fosse stato configurato al setup perché mancavano le credenziali)
   configTime(3600, 3600, "pool.ntp.org", "time.google.com");
