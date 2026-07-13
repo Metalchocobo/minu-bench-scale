@@ -52,6 +52,9 @@ void ui_renderHxError(bool hard, bool showLast, long lastG);
 // Schermata transizione standby (Zzz...)
 void ui_renderSleepZzz();
 
+// Overlay controllo manuale DFPlayer.
+void ui_renderAudioStatus(bool enabled, bool ready, bool logSaved);
+
 // ========================= CALIBRATION WIZARD UI =========================
 // Step ZERO: Acquisisci zero (piatto vuoto)
 // progress: 0-100 indica quanti campioni sono stati raccolti

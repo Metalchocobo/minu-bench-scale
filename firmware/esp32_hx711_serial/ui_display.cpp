@@ -460,6 +460,26 @@ void ui_renderSleepZzz() {
   oled.sendBuffer();
 }
 
+void ui_renderAudioStatus(bool enabled, bool ready, bool logSaved) {
+  oled.clearBuffer();
+
+  oled.setFont(u8g2_font_logisoso24_tf);
+  drawCenteredText(enabled ? "AUDIO ON" : "AUDIO OFF", 30);
+
+  oled.setFont(u8g2_font_6x12_tr);
+  if (!enabled) {
+    drawCenteredText("DFPLAYER SPENTO", 48);
+  } else if (ready) {
+    drawCenteredText("DFPLAYER PRONTO", 48);
+  } else {
+    drawCenteredText("RIAVVIO MODULO...", 48);
+  }
+
+  oled.setFont(u8g2_font_5x8_tr);
+  drawCenteredText(logSaved ? "LOG DIAGNOSTICO SALVATO" : "NESSUN LOG SALVATO", 62);
+  oled.sendBuffer();
+}
+
 // -----------------------------------------------------------------------------
 // LAYOUT PRINCIPALE PESO
 // -----------------------------------------------------------------------------

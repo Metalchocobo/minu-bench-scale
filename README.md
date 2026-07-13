@@ -1,4 +1,4 @@
-# Minù Bench Scale — ESP32 + HX711 + OLED SSD1322 + INA219 (SLA 6 V) · v2026-07-12
+# Minù Bench Scale — ESP32 + HX711 + OLED SSD1322 + INA219 (SLA 6 V) · v2026-07-13
 
 Bilancia da banco per uso interno in laboratorio (gelato/pasticceria), pensata per guidare e rendere affidabili le pesate ingredienti (non “pesatura legale”).
 
@@ -296,7 +296,8 @@ Caratteristiche:
 - L'inattività viene azzerata anche da una variazione del peso visualizzato **> 5 g** (in LIVE o WORK).
 - **Nessun reset** dello stato/pesata: riprende esattamente dove era.
 - WiFi/OTA vengono sospesi prima dello sleep e riattivati dopo il wake **solo se l'utente ha lasciato il WiFi ON**.
-- **Tasto SLEEP**: forza la sequenza di standby (schermata **Zzz...** per ~5 s + audio 0003), poi light-sleep.
+- **SLEEP breve**: al rilascio avvia la sequenza di standby (schermata **Zzz...** per ~5 s + audio 0003), poi light-sleep.
+- **SLEEP tenuto per 2 secondi**: non entra in standby; commuta il DFPlayer tra **AUDIO OFF** e **AUDIO ON**, con conferma sul display e buzzer.
 
 ### Indicatore esterno sleep (LED)
 Quando il display è spento, per capire che la bilancia è in sleep, usa un LED su:
@@ -584,7 +585,7 @@ All'avvio il firmware verifica che il `loopTask` sia davvero iscritto al WDT: in
 
 Dopo un reset WDT, il firmware ripristina da memoria RTC l'ultima tara runtime (`offsetRaw` + zero-tracking) e salta l'auto-tare di boot, così una pesata in corso può ripartire con la stessa tara. Su accensione normale, reset manuale o power loss la recovery viene scartata e resta l'auto-tare standard.
 
-### DFPlayer Mini (audio eventi) + power-gating solo in standby
+### DFPlayer Mini (audio eventi) + power-gating controllato
 Il firmware può suonare file MP3 (es. avviso sleep). Per evitare click e stati strani, **non fa power-cycle a fine brano**.
 
 Comportamento attuale:
@@ -595,9 +596,18 @@ Comportamento attuale:
   - Non interrompibili: **0002, 0007, 0008, 0012, 0013, 0014, 0015, 0016**.
 - Durante l’uso resta alimentato, salvo recovery automatico/manuale.
 - Se un brano supera il timeout di riproduzione, il firmware fa un **hard reset non bloccante** del DFPlayer: chiude UART, porta GPIO2 LOW per ~800 ms, riaccende il modulo, reinizializza UART/volume e svuota la coda audio.
-- **SLEEP tenuto per 2 secondi** forza lo stesso hard reset audio senza entrare in standby.
+- **SLEEP tenuto per 2 secondi** commuta manualmente il DFPlayer:
+  - da ON a OFF: chiude UART, svuota la coda, taglia VCC via GPIO2 e salva uno snapshot diagnostico;
+  - da OFF a ON: esegue un power-cycle non bloccante e mostra prima `RIAVVIO MODULO...`, poi `DFPLAYER PRONTO`;
+  - lo stato OFF resta valido durante il light-sleep e il wake; dopo un reboot completo l'audio riparte abilitato.
 - Il comando seriale `mp3 reset` forza lo stesso hard reset per debug da banco.
 - Viene spento **quando la bilancia entra in standby/light-sleep per inattività** e anche **prima del light-sleep per batteria scarica**.
+
+Diagnostica audio:
+- un ring buffer RAM conserva gli ultimi **24 eventi** (`request`, `play`, assenza transizione BUSY, timeout, reset, ready e toggle manuali); sopravvive al light-sleep ma non a un'interruzione di alimentazione;
+- al timeout e quando l'operatore passa manualmente ad AUDIO OFF viene salvato in NVS un solo snapshot compatto con stato, traccia, BUSY e comando GPIO2; non vengono eseguite scritture flash per ogni riproduzione;
+- `mp3 history` stampa snapshot persistente e cronologia RAM; `mp3 history clear` cancella entrambi;
+- `mp3 status` include anche enable manuale, stato alimentazione firmware, UART e livello GPIO2.
 
 Nota: il firmware mantiene comunque il percorso “cold-start” sul primo `mp3` (utile se in futuro vuoi tornare all’accensione on-demand).
 
@@ -631,6 +641,8 @@ Per provare oggi:
 - `vol 20`
 - `mp3 status`
 - `mp3 reset` (hard reset DFPlayer via power-gate; richiede MOSFET/GPIO2 per tagliare VCC)
+- `mp3 history` (snapshot persistente + ultimi 24 eventi RAM)
+- `mp3 history clear` (cancella la diagnostica audio)
 
 ### Calibrazione
 
@@ -728,4 +740,5 @@ Se un tasto o una linea resta chiusa per almeno 15 secondi, quel tasto viene sop
 **Long press:**
 - **SKIP tenuto per 5 secondi**: avvia il wizard di calibrazione on-display
 - **CLEAR tenuto per 2 secondi**: svuota completamente lo stack pesate
-- **SLEEP tenuto per 2 secondi**: resetta il DFPlayer via power-gate e annulla lo standby
+- **SLEEP breve**: entra in standby al rilascio
+- **SLEEP tenuto per 2 secondi**: commuta DFPlayer AUDIO OFF/ON, salva il log quando passa a OFF e annulla lo standby

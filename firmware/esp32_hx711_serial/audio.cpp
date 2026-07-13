@@ -1,4 +1,5 @@
 #include "audio.h"
+#include <Preferences.h>
 
 namespace Audio {
 
@@ -20,6 +21,7 @@ static uint32_t  g_busyIdleSinceMs   = 0;
 // Stato alimentazione DFPlayer
 static bool     g_dfpPowered   = false;
 static bool     g_dfpUartReady = false;
+static bool     g_userEnabled  = true;
 static uint8_t  g_volume       = AudioConfig::DEFAULT_VOLUME;
 
 // Coda FIFO
@@ -45,6 +47,120 @@ static inline void dfpPowerSet(bool on) {
 
 static int dfpBusyReadStable() {
   return (digitalRead(DFPLAYER_BUSY_PIN) != 0) ? 1 : 0;
+}
+
+// ========================= FLIGHT RECORDER =========================
+
+enum DiagCode : uint8_t {
+  DIAG_BEGIN = 1,
+  DIAG_REQUEST,
+  DIAG_PLAY,
+  DIAG_NO_BUSY_EDGE,
+  DIAG_TIMEOUT,
+  DIAG_RESET,
+  DIAG_READY,
+  DIAG_POWER_OFF,
+  DIAG_MANUAL_OFF,
+  DIAG_MANUAL_ON,
+  DIAG_DROP_DISABLED
+};
+
+struct DiagEntry {
+  uint32_t ms;
+  uint16_t track;
+  uint8_t  code;
+  uint8_t  state;
+  int8_t   busy;
+  uint8_t  en;
+};
+
+struct __attribute__((packed)) SavedSnapshot {
+  uint16_t magic;
+  uint8_t  version;
+  uint8_t  reason;
+  uint8_t  state;
+  int8_t   busy;
+  uint8_t  en;
+  uint8_t  enabled;
+  uint16_t track;
+  uint32_t ms;
+};
+
+static const uint8_t  DIAG_MAX = 24;
+static const uint16_t SNAPSHOT_MAGIC = 0xA7D1;
+static DiagEntry g_diag[DIAG_MAX];
+static uint8_t g_diagCount = 0;
+static uint8_t g_diagNext  = 0;
+static SavedSnapshot g_savedSnapshot = {};
+static bool g_savedChecked = false;
+static bool g_savedValid   = false;
+
+static void printDiagCode(uint8_t code) {
+  switch (code) {
+    case DIAG_BEGIN:         Serial.print(F("BEGIN")); break;
+    case DIAG_REQUEST:       Serial.print(F("REQ")); break;
+    case DIAG_PLAY:          Serial.print(F("PLAY")); break;
+    case DIAG_NO_BUSY_EDGE:  Serial.print(F("NO_BUSY")); break;
+    case DIAG_TIMEOUT:       Serial.print(F("TIMEOUT")); break;
+    case DIAG_RESET:         Serial.print(F("RESET")); break;
+    case DIAG_READY:         Serial.print(F("READY")); break;
+    case DIAG_POWER_OFF:     Serial.print(F("PWR_OFF")); break;
+    case DIAG_MANUAL_OFF:    Serial.print(F("MAN_OFF")); break;
+    case DIAG_MANUAL_ON:     Serial.print(F("MAN_ON")); break;
+    case DIAG_DROP_DISABLED: Serial.print(F("DROP_OFF")); break;
+    default:                 Serial.print('?'); break;
+  }
+}
+
+static void diagRecord(uint8_t code, uint16_t track = 0) {
+  DiagEntry& e = g_diag[g_diagNext];
+  e.ms    = millis();
+  e.track = (track != 0) ? track : g_track;
+  e.code  = code;
+  e.state = (uint8_t)g_state;
+  e.busy  = (int8_t)dfpBusyReadStable();
+  e.en    = (uint8_t)(digitalRead(DFPLAYER_EN_PIN) != 0);
+
+  g_diagNext = (uint8_t)((g_diagNext + 1) % DIAG_MAX);
+  if (g_diagCount < DIAG_MAX) g_diagCount++;
+}
+
+static void diagLoadSaved() {
+  if (g_savedChecked) return;
+  g_savedChecked = true;
+
+  Preferences p;
+  if (!p.begin("minu_audio", true)) return;
+  if (p.getBytesLength("last") == sizeof(g_savedSnapshot)) {
+    p.getBytes("last", &g_savedSnapshot, sizeof(g_savedSnapshot));
+    g_savedValid = g_savedSnapshot.magic == SNAPSHOT_MAGIC &&
+                   g_savedSnapshot.version == 1;
+  }
+  p.end();
+}
+
+static void diagPersist(uint8_t reason) {
+  SavedSnapshot snap = {
+    .magic = SNAPSHOT_MAGIC,
+    .version = 1,
+    .reason = reason,
+    .state = (uint8_t)g_state,
+    .busy = (int8_t)dfpBusyReadStable(),
+    .en = (uint8_t)(digitalRead(DFPLAYER_EN_PIN) != 0),
+    .enabled = (uint8_t)g_userEnabled,
+    .track = g_track,
+    .ms = millis()
+  };
+
+  Preferences p;
+  if (!p.begin("minu_audio", false)) return;
+  bool ok = p.putBytes("last", &snap, sizeof(snap)) == sizeof(snap);
+  p.end();
+  if (ok) {
+    g_savedSnapshot = snap;
+    g_savedChecked = true;
+    g_savedValid = true;
+  }
 }
 
 static bool queuePush(uint16_t track, uint32_t capSec, bool low) {
@@ -113,6 +229,8 @@ static inline bool isRecovering() {
 }
 
 static void beginRecovery(bool clearQueue) {
+  diagRecord(DIAG_RESET);
+
   if (clearQueue) {
     queueClear();
   }
@@ -163,6 +281,7 @@ static void startNow(uint16_t track, uint32_t capSeconds) {
   if (track < 1000) Serial.print('0');
   Serial.print(track);
   Serial.println(F(".mp3"));
+  diagRecord(DIAG_PLAY, track);
 
   const uint32_t now = millis();
 
@@ -224,9 +343,13 @@ void begin() {
   g_busyPlaying       = -1;
   g_busyPolarityKnown = false;
   g_busyIdleSinceMs   = 0;
+
+  diagLoadSaved();
+  diagRecord(DIAG_BEGIN);
 }
 
 void primeReady() {
+  if (!g_userEnabled) return;
   if (g_dfpPowered && g_dfpUartReady) return;
 
   if (!g_dfpPowered) {
@@ -246,10 +369,17 @@ void primeReady() {
   delay(20);
 
   g_busyIdle = dfpBusyReadStable();
+  diagRecord(DIAG_READY);
 }
 
 void requestPlayMp3(uint16_t track, uint32_t capSeconds) {
   if (track < 1) track = 1;
+
+  if (!g_userEnabled) {
+    diagRecord(DIAG_DROP_DISABLED, track);
+    return;
+  }
+  diagRecord(DIAG_REQUEST, track);
 
   // Anti-retrigger
   const uint32_t nowReq = millis();
@@ -298,6 +428,10 @@ void requestPlayMp3(uint16_t track, uint32_t capSeconds) {
 }
 
 void requestPlayMp3Low(uint16_t track, uint32_t capSeconds) {
+  if (!g_userEnabled) {
+    diagRecord(DIAG_DROP_DISABLED, track);
+    return;
+  }
   if (g_state != IDLE) return;
   if (g_qCount > 0) return;
   (void)queuePush(track, capSeconds, true);
@@ -308,7 +442,7 @@ void setVolume(uint8_t vol) {
   if (vol > 30) vol = 30;
   g_volume = vol;
 
-  if (g_dfpUartReady) {
+  if (g_userEnabled && g_dfpUartReady) {
     DFPlayer::setVolume(vol);
   }
 }
@@ -338,10 +472,36 @@ void stopNow(bool clearQueue) {
 
 void hardReset(bool clearQueue) {
   Serial.println(F("[MP3] reset"));
+  g_userEnabled = true;
   beginRecovery(clearQueue);
 }
 
+bool toggleEnabled() {
+  if (g_userEnabled) {
+    diagRecord(DIAG_MANUAL_OFF);
+    diagPersist(DIAG_MANUAL_OFF);
+    g_userEnabled = false;
+    powerOffNow();
+    Serial.println(F("[MP3] manual OFF; log salvato"));
+  } else {
+    g_userEnabled = true;
+    diagRecord(DIAG_MANUAL_ON);
+    beginRecovery(true);
+    Serial.println(F("[MP3] manual ON"));
+  }
+  return g_userEnabled;
+}
+
+bool isEnabled() {
+  return g_userEnabled;
+}
+
+bool isReady() {
+  return g_userEnabled && g_dfpPowered && g_dfpUartReady && !isRecovering();
+}
+
 void powerOffNow() {
+  diagRecord(DIAG_POWER_OFF);
   queueClear();
 
   if (g_dfpUartReady) {
@@ -365,6 +525,8 @@ void powerOffNow() {
 }
 
 void task(uint32_t now) {
+  if (!g_userEnabled) return;
+
   switch (g_state) {
     case IDLE:
       kickIfIdle();
@@ -404,6 +566,7 @@ void task(uint32_t now) {
       }
 
       if ((now - g_stateMs) >= AudioConfig::BUSY_DETECT_MS) {
+        diagRecord(DIAG_NO_BUSY_EDGE);
         g_busyPlaying       = (g_busyIdle == 0) ? 1 : 0;
         g_busyPolarityKnown = false;
         g_state             = PLAYING;
@@ -417,6 +580,8 @@ void task(uint32_t now) {
       // Timeout paracadute
       if (g_startMs != 0 && (now - g_startMs) >= g_timeoutMs) {
         Serial.println(F("[MP3] timeout reset"));
+        diagRecord(DIAG_TIMEOUT);
+        diagPersist(DIAG_TIMEOUT);
         beginRecovery(true);
         return;
       }
@@ -470,13 +635,14 @@ void task(uint32_t now) {
       g_busyIdle = dfpBusyReadStable();
       g_state    = IDLE;
       g_stateMs  = now;
+      diagRecord(DIAG_READY);
       kickIfIdle();
       return;
   }
 }
 
 bool isActive() {
-  return (g_state != IDLE) || (g_qCount > 0);
+  return g_userEnabled && ((g_state != IDLE) || (g_qCount > 0));
 }
 
 void queueClear() {
@@ -487,10 +653,64 @@ void debugStatus() {
   Serial.print(F("[MP3] state="));    Serial.print((int)g_state);
   Serial.print(F(" track="));         Serial.print(g_track);
   Serial.print(F(" vol="));           Serial.print(g_volume);
+  Serial.print(F(" enabled="));       Serial.print(g_userEnabled ? 1 : 0);
+  Serial.print(F(" pwr="));           Serial.print(g_dfpPowered ? 1 : 0);
+  Serial.print(F(" uart="));          Serial.print(g_dfpUartReady ? 1 : 0);
+  Serial.print(F(" EN="));            Serial.print(digitalRead(DFPLAYER_EN_PIN));
   Serial.print(F(" BUSY="));          Serial.print(digitalRead(DFPLAYER_BUSY_PIN));
   Serial.print(F(" idle="));          Serial.print(g_busyIdle);
   Serial.print(F(" playLvl="));       Serial.print(g_busyPlaying);
   Serial.print(F(" polKnown="));      Serial.println(g_busyPolarityKnown ? "yes" : "no");
+}
+
+void printHistory() {
+  diagLoadSaved();
+
+  if (g_savedValid) {
+    Serial.print(F("[MP3LOG] saved ms=")); Serial.print(g_savedSnapshot.ms);
+    Serial.print(F(" ev=")); printDiagCode(g_savedSnapshot.reason);
+    Serial.print(F(" st=")); Serial.print(g_savedSnapshot.state);
+    Serial.print(F(" tr=")); Serial.print(g_savedSnapshot.track);
+    Serial.print(F(" busy=")); Serial.print(g_savedSnapshot.busy);
+    Serial.print(F(" en=")); Serial.print(g_savedSnapshot.en);
+    Serial.print(F(" enabled=")); Serial.println(g_savedSnapshot.enabled);
+  } else {
+    Serial.println(F("[MP3LOG] saved none"));
+  }
+
+  Serial.print(F("[MP3LOG] ram count="));
+  Serial.println(g_diagCount);
+  uint8_t first = (g_diagCount < DIAG_MAX) ? 0 : g_diagNext;
+  for (uint8_t i = 0; i < g_diagCount; i++) {
+    const DiagEntry& e = g_diag[(uint8_t)((first + i) % DIAG_MAX)];
+    Serial.print(F("[MP3LOG] ms=")); Serial.print(e.ms);
+    Serial.print(F(" ev=")); printDiagCode(e.code);
+    Serial.print(F(" st=")); Serial.print(e.state);
+    Serial.print(F(" tr=")); Serial.print(e.track);
+    Serial.print(F(" busy=")); Serial.print(e.busy);
+    Serial.print(F(" en=")); Serial.println(e.en);
+  }
+}
+
+void clearHistory() {
+  g_diagCount = 0;
+  g_diagNext = 0;
+  memset(g_diag, 0, sizeof(g_diag));
+  memset(&g_savedSnapshot, 0, sizeof(g_savedSnapshot));
+  g_savedChecked = true;
+  g_savedValid = false;
+
+  Preferences p;
+  if (p.begin("minu_audio", false)) {
+    p.remove("last");
+    p.end();
+  }
+  Serial.println(F("[MP3LOG] cleared"));
+}
+
+bool hasSavedDiagnostic() {
+  diagLoadSaved();
+  return g_savedValid;
 }
 
 State getState() {

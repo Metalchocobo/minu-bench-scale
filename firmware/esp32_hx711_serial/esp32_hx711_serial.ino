@@ -112,7 +112,7 @@ static const uint32_t LONG_PRESS_MS = 2000;  // 2 seconds for long press
 static uint32_t g_clearPressStartMs   = 0;
 static bool     g_clearLongPressFired = false;
 
-// SLEEP key long press tracking: manual audio recovery without serial access
+// SLEEP key: short release starts standby; 2s toggles DFPlayer power.
 static uint32_t g_sleepPressStartMs   = 0;
 static bool     g_sleepLongPressFired = false;
 
@@ -120,7 +120,8 @@ static bool     g_sleepLongPressFired = false;
 enum OverlayType : uint8_t {
   OVERLAY_NONE = 0,
   OVERLAY_STACK_COMPARE,
-  OVERLAY_CLEAR_FEEDBACK
+  OVERLAY_CLEAR_FEEDBACK,
+  OVERLAY_AUDIO_STATUS
 };
 static OverlayType g_overlayType      = OVERLAY_NONE;
 static uint32_t    g_overlayStartMs   = 0;
@@ -131,6 +132,7 @@ static long g_overlayTotal    = 0;
 static long g_overlayNet      = 0;
 static int  g_overlayCount    = 0;
 static char g_overlayMsg[12]  = {0};
+static bool g_overlayAudioEnabled = true;
 
 // Manual TARE reference capture: save ref offset only after tare is applied
 static bool g_captureReferenceAfterTare = false;
@@ -322,7 +324,7 @@ static void feedLoopWatchdog() {
 void printHelp() {
   Serial.println(F("\n--- COMANDI SERIALI ---"));
   Serial.println(F("hxlog on/off, hxlog rate <ms>"));
-  Serial.println(F("mp3 <track> [sec], mp3 status/reset, stop, vol <0-30>"));
+  Serial.println(F("mp3 <track> [sec], mp3 status/reset/history, stop, vol <0-30>"));
   Serial.println(F("wifi set <slot> \"SSID\" \"PASS\", wifi creds, wifi apply"));
   Serial.println(F("ota status, ota set \"PASS\", ota clear"));
   Serial.println(F("mqtt set \"host\" \"user\" \"pass\", mqtt creds, mqtt clear, mqtt apply, mqtt status"));
@@ -378,6 +380,10 @@ void parseCommand(const char* cmd) {
       Audio::debugStatus();
     } else if (strcmp(arg, "reset") == 0) {
       Audio::hardReset(true);
+    } else if (strcmp(arg, "history") == 0) {
+      Audio::printHistory();
+    } else if (strcmp(arg, "history clear") == 0) {
+      Audio::clearHistory();
     } else {
       int track = 0, sec = 0;
       int n = sscanf(arg, "%d %d", &track, &sec);
@@ -860,16 +866,10 @@ void handleKeyEvent(KeyCode key) {
 #endif
 
     case KEY_SLEEP: {
-      Serial.println(F("[KEYPAD] SLEEP pressed"));
+      Serial.println(F("[KEYPAD] SLEEP pressed (tracking)"));
       buzzerKeyClick();
       g_sleepPressStartMs = millis();
       g_sleepLongPressFired = false;
-
-      ui_renderSleepZzz();
-      Audio::requestPlayMp3(Track::SLEEP_ENTER);
-      g_inactivitySleepStage = INACT_ZZZ;
-      g_inactivityStageStartMs = g_lastKeyPressMs;
-      lastOledMs = 0;
       break;
     }
 
@@ -1807,7 +1807,7 @@ void loop() {
     }
   }
 
-  // SLEEP held for 2s: audio hard reset, no standby.
+  // SLEEP: short release starts standby; 2s toggles DFPlayer OFF/ON.
   if (g_sleepPressStartMs != 0) {
     if (keypad_is_pressed(KEY_SLEEP)) {
       if (!g_sleepLongPressFired && (int32_t)(now - g_sleepPressStartMs) >= (int32_t)LONG_PRESS_MS) {
@@ -1815,17 +1815,38 @@ void loop() {
         g_inactivitySleepStage = INACT_NONE;
         g_inactivityStageStartMs = 0;
         g_lastKeyPressMs = now;
-        Audio::hardReset(true);
-        buzzerOk();
+
+        g_overlayAudioEnabled = Audio::toggleEnabled();
+        g_overlayType = OVERLAY_AUDIO_STATUS;
+        g_overlayStartMs = now;
+        ui_renderAudioStatus(
+          g_overlayAudioEnabled,
+          Audio::isReady(),
+          Audio::hasSavedDiagnostic()
+        );
+
+        if (g_overlayAudioEnabled) {
+          buzzerOk();
+        } else {
+          buzzerWarn();
+        }
         lastOledMs = 0;
       }
     } else {
+      if (!g_sleepLongPressFired) {
+        Serial.println(F("[KEYPAD] SLEEP short -> standby"));
+        ui_renderSleepZzz();
+        Audio::requestPlayMp3(Track::SLEEP_ENTER);
+        g_inactivitySleepStage = INACT_ZZZ;
+        g_inactivityStageStartMs = now;
+        lastOledMs = 0;
+      }
       g_sleepPressStartMs = 0;
       g_sleepLongPressFired = false;
     }
   }
 
-  // Overlay timeout: auto-dismiss after 3 seconds or any key press
+  // Overlay timeout: auto-dismiss after 10 seconds.
   if (g_overlayType != OVERLAY_NONE) {
     if ((int32_t)(now - g_overlayStartMs) >= (int32_t)OVERLAY_TIMEOUT_MS) {
       g_overlayType = OVERLAY_NONE;
@@ -2196,6 +2217,13 @@ void loop() {
             break;
           case OVERLAY_CLEAR_FEEDBACK:
             ui_renderStackClear(g_overlayMsg, g_overlayCount);
+            break;
+          case OVERLAY_AUDIO_STATUS:
+            ui_renderAudioStatus(
+              g_overlayAudioEnabled,
+              Audio::isReady(),
+              Audio::hasSavedDiagnostic()
+            );
             break;
           default:
             break;
