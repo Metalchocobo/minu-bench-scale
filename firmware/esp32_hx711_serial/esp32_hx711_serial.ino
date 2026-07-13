@@ -1071,15 +1071,22 @@ bool autoTareOnBoot(uint16_t maxSamples) {
     feedLoopWatchdog();
     delay(2);
   }
+  const uint32_t acquisitionStartedMs = millis();
 
   long window[AUTO_TARE_WINDOW_SAMPLES] = {0};
   uint8_t count = 0;
   uint8_t writeAt = 0;
+  uint16_t totalSamples = 0;
+  uint16_t checkedWindows = 0;
+  float bestRangeG = 999999.0f;
 
-  while ((millis() - startedMs) < AUTO_TARE_MAX_MS) {
+  // AUTO_TARE_MAX_MS is the acquisition budget after settling, not the total
+  // budget including the discarded startup samples.
+  while ((millis() - acquisitionStartedMs) < AUTO_TARE_MAX_MS) {
     feedLoopWatchdog();
     long raw = readRawHXOnceBlocking(60);
     if (raw == 0) continue;
+    totalSamples++;
 
     window[writeAt] = raw;
     writeAt = (uint8_t)((writeAt + 1) % AUTO_TARE_WINDOW_SAMPLES);
@@ -1103,6 +1110,8 @@ bool autoTareOnBoot(uint16_t maxSamples) {
     float cpg = fabsf(ScaleState::getScaleCpg());
     if (cpg <= 0.01f || last <= first) break;
     float rangeG = (float)(sorted[last - 1] - sorted[first]) / cpg;
+    checkedWindows++;
+    if (rangeG < bestRangeG) bestRangeG = rangeG;
     if (rangeG > AUTO_TARE_RANGE_G) continue;
 
     int64_t sum = 0;
@@ -1113,11 +1122,28 @@ bool autoTareOnBoot(uint16_t maxSamples) {
     ScaleState::resetFiltersAndState();
 
     Serial.print(F("[BOOT] Auto-TARE OK. OFFSET_RAW="));
-    Serial.println(rawZero);
+    Serial.print(rawZero);
+    Serial.print(F(" samples="));
+    Serial.print(totalSamples);
+    Serial.print(F(" range="));
+    Serial.print(rangeG, 2);
+    Serial.println(F("g"));
     return true;
   }
 
-  Serial.println(F("[BOOT] Auto-TARE FAIL (nessuna finestra stabile)"));
+  uint32_t acquisitionMs = millis() - acquisitionStartedMs;
+  float estimatedSps = acquisitionMs > 0
+    ? ((float)totalSamples * 1000.0f) / (float)acquisitionMs : 0.0f;
+  Serial.print(F("[BOOT] Auto-TARE FAIL samples="));
+  Serial.print(totalSamples);
+  Serial.print(F(" windows="));
+  Serial.print(checkedWindows);
+  Serial.print(F(" sps="));
+  Serial.print(estimatedSps, 1);
+  Serial.print(F(" bestRange="));
+  if (checkedWindows > 0) Serial.print(bestRangeG, 2);
+  else Serial.print(F("n/a"));
+  Serial.println(F("g"));
   return false;
 }
 

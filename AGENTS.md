@@ -214,4 +214,4 @@ On DigitalOcean VPS, config at `/etc/mosquitto/conf.d/minu.conf`:
 - Auto-TARE boot fail-closed, INA219 validato/fresh, hard-low debounced, sovraccarico esplicito, reset WDT coerente, wake key consumato e stack undo LIFO operativi.
 - Browser MQTT operativo nel Manager con owner lease per scheda, identità operatore, REST-before-ACK, deduplica response e compatibilità legacy.
 - Laravel operativo con CRUD bilance, associazione utente-bilancia, discovery MQTT, pagina pesatura e receipt idempotenti per confirm/skip/undo.
-- `MQTT_FW_VERSION` corrente: `1.2.0`.
+- `MQTT_FW_VERSION` corrente: `1.2.1`.

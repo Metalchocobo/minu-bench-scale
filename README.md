@@ -200,9 +200,9 @@ Nota: la guard scarta solo **frame singoli** (o confermati) e quindi non cambia 
 - La tara di lavoro post-**ENTER** è immediata: usa lo stesso RAW WORK filtrato della pesata già validata, senza avviare una seconda finestra fallibile.
 
 ### Auto-TARE al boot
-- Dopo **300 ms** di assestamento cerca per un massimo di **2 s** una finestra stabile di **32 campioni**; calcola lo zero con trimmed mean eliminando i 4 estremi per lato e usando soltanto quella finestra.
+- Dopo **300 ms** di assestamento cerca per ulteriori **2 s** una finestra stabile di **32 campioni**; calcola lo zero con trimmed mean eliminando i 4 estremi per lato e usando soltanto quella finestra. La soglia sul range centrale è **1,50 g**, tarata sul rumore reale misurato (~0,78 g a vuoto, ~95 SPS).
 - Raggiungere il limite di campioni senza stabilità non equivale a successo: l'offset resta invariato e il boot entra in errore **Auto-TARE**.
-- Nella schermata di errore il tasto **TARE** avvia un nuovo tentativo reale. La bilancia non completa il boot finché non ottiene una tara stabile.
+- Nella schermata di errore il tasto **TARE** avvia un nuovo tentativo reale. La bilancia non completa il boot finché non ottiene una tara stabile; il log seriale riporta campioni, SPS stimati e miglior range osservato.
 
 I parametri (N di media, isteresi, ecc.) sono nel firmware e sono pensati per essere ritoccati in base al tuo rumore reale.
 
@@ -394,7 +394,7 @@ Comandi seriali:
 
 Se le credenziali non sono configurate, MQTT resta inattivo (nessun tentativo di connessione).
 
-Porta bilancia: **8883** (MQTTS/TLS). Porta browser: **8884** (WSS/TLS). Il certificato CA ISRG Root X1 è nel firmware. `MQTT_SCALE_NAME` e `MQTT_FW_VERSION` sono definiti in `net_ota_cloud.h`; la versione corrente è **1.2.0**.
+Porta bilancia: **8883** (MQTTS/TLS). Porta browser: **8884** (WSS/TLS). Il certificato CA ISRG Root X1 è nel firmware. `MQTT_SCALE_NAME` e `MQTT_FW_VERSION` sono definiti in `net_ota_cloud.h`; la versione corrente è **1.2.1**.
 
 ### Topic e QoS effettivo
 

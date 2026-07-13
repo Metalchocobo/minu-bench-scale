@@ -456,7 +456,7 @@ static bool tareBuildStableOffset(const TareParams& p, long* offsetOut, float* r
 
   uint8_t n = p.minSamples;
   if (g_tareSampleCount < n || n > ScaleConfig::TARE_SAMPLE_BUF_N) return false;
-  if (g_scaleCpg <= 0.01f) return false;
+  if (fabsf(g_scaleCpg) <= 0.01f) return false;
 
   uint8_t start = g_tareSampleCount - n;
   for (uint8_t i = 1; i < n; i++) {
@@ -587,7 +587,7 @@ bool tareCancel(uint32_t nowMs) {
 }
 
 bool tareApplyWorking(long rawOffset, uint32_t nowMs) {
-  if (g_tareActive || rawOffset == 0 || g_scaleCpg <= 0.01f) return false;
+  if (g_tareActive || rawOffset == 0 || fabsf(g_scaleCpg) <= 0.01f) return false;
 
   g_tareActive      = false;
   g_tareMode        = TARE_MODE_AUTO;

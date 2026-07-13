@@ -33,7 +33,9 @@ static const uint16_t AUTO_TARE_SETTLE_MS       = 300;
 static const uint16_t AUTO_TARE_MAX_MS          = 2000;
 static const uint8_t  AUTO_TARE_WINDOW_SAMPLES  = 32;
 static const uint8_t  AUTO_TARE_TRIM_SAMPLES    = 4;
-static const float    AUTO_TARE_RANGE_G         = 0.40f;
+// Measured empty-plate trimmed range is ~0.78 g at the actual ~95 SPS.
+// 1.50 g keeps the boot fail-closed while leaving realistic noise margin.
+static const float    AUTO_TARE_RANGE_G         = 1.50f;
 
 // ========================= TARE UI =========================
 static const uint8_t  TARE_SAMPLE_BUF_N      = 64;    // Finestra mobile campioni tara
