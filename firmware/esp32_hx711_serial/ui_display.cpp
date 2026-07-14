@@ -667,13 +667,13 @@ void ui_renderTareStatus(ScaleState::TareUiState state, bool autoMode) {
   if (state == ScaleState::TARE_UI_OK) {
     txt = "TARA OK";
   } else if (state == ScaleState::TARE_UI_FAILED) {
-    txt = "INSTABILE";
+    txt = "TARA FALLITA";
   }
   drawCenteredTextInArea(txt, TARE_AREA_X, TARE_AREA_W, 40);
 
   oled.setFont(u8g2_font_6x12_tr);
   if (state == ScaleState::TARE_UI_FAILED) {
-    drawCenteredTextInArea("Ripeti a peso fermo", TARE_AREA_X, TARE_AREA_W, 58);
+    drawCenteredTextInArea("Premi TARA e riprova", TARE_AREA_X, TARE_AREA_W, 58);
   } else if (state == ScaleState::TARE_UI_OK) {
     drawCenteredTextInArea("Zero aggiornato", TARE_AREA_X, TARE_AREA_W, 58);
   } else {

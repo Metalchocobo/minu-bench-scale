@@ -28,34 +28,38 @@ static const uint32_t MQTT_TLS_WDT_TIMEOUT_MS  = 20000;  // Guard durante handsh
 static const uint16_t I2C_TIMEOUT_MS           = 50;     // Timeout transazioni Wire
 
 // ========================= AUTO-TARE BOOT =========================
-static const bool     AUTO_TARE_ON_BOOT    = true;
+static const bool     AUTO_TARE_ON_BOOT         = true;
 static const uint16_t AUTO_TARE_SETTLE_MS       = 300;
 static const uint16_t AUTO_TARE_MAX_MS          = 2000;
-static const uint8_t  AUTO_TARE_WINDOW_SAMPLES  = 32;
-static const uint8_t  AUTO_TARE_TRIM_SAMPLES    = 4;
-// Measured empty-plate trimmed range is ~0.78 g at the actual ~95 SPS.
-// 1.50 g keeps the boot fail-closed while leaving realistic noise margin.
-static const float    AUTO_TARE_RANGE_G         = 1.50f;
+static const uint8_t  AUTO_TARE_TARGET_SAMPLES  = 64;
+static const uint8_t  AUTO_TARE_MIN_SAMPLES     = 32;
+static const uint8_t  AUTO_TARE_TRIM_SAMPLES    = 8;
 
 // ========================= TARE UI =========================
 static const uint8_t  TARE_SAMPLE_BUF_N      = 64;    // Finestra mobile campioni tara
 static const uint32_t TARE_OK_HOLD_MS        = 200;   // Feedback breve a tara applicata
-static const uint32_t TARE_FAIL_HOLD_MS      = 700;   // Visible after the blocking error beep
+static const uint32_t TARE_FAIL_HOLD_MS      = 1200;  // Remains visible after the error beep
 
-// Manual tare at 80 SPS. Timing starts after the debounced key release.
-// The latest 32 samples span ~400 ms; 7 confirmations add ~75 ms.
+// Manual tare at 80-95 SPS. It starts after the debounced key release and
+// averages ambient vibration instead of requiring a perfectly quiet bench.
 static const uint32_t TARE_MANUAL_SETTLE_MS         = 60;
-static const uint32_t TARE_MANUAL_MIN_MS            = 450;
-static const uint32_t TARE_MANUAL_MAX_MS            = 1100;
+static const uint32_t TARE_MANUAL_MIN_MS            = 700;
+static const uint32_t TARE_MANUAL_MAX_MS            = 1600;
 static const uint32_t TARE_MANUAL_ARM_MAX_MS        = 1500;
-static const uint8_t  TARE_MANUAL_WINDOW_SAMPLES    = 32;
-static const uint8_t  TARE_MANUAL_TRIM_SAMPLES      = 4;
-static const uint8_t  TARE_MANUAL_EDGE_SAMPLES      = 8;
-static const uint8_t  TARE_MANUAL_STABLE_SAMPLES    = 7;
+static const uint8_t  TARE_MANUAL_WINDOW_SAMPLES    = 64;
+static const uint8_t  TARE_MANUAL_TRIM_SAMPLES      = 8;
+static const uint8_t  TARE_MANUAL_EDGE_SAMPLES      = 16;
+static const uint8_t  TARE_MANUAL_STABLE_SAMPLES    = 1;
 static const uint32_t TARE_MANUAL_SAMPLE_MAX_AGE_MS = 75;
-static const uint32_t TARE_MANUAL_WINDOW_MAX_MS     = 550;
-static const float    TARE_MANUAL_RANGE_G           = 2.5f;
-static const float    TARE_MANUAL_SLOPE_GPS         = 2.0f;
+static const uint32_t TARE_MANUAL_WINDOW_MAX_MS     = 1000;
+// Only sustained drift rejects a manual tare. Sample range is diagnostic:
+// periodic vibration widens it without moving the robust center.
+static const float    TARE_MANUAL_MAX_SLOPE_GPS     = 10.0f;
+
+// LIVE ENTER keeps its stricter quiet-weight gate; it is intentionally
+// independent from the more tolerant explicit TARE operation.
+static const float    LIVE_ENTER_RANGE_G            = 2.5f;
+static const float    LIVE_ENTER_SLOPE_GPS          = 2.0f;
 
 // The post-ENTER working tare does not open a new window: it applies the WORK
 // snapshot that was already filtered and validated as STABLE.

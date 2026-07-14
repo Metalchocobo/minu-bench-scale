@@ -425,7 +425,6 @@ struct TareParams {
   uint32_t minMs;
   uint32_t maxMs;
   uint8_t minSamples;
-  float maxRangeG;
   float maxSlopeGps;
 };
 
@@ -437,8 +436,7 @@ static TareParams tareParamsForMode(TareMode mode) {
     ScaleConfig::TARE_MANUAL_MIN_MS,
     ScaleConfig::TARE_MANUAL_MAX_MS,
     ScaleConfig::TARE_MANUAL_WINDOW_SAMPLES,
-    ScaleConfig::TARE_MANUAL_RANGE_G,
-    ScaleConfig::TARE_MANUAL_SLOPE_GPS
+    ScaleConfig::TARE_MANUAL_MAX_SLOPE_GPS
   };
 }
 
@@ -456,7 +454,7 @@ static bool tareBuildStableOffset(const TareParams& p, long* offsetOut, float* r
 
   uint8_t n = p.minSamples;
   if (g_tareSampleCount < n || n > ScaleConfig::TARE_SAMPLE_BUF_N) return false;
-  if (fabsf(g_scaleCpg) <= 0.01f) return false;
+  if (!isfinite(g_scaleCpg) || fabsf(g_scaleCpg) <= 0.01f) return false;
 
   uint8_t start = g_tareSampleCount - n;
   for (uint8_t i = 1; i < n; i++) {
@@ -530,7 +528,9 @@ static bool tareBuildStableOffset(const TareParams& p, long* offsetOut, float* r
   if (slopeGpsOut) *slopeGpsOut = slopeGps;
   if (useNOut) *useNOut = useN;
 
-  if (rangeG > p.maxRangeG) return false;
+  // Range is intentionally diagnostic only. A mixer or workbench vibration
+  // can widen the samples around the same center without invalidating zero.
+  // The first/last block comparison still rejects sustained movement.
   if (slopeGps > p.maxSlopeGps) return false;
 
   if (offsetOut) *offsetOut = (long)(sum / useN);
@@ -587,7 +587,7 @@ bool tareCancel(uint32_t nowMs) {
 }
 
 bool tareApplyWorking(long rawOffset, uint32_t nowMs) {
-  if (g_tareActive || rawOffset == 0 || fabsf(g_scaleCpg) <= 0.01f) return false;
+  if (g_tareActive || rawOffset == 0 || !isfinite(g_scaleCpg) || fabsf(g_scaleCpg) <= 0.01f) return false;
 
   g_tareActive      = false;
   g_tareMode        = TARE_MODE_AUTO;

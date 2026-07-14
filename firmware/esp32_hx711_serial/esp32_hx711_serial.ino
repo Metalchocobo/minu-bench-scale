@@ -94,6 +94,7 @@ enum InactivityStage : uint8_t { INACT_NONE = 0, INACT_ZZZ = 1 };
 static InactivityStage g_inactivitySleepStage = INACT_NONE;
 static uint32_t g_inactivityStageStartMs = 0;
 static bool     g_inactivitySleepArmed = true;
+static bool     g_manualSleepRequested = false;
 
 // WiFi
 #if ENABLE_WIFI_OTA
@@ -900,8 +901,8 @@ void handleKeyEvent(KeyCode key) {
       } else {
         int nQuiet = constrain((int)ceil(400.0f / SAMPLE_MS), 2, 64);
         if (ScaleFilters::histCount() < nQuiet ||
-            ScaleFilters::rangeLastNSamples(nQuiet) > TARE_MANUAL_RANGE_G ||
-            fabsf(ScaleFilters::slopeLastNSamples(nQuiet)) > TARE_MANUAL_SLOPE_GPS) {
+            ScaleFilters::rangeLastNSamples(nQuiet) > LIVE_ENTER_RANGE_G ||
+            fabsf(ScaleFilters::slopeLastNSamples(nQuiet)) > LIVE_ENTER_SLOPE_GPS) {
           Serial.println(F("[STACK] ENTER bloccato (LIVE instabile)"));
           buzzerWarn();
           break;
@@ -1059,7 +1060,6 @@ void handleKeyEvent(KeyCode key) {
 
 // ========================= AUTO-TARE BOOT =========================
 bool autoTareOnBoot(uint16_t maxSamples) {
-  (void)maxSamples;
   if (!AUTO_TARE_ON_BOOT) {
     Serial.println(F("[BOOT] Auto-TARE disattivata."));
     return true;
@@ -1073,78 +1073,76 @@ bool autoTareOnBoot(uint16_t maxSamples) {
   }
   const uint32_t acquisitionStartedMs = millis();
 
-  long window[AUTO_TARE_WINDOW_SAMPLES] = {0};
+  uint8_t targetSamples = (uint8_t)maxSamples;
+  if (targetSamples < AUTO_TARE_MIN_SAMPLES) targetSamples = AUTO_TARE_MIN_SAMPLES;
+  if (targetSamples > AUTO_TARE_TARGET_SAMPLES) targetSamples = AUTO_TARE_TARGET_SAMPLES;
+
+  long samples[AUTO_TARE_TARGET_SAMPLES] = {0};
   uint8_t count = 0;
-  uint8_t writeAt = 0;
-  uint16_t totalSamples = 0;
-  uint16_t checkedWindows = 0;
-  float bestRangeG = 999999.0f;
 
   // AUTO_TARE_MAX_MS is the acquisition budget after settling, not the total
   // budget including the discarded startup samples.
-  while ((millis() - acquisitionStartedMs) < AUTO_TARE_MAX_MS) {
+  while (count < targetSamples &&
+         (millis() - acquisitionStartedMs) < AUTO_TARE_MAX_MS) {
     feedLoopWatchdog();
     long raw = readRawHXOnceBlocking(60);
     if (raw == 0) continue;
-    totalSamples++;
-
-    window[writeAt] = raw;
-    writeAt = (uint8_t)((writeAt + 1) % AUTO_TARE_WINDOW_SAMPLES);
-    if (count < AUTO_TARE_WINDOW_SAMPLES) count++;
-    if (count < AUTO_TARE_WINDOW_SAMPLES) continue;
-
-    long sorted[AUTO_TARE_WINDOW_SAMPLES];
-    memcpy(sorted, window, sizeof(sorted));
-    for (uint8_t i = 1; i < AUTO_TARE_WINDOW_SAMPLES; i++) {
-      long key = sorted[i];
-      int j = (int)i - 1;
-      while (j >= 0 && sorted[j] > key) {
-        sorted[j + 1] = sorted[j];
-        j--;
-      }
-      sorted[j + 1] = key;
-    }
-
-    const uint8_t first = AUTO_TARE_TRIM_SAMPLES;
-    const uint8_t last = AUTO_TARE_WINDOW_SAMPLES - AUTO_TARE_TRIM_SAMPLES;
-    float cpg = fabsf(ScaleState::getScaleCpg());
-    if (cpg <= 0.01f || last <= first) break;
-    float rangeG = (float)(sorted[last - 1] - sorted[first]) / cpg;
-    checkedWindows++;
-    if (rangeG < bestRangeG) bestRangeG = rangeG;
-    if (rangeG > AUTO_TARE_RANGE_G) continue;
-
-    int64_t sum = 0;
-    for (uint8_t i = first; i < last; i++) sum += (int64_t)sorted[i];
-    long rawZero = (long)(sum / (int64_t)(last - first));
-    ScaleState::setOffsetRaw(rawZero);
-    ScaleState::setZtCounts(0);
-    ScaleState::resetFiltersAndState();
-
-    Serial.print(F("[BOOT] Auto-TARE OK. OFFSET_RAW="));
-    Serial.print(rawZero);
-    Serial.print(F(" samples="));
-    Serial.print(totalSamples);
-    Serial.print(F(" range="));
-    Serial.print(rangeG, 2);
-    Serial.println(F("g"));
-    return true;
+    samples[count++] = raw;
   }
 
   uint32_t acquisitionMs = millis() - acquisitionStartedMs;
   float estimatedSps = acquisitionMs > 0
-    ? ((float)totalSamples * 1000.0f) / (float)acquisitionMs : 0.0f;
-  Serial.print(F("[BOOT] Auto-TARE FAIL samples="));
-  Serial.print(totalSamples);
-  Serial.print(F(" windows="));
-  Serial.print(checkedWindows);
-  Serial.print(F(" sps="));
-  Serial.print(estimatedSps, 1);
-  Serial.print(F(" bestRange="));
-  if (checkedWindows > 0) Serial.print(bestRangeG, 2);
-  else Serial.print(F("n/a"));
-  Serial.println(F("g"));
-  return false;
+    ? ((float)count * 1000.0f) / (float)acquisitionMs : 0.0f;
+
+  float cpg = fabsf(ScaleState::getScaleCpg());
+  if (count < AUTO_TARE_MIN_SAMPLES || !isfinite(cpg) || cpg <= 0.01f) {
+    Serial.print(F("[BOOT] Auto-TARE FAIL valid="));
+    Serial.print(count);
+    Serial.print(F(" required="));
+    Serial.print(AUTO_TARE_MIN_SAMPLES);
+    Serial.print(F(" sps="));
+    Serial.println(estimatedSps, 1);
+    return false;
+  }
+
+  // Periodic vibration changes the range but not the center. Sort once, trim
+  // both tails and always use the robust center when samples are valid.
+  long sorted[AUTO_TARE_TARGET_SAMPLES];
+  memcpy(sorted, samples, count * sizeof(long));
+  for (uint8_t i = 1; i < count; i++) {
+    long key = sorted[i];
+    int j = (int)i - 1;
+    while (j >= 0 && sorted[j] > key) {
+      sorted[j + 1] = sorted[j];
+      j--;
+    }
+    sorted[j + 1] = key;
+  }
+
+  uint8_t trim = count / 8;
+  if (trim > AUTO_TARE_TRIM_SAMPLES) trim = AUTO_TARE_TRIM_SAMPLES;
+  uint8_t first = trim;
+  uint8_t last = count - trim;
+  if (last <= first) return false;
+
+  int64_t sum = 0;
+  for (uint8_t i = first; i < last; i++) sum += (int64_t)sorted[i];
+  long rawZero = (long)(sum / (int64_t)(last - first));
+  float rangeG = (float)(sorted[last - 1] - sorted[first]) / cpg;
+
+  ScaleState::setOffsetRaw(rawZero);
+  ScaleState::setZtCounts(0);
+  ScaleState::resetFiltersAndState();
+
+  Serial.print(F("[BOOT] Auto-TARE OK. OFFSET_RAW="));
+  Serial.print(rawZero);
+  Serial.print(F(" samples="));
+  Serial.print(count);
+  Serial.print(F(" range="));
+  Serial.print(rangeG, 2);
+  Serial.print(F("g sps="));
+  Serial.println(estimatedSps, 1);
+  return true;
 }
 
 // ========================= INIT HX711 =========================
@@ -1248,6 +1246,9 @@ static void bootShow(const char* line1, const char* line2, uint16_t holdMs = 350
 }
 
 static void bootWaitTare() {
+  // The buzzer is the guaranteed alert even when DFPlayer is disabled,
+  // missing or still recovering. The optional MP3 is requested by the caller.
+  buzzerError();
   bool tarePressed = false;
   while (true) {
     feedLoopWatchdog();
@@ -1665,20 +1666,20 @@ void setup() {
     ScaleState::resetFiltersAndState();
     g_lastRawFiltered = 0;
     Serial.println(F("[RECOVERY] WDT: stato transazionale e zero scartati"));
-    ui_showError("RESET WATCHDOG", "Svuota il piatto", "Premi TARA per ritentare");
-    Audio::requestPlayMp3(Track::ERROR_TARE);
-    bootWaitTare();
+    buzzerWarn();
+    bootShow("RESET WATCHDOG", "Nuova Auto-TARE", 1000);
   }
 
   // Auto-TARE
   if (AUTO_TARE_ON_BOOT) {
     bootShow("Auto-TARE", "In corso...");
-    while (!autoTareOnBoot(AUTO_TARE_WINDOW_SAMPLES)) {
-      ui_showError("Auto-TARE", "Piatto non stabile", "Svuota e premi TARA");
+    while (!autoTareOnBoot(AUTO_TARE_TARGET_SAMPLES)) {
+      ui_showError("Auto-TARE", "Sensore non valido", "Premi TARA per ritentare");
       Audio::requestPlayMp3(Track::ERROR_TARE);
       bootWaitTare();
       bootShow("Auto-TARE", "Ritentativo...");
     }
+    buzzerOk();
   }
 
   // Batteria
@@ -1728,9 +1729,10 @@ void loop() {
   if (!tareCritical && Net::mqttPopActivity()) {
     uint32_t activityNow = millis();
     g_lastKeyPressMs = activityNow;
-    if (g_inactivitySleepStage != INACT_NONE) {
+    if (g_inactivitySleepStage != INACT_NONE && !g_manualSleepRequested) {
       g_inactivitySleepStage = INACT_NONE;
       g_inactivityStageStartMs = 0;
+      g_manualSleepRequested = false;
       Audio::stopNow(true);
       lastOledMs = 0;
     }
@@ -1825,6 +1827,7 @@ void loop() {
       if (g_inactivitySleepStage != INACT_NONE) {
         g_inactivitySleepStage = INACT_NONE;
         g_inactivityStageStartMs = 0;
+        g_manualSleepRequested = false;
         Audio::stopNow(true);
         lastOledMs = 0;
       }
@@ -1841,6 +1844,7 @@ void loop() {
     if (g_inactivitySleepStage != INACT_NONE) {
       g_inactivitySleepStage = INACT_NONE;
       g_inactivityStageStartMs = 0;
+      g_manualSleepRequested = false;
       Audio::stopNow(true);
       lastOledMs = 0;
     }
@@ -1945,6 +1949,7 @@ void loop() {
         g_sleepLongPressFired = true;
         g_inactivitySleepStage = INACT_NONE;
         g_inactivityStageStartMs = 0;
+        g_manualSleepRequested = false;
         g_lastKeyPressMs = now;
 
         g_overlayAudioEnabled = Audio::toggleEnabled();
@@ -1965,12 +1970,25 @@ void loop() {
       }
     } else {
       if (!g_sleepLongPressFired) {
-        Serial.println(F("[KEYPAD] SLEEP short -> standby"));
-        ui_renderSleepZzz();
-        Audio::requestPlayMp3(Track::SLEEP_ENTER);
-        g_inactivitySleepStage = INACT_ZZZ;
-        g_inactivityStageStartMs = now;
-        lastOledMs = 0;
+        bool sleepBlocked = g_overloadActive || mqttOutboxPending;
+#if ENABLE_WIFI_OTA
+        sleepBlocked = sleepBlocked || Net::isOtaInProgress();
+#endif
+        if (sleepBlocked) {
+          Serial.println(F("[KEYPAD] SLEEP short bloccato (safety lock)"));
+          g_manualSleepRequested = false;
+          g_inactivitySleepStage = INACT_NONE;
+          g_inactivityStageStartMs = 0;
+          buzzerWarn();
+        } else {
+          Serial.println(F("[KEYPAD] SLEEP short -> standby manuale"));
+          g_manualSleepRequested = true;
+          ui_renderSleepZzz();
+          Audio::requestPlayMp3(Track::SLEEP_ENTER);
+          g_inactivitySleepStage = INACT_ZZZ;
+          g_inactivityStageStartMs = now;
+          lastOledMs = 0;
+        }
       }
       g_sleepPressStartMs = 0;
       g_sleepLongPressFired = false;
@@ -2243,11 +2261,15 @@ void loop() {
     g_clearStackAfterTare = false;
     Serial.print(F("[STACK] Ref offset saved: "));
     Serial.println(ref);
+  }
+  if (tareApplied) {
+    buzzerOk();
   } else if (tareResult == ScaleState::TARE_RESULT_FAILED) {
     g_captureReferenceAfterTare = false;
     g_clearStackAfterTare = false;
     g_tareKeyLockUntilMs = tareNow + TARE_FAIL_HOLD_MS;
     buzzerError();
+    Audio::requestPlayMp3(Track::ERROR_TARE);
   }
 
   // HX health update
@@ -2267,24 +2289,32 @@ void loop() {
   }
 
   // Sleep per inattività
-  bool allowInactivitySleep = g_inactivitySleepArmed;
+  bool manualSleepCountdown = g_manualSleepRequested &&
+    g_inactivitySleepStage == INACT_ZZZ;
+  bool allowInactivitySleep = g_inactivitySleepArmed || manualSleepCountdown;
   if (g_overloadActive) allowInactivitySleep = false;
   if (g_inactivitySleepStage == INACT_NONE && Audio::isActive()) allowInactivitySleep = false;
 #if ENABLE_MQTT
-  if (Net::isMqttCommandActive() || Net::isMqttResponsePending()) {
-    allowInactivitySleep = false;
-  }
+  if (Net::isMqttResponsePending()) allowInactivitySleep = false;
+  if (!manualSleepCountdown && Net::isMqttCommandActive()) allowInactivitySleep = false;
 #endif
 #if ENABLE_WIFI_OTA
   if (Net::isOtaInProgress()) allowInactivitySleep = false;
 #endif
 
   if (!allowInactivitySleep) {
+    bool cancelledCountdown = g_inactivitySleepStage != INACT_NONE;
     g_inactivitySleepStage = INACT_NONE;
     g_inactivityStageStartMs = 0;
+    g_manualSleepRequested = false;
+    if (cancelledCountdown) {
+      Audio::stopNow(true);
+      lastOledMs = 0;
+    }
   } else {
     if (g_inactivitySleepStage == INACT_NONE) {
       if ((now - g_lastKeyPressMs) >= INACTIVITY_SLEEP_MS) {
+        g_manualSleepRequested = false;
         ui_renderSleepZzz();
         Audio::requestPlayMp3(Track::SLEEP_ENTER);
         g_inactivitySleepStage = INACT_ZZZ;
@@ -2295,6 +2325,7 @@ void loop() {
       if ((now - g_inactivityStageStartMs) >= INACTIVITY_ZZZ_MS) {
         g_inactivitySleepStage = INACT_NONE;
         g_inactivityStageStartMs = 0;
+        g_manualSleepRequested = false;
         enterInactivityLightSleep();
         return;
       }

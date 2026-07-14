@@ -22,7 +22,7 @@ Target:
 Funzioni principali (firmware HX711):
 - Lettura HX711 con filtri + stati **STABLE / UNSTABLE / LIVE / SOVRACCARICO**
 - **Zero-tracking** vicino allo zero + **snap-to-zero** allo scarico
-- **TARA** con UI dedicata a stato/animazione, verifica stabilità e blocco pesata durante l’operazione
+- **TARA** automatica e manuale con centro robusto: tollera il rumore ambientale, distingue la deriva reale e segnala acusticamente gli errori tecnici
 - Monitor batteria con **tacche** + stato **charging** stabilizzato; soltanto campioni INA219 validi, plausibili e freschi alimentano filtri e protezioni
 - Protezione “batteria scarica” con **avviso + beep + light-sleep**, anti-flapping (debounce 10 s, recovery stabile 30 s) e cooldown avvisi 5 min
 - **HX health** runtime: stati **OK / WARN / ERROR / ERROR HARD**, badge **"Errore Cella"** (testo piccolo + triangolino) in alto a destra in WARN, schermata error bloccante (senza mostrare l'ultimo peso), blocco tara/calib, audio 0015.mp3 una sola volta all’ingresso in ERROR
@@ -196,13 +196,18 @@ così non rallentiamo i carichi rapidi).
 Nota: la guard scarta solo **frame singoli** (o confermati) e quindi non cambia la logica WORK/zt/stati, se non in presenza di glitch reali.
 
 ### TARE
-- Tara manuale **non-blocking** a 80 SPS: parte dal rilascio del tasto, valuta una finestra mobile fissa di 32 campioni con trimmed mean, range e pendenza robusta; se il segnale non è stabile lascia invariato l’offset.
+- Auto-TARE e tara manuale stimano lo zero con **trimmed mean**: ordinano i campioni e scartano le due code prima della media. Vibrazioni periodiche di frullatori o lavorazioni sul banco allargano il range ma non spostano necessariamente il centro, quindi il range resta diagnostico e non blocca la tara.
+- La tara manuale parte dal rilascio del tasto, usa 64 campioni e rifiuta soltanto una deriva sostenuta fra l'inizio e la fine della finestra. Un doppio beep basso più l'audio opzionale `0016.mp3` segnalano un fallimento reale; un beep acuto conferma il successo.
 - La tara di lavoro post-**ENTER** è immediata: usa lo stesso RAW WORK filtrato della pesata già validata, senza avviare una seconda finestra fallibile.
 
 ### Auto-TARE al boot
-- Dopo **300 ms** di assestamento cerca per ulteriori **2 s** una finestra stabile di **32 campioni**; calcola lo zero con trimmed mean eliminando i 4 estremi per lato e usando soltanto quella finestra. La soglia sul range centrale è **1,50 g**, tarata sul rumore reale misurato (~0,78 g a vuoto, ~95 SPS).
-- Raggiungere il limite di campioni senza stabilità non equivale a successo: l'offset resta invariato e il boot entra in errore **Auto-TARE**.
-- Nella schermata di errore il tasto **TARE** avvia un nuovo tentativo reale. La bilancia non completa il boot finché non ottiene una tara stabile; il log seriale riporta campioni, SPS stimati e miglior range osservato.
+- Dopo **300 ms** di assestamento raccoglie fino a **64 campioni** in un massimo di **2 s**. Con almeno 32 campioni validi calcola sempre il centro robusto, scartando un ottavo dei valori per ogni coda, applica lo zero e completa il boot anche su un banco rumoroso.
+- La qualità del segnale non è un gate di avvio: il range viene scritto nel log per diagnosi, mentre lo **zero-tracking** resta prudente e rifinisce gli scarti residui entro la propria finestra di ±1,5 g soltanto quando trova una successiva finestra quieta. Non viene allargato, così non può inseguire le vibrazioni o assorbire più facilmente un peso reale.
+- Il boot si blocca soltanto se non arrivano almeno 32 campioni validi o se la calibrazione non consente di convertire i raw. In quel caso mostra **Sensore non valido**, emette sempre il doppio beep del buzzer anche senza DFPlayer, richiede **TARE** e riproduce opzionalmente `0016.mp3`.
+
+Questa separazione è intenzionale: il rumore ambientale influenza la precisione istantanea ma non equivale a un guasto; assenza di campioni e calibrazione invalida sono invece errori tecnici che non permettono di costruire uno zero.
+
+Anche la differenza fra TARE ed ENTER è intenzionale. TARE è una richiesta esplicita dell'operatore di assumere il centro corrente come zero e privilegia quindi l'usabilità sul banco reale; ENTER registra invece una quantità e conserva le verifiche strette di quiete, per non salvare una pesata sbagliata.
 
 I parametri (N di media, isteresi, ecc.) sono nel firmware e sono pensati per essere ritoccati in base al tuo rumore reale.
 
@@ -212,11 +217,12 @@ I parametri (N di media, isteresi, ecc.) sono nel firmware e sono pensati per es
 
 Tasto **TARE**:
 - arma la tara alla pressione e avvia il campionamento dopo il rilascio debounced, così pressione e rilascio non contaminano la misura; una pressione trattenuta oltre 1,5 s annulla l'operazione
-- dopo 60 ms di assestamento valuta sempre gli ultimi 32 campioni (~400 ms a 80 SPS), taglia i 4 estremi per lato e verifica range + pendenza su valori robusti
-- richiede 7 finestre valide consecutive (~75 ms): normalmente applica il nuovo zero in circa 0,5–0,6 s dal rilascio; il timeout è 1,1 s
-- mostra “**- TARA -**” durante l’acquisizione; se resta instabile mostra “**INSTABILE** / Ripeti a peso fermo” e non modifica l’offset
+- dopo 60 ms di assestamento valuta gli ultimi 64 campioni, taglia gli 8 estremi per lato e applica il centro robusto normalmente entro circa 0,8–1,0 s dal rilascio
+- il range non annulla più l'operazione; il confronto fra la media robusta dei primi e degli ultimi 16 campioni rifiuta soltanto una deriva oltre **10 g/s**, cioè un piatto ancora realmente in movimento. Il timeout tecnico è 1,6 s
+- mostra “**- TARA -**” durante l’acquisizione; un movimento reale, campioni insufficienti o un blocco di sicurezza mostrano “**TARA FALLITA** / Premi TARA e riprova” e non modificano l’offset
 - durante la tara la pesata è “bloccata” a display (l’utente non deve pesare)
-- se la tara manuale riesce, azzera lo stack e salva la tara di riferimento della sessione
+- se la tara manuale riesce, emette un beep positivo, azzera lo stack e salva la tara di riferimento della sessione
+- se fallisce, emette il doppio beep di errore e richiede opzionalmente `0016.mp3`; il buzzer resta autorevole anche con AUDIO OFF o DFPlayer assente
 - è bloccato nello stato **SOVRACCARICO**, per evitare che un carico oltre il campo operativo venga nascosto impostandolo come zero
 
 Zero di lavoro post-**ENTER**:
@@ -312,7 +318,7 @@ Caratteristiche:
 - Il tasto che provoca il wake viene ignorato come comando finché non viene rilasciato.
 - **Nessun reset** dello stato/pesata: riprende esattamente dove era.
 - WiFi/OTA vengono sospesi prima dello sleep e riattivati dopo il wake **solo se l'utente ha lasciato il WiFi ON**.
-- **SLEEP breve**: al rilascio avvia la sequenza di standby (schermata **Zzz...** per ~5 s + audio 0003), poi light-sleep.
+- **SLEEP breve**: al rilascio avvia la sequenza di standby manuale (schermata **Zzz...** per ~5 s + audio 0003), poi light-sleep anche se è presente un semplice comando `weigh` MQTT. Una response in attesa di receipt/ACK, un upload OTA o il sovraccarico continuano invece a bloccarlo.
 - **SLEEP tenuto per 2 secondi**: non entra in standby; commuta il DFPlayer tra **AUDIO OFF** e **AUDIO ON**, con conferma sul display e buzzer.
 
 ### Indicatore esterno sleep (LED)
@@ -394,7 +400,7 @@ Comandi seriali:
 
 Se le credenziali non sono configurate, MQTT resta inattivo (nessun tentativo di connessione).
 
-Porta bilancia: **8883** (MQTTS/TLS). Porta browser: **8884** (WSS/TLS). Il certificato CA ISRG Root X1 è nel firmware. `MQTT_SCALE_NAME` e `MQTT_FW_VERSION` sono definiti in `net_ota_cloud.h`; la versione corrente è **1.2.1**.
+Porta bilancia: **8883** (MQTTS/TLS). Porta browser: **8884** (WSS/TLS). Il certificato CA ISRG Root X1 è nel firmware. `MQTT_SCALE_NAME` e `MQTT_FW_VERSION` sono definiti in `net_ota_cloud.h`; la versione corrente è **1.2.3**.
 
 ### Topic e QoS effettivo
 
@@ -530,7 +536,7 @@ Stack pesate in RAM (LIFO, max 50 elementi). Ogni voce conserva grammi, offset e
 - ENTER con HX non OK, snapshot vecchio o peso instabile: ignorato senza modificare offset, stack o comando MQTT
 - ENTER e TARE in **SOVRACCARICO**: bloccati senza modificare zero, stack o MQTT
 - Lo zero di lavoro post-ENTER NON azzera lo stack e NON aggiorna il riferimento
-- Se la tara manuale fallisce per instabilità, offset, riferimento e stack restano invariati
+- Se la tara manuale fallisce per deriva reale o campioni insufficienti, offset, riferimento e stack restano invariati
 - Le overlay si chiudono dopo 10 secondi; l'overlay TOTAL si chiude anche con TOTAL, TARE o ENTER
 - Long press "solido" usato su CLEAR: l'azione breve scatta al rilascio solo se la soglia non è stata raggiunta. Il clear lungo è una manutenzione locale e non annulla in massa le azioni già persistite in Laravel.
 
@@ -617,7 +623,7 @@ Il firmware include un **Task Watchdog** (8 secondi) attivo già durante il setu
 
 All'avvio il firmware verifica che il `loopTask` sia davvero iscritto al WDT: in seriale stampa `[WDT] OK` se l'aggancio e' attivo, oppure `[WDT] FAIL i=... a=... s=...` se init/add/status falliscono. Il reset periodico del watchdog viene eseguito solo dopo questa verifica.
 
-Dopo un reset WDT la sessione runtime viene azzerata in modo coerente: stack, riferimento, offset di lavoro, zero-tracking e filtri. Nessuna tara runtime parziale viene recuperata da RTC. La UI chiede di liberare il piatto e premere TARE; il tasto avvia una nuova auto-TARE fail-closed e il boot resta fermo, ripetendo la richiesta finché l'acquisizione non è stabile. La calibrazione persistente in NVS resta valida.
+Dopo un reset WDT la sessione runtime viene azzerata in modo coerente: stack, riferimento, offset di lavoro, zero-tracking e filtri. Nessuna tara runtime parziale viene recuperata da RTC. La UI informa del reset e avvia direttamente una nuova Auto-TARE robusta: il rumore non blocca il recupero, mentre l'assenza di campioni validi mantiene il blocco tecnico con richiesta TARE. La calibrazione persistente in NVS resta valida.
 
 ### DFPlayer Mini (audio eventi) + power-gating controllato
 Il firmware può suonare file MP3 (es. avviso sleep). Per evitare click e stati strani, **non fa power-cycle a fine brano**.
@@ -742,7 +748,7 @@ Metti i file in **SD:/MP3/** con nome a 4 cifre (es. `0001.mp3`).
 |---:|---|
 | 0001.mp3 | Avvio bilancia |
 | 0002.mp3 | Boot completato |
-| 0003.mp3 | Entrata risparmio energetico (inattività: schermata Zzz... 5s prima del light-sleep) |
+| 0003.mp3 | Entrata risparmio energetico (standby manuale o automatico: schermata Zzz... 5s prima del light-sleep) |
 | 0004.mp3 | Uscita risparmio energetico (wake) |
 | 0005.mp3 | Wi‑Fi **modulo ON** (toggle manuale) |
 | 0006.mp3 | Wi‑Fi **modulo OFF** (toggle manuale) |
@@ -753,7 +759,7 @@ Metti i file in **SD:/MP3/** con nome a 4 cifre (es. `0001.mp3`).
 | 0013.mp3 | Standby pre‑sleep per batteria scarica (schermata Zzz... 5s prima del light-sleep) |
 | 0014.mp3 | Errore lettura batteria (INA) |
 | 0015.mp3 | Errore sensore peso (HX) |
-| 0016.mp3 | Errore TARA al boot (Auto‑TARE fallita; piatto fermo + TARE per ritentare) |
+| 0016.mp3 | Tara non eseguita, riprovare (errore tecnico al boot o movimento reale nella tara manuale; il buzzer suona comunque) |
 | 0017.mp3 | Modalità WORK |
 | 0018.mp3 | Modalità LIVE |
 

@@ -133,7 +133,7 @@ All secrets follow the same pattern — **never hardcoded**, always in ESP32 NVS
 - **8-second WDT** configured in firmware. If loop blocks > 8s, ESP32 reboots.
 - **TLS handshake può superare 8 s:** `configureLoopWdt()` porta temporaneamente il timeout a `MQTT_TLS_WDT_TIMEOUT_MS` (20 s) e lo ripristina a `LOOP_WDT_TIMEOUT_MS` (8 s) subito dopo il tentativo.
 - **OTA upload:** il task viene rimosso dal WDT in `onStart` e riaggiunto/ripristinato in `onEnd` e `onError`.
-- **Recovery coerente:** dopo WDT non ripristinare soltanto offset/zero-tracking da RTC. Stack, riferimento, zero runtime e filtri vengono invalidati insieme; la UI richiede piatto vuoto + TARE e il boot accetta soltanto una nuova auto-TARE stabile. La calibrazione NVS resta valida.
+- **Recovery coerente:** dopo WDT non ripristinare soltanto offset/zero-tracking da RTC. Stack, riferimento, zero runtime e filtri vengono invalidati insieme; la UI informa del reset e avvia una nuova Auto-TARE robusta. Il rumore non blocca il recupero, mentre campioni insufficienti o calibrazione invalida richiedono un retry TARE. La calibrazione NVS resta valida.
 - **Ogni nuova operazione bloccante >2 s** deve essere spezzata in step non bloccanti, alimentare esplicitamente il WDT o usare la stessa reconfiguration temporanea con ripristino garantito.
 
 ### Light Sleep
@@ -155,6 +155,7 @@ All secrets follow the same pattern — **never hardcoded**, always in ESP32 NVS
 - INA219: soltanto letture I2C riuscite, finite, plausibili e fresche possono aggiornare filtri, charging o protezione sleep; la soglia hard-low richiede conferma temporale.
 - Il peso reale oltre il campo ±16 kg entra in **SOVRACCARICO** con isteresi e blocca ENTER/TARE; non registrare mai il valore clamped come una pesata valida.
 - SKIP breve scatta al rilascio; SKIP tenuto 5 s apre la calibrazione senza emettere prima uno skip MQTT.
+- Auto-TARE e TARE manuale usano trimmed mean su 64 campioni: il range dovuto a vibrazioni ambientali è diagnostico, non un veto. Al boot bastano 32 campioni validi per avviare e lasciare allo zero-tracking la rifinitura nelle sole finestre quiete; la manuale rifiuta soltanto una deriva sostenuta oltre 10 g/s. Il buzzer segnala sempre un errore reale anche senza DFPlayer.
 
 ## Firmware Module Structure
 
@@ -207,11 +208,11 @@ On DigitalOcean VPS, config at `/etc/mosquitto/conf.d/minu.conf`:
 - `tls_version tlsv1.2` required for ESP32 compatibility
 - Do NOT set `cafile` to the same file as `certfile` (causes Mosquitto error)
 
-## Current State (as of 2026-07-13)
+## Current State (as of 2026-07-14)
 
 - Firmware ESP32 operativo: TLS/NTP, MQTT, status `online/sleeping/offline`, backoff, `weigh`/`clear`, `confirm`/`skip`/`undo`, takeover con retarget sessione e retry response con ACK applicativo.
 - Credenziali WiFi, OTA e MQTT persistite in NVS; nessun segreto nel sorgente.
-- Auto-TARE boot fail-closed, INA219 validato/fresh, hard-low debounced, sovraccarico esplicito, reset WDT coerente, wake key consumato e stack undo LIFO operativi.
+- Auto-TARE fail-soft sul rumore e TARE manuale tollerante alle vibrazioni, INA219 validato/fresh, hard-low debounced, sovraccarico esplicito, reset WDT coerente, wake key consumato e stack undo LIFO operativi.
 - Browser MQTT operativo nel Manager con owner lease per scheda, identità operatore, REST-before-ACK, deduplica response e compatibilità legacy.
 - Laravel operativo con CRUD bilance, associazione utente-bilancia, discovery MQTT, pagina pesatura e receipt idempotenti per confirm/skip/undo.
-- `MQTT_FW_VERSION` corrente: `1.2.1`.
+- `MQTT_FW_VERSION` corrente: `1.2.3`.

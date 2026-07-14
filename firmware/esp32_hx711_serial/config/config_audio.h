@@ -50,7 +50,7 @@ inline bool isMustPlayTrack(uint16_t track) {
 // 0013 = Standby batteria scarica
 // 0014 = Errore INA219
 // 0015 = Errore HX711
-// 0016 = Auto-tare boot fallita
+// 0016 = Tare not completed (boot or manual)
 // 0017 = Modalità WORK
 // 0018 = Modalità LIVE
 
