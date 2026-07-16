@@ -41,7 +41,7 @@
   // e vengono salvati in NVS (persistono tra aggiornamenti firmware).
   // Comandi: mqtt set "host" "user" "pass", mqtt creds, mqtt clear, mqtt apply
   #define MQTT_PORT       8883          // MQTTS (TLS)
-  #define MQTT_FW_VERSION "1.2.3"
+  #define MQTT_FW_VERSION "1.3.0"
   #define MQTT_SCALE_NAME "Minu Bench Scale"  // Nome visibile nel browser
 #endif
 
@@ -107,7 +107,7 @@ namespace Net {
   const char* getMqttLastSessionId();
   uint32_t getMqttCommandProductId();
 
-  // True once for every accepted weigh/clear command (including duplicates).
+  // True once for every weigh activation or clear that changes active state.
   bool mqttPopActivity();
 
   // True once after the browser ACKs a durable undo REST commit.
