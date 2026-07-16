@@ -13,6 +13,7 @@ Le fonti canoniche sono mantenute nella root del repository:
 - Una response durable `confirm` o `skip` conserva il `command_id` originale. L'`undo` usa `undo_of_response_id` e non inventa un nuovo command ID.
 - L'outbox durable è immutabile: mentre è pending, `weigh` e `clear` sono ignorati. Solo il `response_ack` con la `response_id` esatta chiude l'outbox.
 - Con MQTT connesso ENTER richiede un comando attivo e, se manca, produce solo un warning. Il commit standalone resta disponibile con MQTT disconnesso o WiFi spento.
+- Se ENTER arriva prima della quiete, il firmware emette un beep basso e mostra **ACQUISIZIONE PESO** per massimo 1,5 s. Registra appena raggiunge STABLE; al timeout accetta il centro RAW robusto solo senza deriva continua e usa lo stesso centro per peso e zero. Movimento persistente o campioni non validi producono doppio beep e un avviso leggibile; successo e fallimento si chiudono automaticamente dopo circa 1,3 s e 2 s.
 
 Verifica locale:
 

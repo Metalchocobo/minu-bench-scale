@@ -45,6 +45,11 @@ void ui_renderWeightLiveHalf(long gDispX2, const char* stateLabel,
 // Overlay TARA: mostra stato stabilizzazione, senza barra a tempo.
 void ui_renderTareStatus(ScaleState::TareUiState state, bool autoMode);
 
+// ENTER acquisition feedback. Progress is time-based (0..100): reaching
+// 100 may still end in a rejected moving-weight result.
+void ui_renderEnterCapture(uint8_t progress);
+void ui_renderEnterResult(bool success, bool movingWeight);
+
 // Schermata ERROR runtime HX711 (bloccante)
 // - hard=true  -> non fidarsi del valore (non mostra last)
 // - showLast=true -> mostra lastG come "Ultimo valore valido"

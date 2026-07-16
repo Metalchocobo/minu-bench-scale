@@ -104,6 +104,7 @@ namespace Net {
   const char* getMqttCommandUuid();
   const char* getMqttCommandName();
   const char* getMqttCommandSessionId();
+  const char* getMqttCommandId();
   const char* getMqttLastSessionId();
   uint32_t getMqttCommandProductId();
 

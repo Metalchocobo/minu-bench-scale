@@ -817,6 +817,10 @@ const char* getMqttCommandSessionId() {
   return mqtt_cmdSessionId;
 }
 
+const char* getMqttCommandId() {
+  return mqtt_cmdCommandId;
+}
+
 const char* getMqttLastSessionId() {
   return mqtt_lastSessionId;
 }

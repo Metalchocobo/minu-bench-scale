@@ -198,7 +198,7 @@ Nota: la guard scarta solo **frame singoli** (o confermati) e quindi non cambia 
 ### TARE
 - Auto-TARE e tara manuale stimano lo zero con **trimmed mean**: ordinano i campioni e scartano le due code prima della media. Vibrazioni periodiche di frullatori o lavorazioni sul banco allargano il range ma non spostano necessariamente il centro, quindi il range resta diagnostico e non blocca la tara.
 - La tara manuale parte dal rilascio del tasto, usa 64 campioni e rifiuta soltanto una deriva sostenuta fra l'inizio e la fine della finestra. Un doppio beep basso più l'audio opzionale `0016.mp3` segnalano un fallimento reale; un beep acuto conferma il successo.
-- La tara di lavoro post-**ENTER** è immediata: usa lo stesso RAW WORK filtrato della pesata già validata, senza avviare una seconda finestra fallibile.
+- La tara di lavoro post-**ENTER** è immediata quando il peso è già quieto. Se non lo è, ENTER apre un'acquisizione visibile di massimo **1,5 s**: appena arriva STABLE registra e tara; al timeout usa un centro RAW robusto soltanto se non rileva una deriva continua.
 
 ### Auto-TARE al boot
 - Dopo **300 ms** di assestamento raccoglie fino a **64 campioni** in un massimo di **2 s**. Con almeno 32 campioni validi calcola sempre il centro robusto, scartando un ottavo dei valori per ogni coda, applica lo zero e completa il boot anche su un banco rumoroso.
@@ -207,7 +207,7 @@ Nota: la guard scarta solo **frame singoli** (o confermati) e quindi non cambia 
 
 Questa separazione è intenzionale: il rumore ambientale influenza la precisione istantanea ma non equivale a un guasto; assenza di campioni e calibrazione invalida sono invece errori tecnici che non permettono di costruire uno zero.
 
-Anche la differenza fra TARE ed ENTER è intenzionale. TARE è una richiesta esplicita dell'operatore di assumere il centro corrente come zero e privilegia quindi l'usabilità sul banco reale; ENTER registra invece una quantità e conserva le verifiche strette di quiete, per non salvare una pesata sbagliata.
+Anche la differenza fra TARE ed ENTER è intenzionale. TARE è una richiesta esplicita dell'operatore di assumere il centro corrente come zero. ENTER registra invece una quantità: prova prima la quiete normale e, solo dopo il timeout visibile, accetta la media robusta di un liquido che oscilla attorno a un centro fermo; una variazione ancora direzionale viene rifiutata.
 
 I parametri (N di media, isteresi, ecc.) sono nel firmware e sono pensati per essere ritoccati in base al tuo rumore reale.
 
@@ -226,14 +226,16 @@ Tasto **TARE**:
 - è bloccato nello stato **SOVRACCARICO**, per evitare che un carico oltre il campo operativo venga nascosto impostandolo come zero
 
 Zero di lavoro post-**ENTER**:
-- in WORK accetta ENTER solo con HX in stato OK, snapshot fresco, assenza di sovraccarico e pesata realmente STABLE per la finestra configurata; in LIVE richiede almeno 400 ms di segnale quieto
-- applica immediatamente come offset lo stesso snapshot RAW filtrato che ha prodotto la pesata accettata
+- con HX OK, snapshot fresco, peso positivo e assenza di sovraccarico, un peso già STABLE in WORK o quieto da almeno 400 ms in LIVE viene registrato subito
+- se il gate normale non è pronto, emette un beep basso e mostra **ACQUISIZIONE PESO** con barra di avanzamento per un massimo di **1,5 s**; appena il peso diventa quieto registra e tara senza attendere la fine della barra
+- al timeout calcola un centro robusto sui campioni RAW successivi alla pressione. Il range resta diagnostico per tollerare l'oscillazione dei liquidi; una deriva oltre **4 g/s**, campioni insufficienti o non freschi rifiutano l'operazione. Il valore robusto deve inoltre restare nel campo ±16 kg
+- nel fallback applica come nuovo zero lo stesso centro RAW da cui ricava i grammi registrati
 - registra nello stack anche offset/zero-tracking precedenti e, per un comando session-aware, UUID, `product_id`, sessione e receipt del `confirm`; questi dati rendono reversibile il commit con CLEAR breve
 - solo dopo il nuovo zero registra il peso nello stack e prepara il `confirm` MQTT; la response resta in retry finché Laravel l'ha persistita e il browser completa clear + ACK
-- se una condizione fallisce, oppure MQTT è offline con un comando attivo, offset, stack e comando restano invariati
+- durante l'attesa ricontrolla sensore, calibrazione, offset e identità esatta del comando MQTT; se una condizione cambia, oppure MQTT va offline con un comando attivo, offset, stack e comando restano invariati
 - non azzera lo stack e non aggiorna la tara di riferimento della sessione
 
-Durante una tara o il breve commit post-ENTER gli altri tasti vengono ignorati, evitando doppi inserimenti e riavvii dell’operazione.
+Durante acquisizione e feedback ENTER gli altri tasti vengono ignorati, evitando doppi inserimenti. Il successo **REGISTRATO / Tara applicata** resta visibile per circa **1,3 s** dopo il beep; il rifiuto mostra **PESO IN MOVIMENTO / NON REGISTRATO** oppure **ACQUISIZIONE FALLITA / NON REGISTRATO** per circa **2 s** dopo il doppio beep. Tutte queste schermate si chiudono da sole.
 La tara manuale è rifiutata durante un upload OTA, che continua quindi senza interruzioni.
 
 ---
@@ -494,7 +496,7 @@ Cambio e disassociazione bilancia sono bloccati finché una response è in sincr
 
 ### Tasti (con MQTT attivo)
 
-- **ENTER**: quando MQTT è connesso richiede un comando `weigh` attivo; senza comando emette un warning e non applica tara, push o audio di successo. Con comando valido prepara `confirm` e resta pending fino alla receipt Laravel e all'ACK browser. In modalità standalone il commit locale resta disponibile quando MQTT non è connesso o il WiFi è spento
+- **ENTER**: quando MQTT è connesso richiede un comando `weigh` attivo; senza comando emette un warning e non applica tara, push o audio di successo. Se il peso non è ancora quieto avvia la barra di acquisizione da 1,5 s e conserva l'identità esatta del comando fino al commit. Con comando valido prepara `confirm` e resta pending fino alla receipt Laravel e all'ACK browser. In modalità standalone il commit locale resta disponibile quando MQTT non è connesso o il WiFi è spento
 - **SKIP breve**: scatta al rilascio e prepara `skip` per il comando attivo; senza comando emette un buzzer di avviso
 - **SKIP tenuto 5 secondi**: apre il wizard calibrazione senza inviare prima uno `skip`
 - **CLEAR breve**: annulla subito una voce locale; per una voce con receipt session-aware prepara `undo` e ripristina offset/zero-tracking soltanto al relativo ACK
@@ -532,7 +534,7 @@ Stack pesate in RAM (LIFO, max 50 elementi). Ogni voce conserva grammi, offset e
 ### Workflow tipico
 
 1. Metti contenitore, premi **TARA** → avvia tara manuale; se riesce azzera stack e salva la tara di riferimento
-2. Aggiungi ingrediente, attendi **STABLE** e premi **ENTER** → zero di lavoro immediato, registrazione nello stack e `confirm` MQTT (display torna a 0)
+2. Aggiungi ingrediente e premi **ENTER** → se è già quieto accetta subito; altrimenti mostra la barra **ACQUISIZIONE PESO** fino a 1,5 s, poi accetta appena STABLE o usa il centro robusto se non c'è deriva. A quel punto applica lo zero di lavoro, registra nello stack e prepara il `confirm` MQTT
 3. Ripeti per ogni ingrediente
 4. **TOTAL** (breve) → mostra overlay di controllo con **Registrato**, **Effettivo** e **Differenza** (10 secondi)
 5. **CLEAR** (breve) → annulla realmente l'ultima pesata: subito se locale, oppure dopo receipt/ACK dell'`undo` se associata a Laravel; a quel punto ripristina offset/zero-tracking e rimuove la voce LIFO
@@ -549,7 +551,7 @@ Stack pesate in RAM (LIFO, max 50 elementi). Ogni voce conserva grammi, offset e
 
 **Note:**
 - ENTER con peso <= 0: ignorato (nessun push, nessuna tara, nessun MQTT)
-- ENTER con HX non OK, snapshot vecchio o peso instabile: ignorato senza modificare offset, stack o comando MQTT
+- ENTER con HX non OK o snapshot vecchio è ignorato. Un peso non quieto avvia invece l'acquisizione da 1,5 s; se continua a muoversi o i campioni non sono validi, il doppio beep e l'avviso auto-dismiss confermano che non è stato registrato
 - ENTER e TARE in **SOVRACCARICO**: bloccati senza modificare zero, stack o MQTT
 - Lo zero di lavoro post-ENTER NON azzera lo stack e NON aggiorna il riferimento
 - Se la tara manuale fallisce per deriva reale o campioni insufficienti, offset, riferimento e stack restano invariati
@@ -567,7 +569,7 @@ Stack pesate in RAM (LIFO, max 50 elementi). Ogni voce conserva grammi, offset e
 - ENTER session-aware esegue: validazione → zero di lavoro → push reversibile → staging del `confirm` → associazione della receipt generata alla voce. Se lo staging non riesce, push e zero vengono annullati.
 - CLEAR breve legge la voce senza rimuoverla. Se contiene una receipt remota, prepara un nuovo outbox `undo` con `undo_of_response_id`; offset/zero-tracking vengono ripristinati e la voce viene rimossa soltanto dopo l'ACK browser, quindi dopo la persistenza Laravel. Se il primo publish QoS 0 fallisce, lo stato locale resta invariato e l'outbox continua i retry.
 - Una voce locale o legacy senza receipt viene annullata subito e solo localmente; non viene inventato un undo Laravel non correlabile.
-- Durante una response in attesa di receipt/ACK sono bloccati TARE, ENTER, SKIP, qualsiasi CLEAR incluso quello lungo e le mutazioni del wizard di calibrazione. Da seriale restano bloccati `stack clear` e tutti i comandi `cal ...` mutanti; `cal status` resta consultabile.
+- Durante una response in attesa di receipt/ACK sono bloccati TARE, ENTER, SKIP, qualsiasi CLEAR incluso quello lungo e le mutazioni del wizard di calibrazione. Gli stessi comandi seriali mutanti restano bloccati durante acquisizione e feedback ENTER: `stack clear` e tutti i `cal ...` tranne `cal status`.
 - Il payload MQTT `clear` inviato dal browser non equivale al tasto CLEAR: pulisce soltanto UUID, target e sessione del comando retained e non modifica lo stack.
 
 ---

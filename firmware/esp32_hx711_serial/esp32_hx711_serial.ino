@@ -136,6 +136,33 @@ static int  g_overlayCount    = 0;
 static char g_overlayMsg[12]  = {0};
 static bool g_overlayAudioEnabled = true;
 
+// ENTER: bounded, non-blocking acquisition when the normal STABLE gate is not
+// ready. Result screens have their own readable, auto-dismiss timing.
+enum EnterUiState : uint8_t {
+  ENTER_UI_IDLE = 0,
+  ENTER_UI_ACQUIRING,
+  ENTER_UI_SUCCESS,
+  ENTER_UI_FAILED_MOVING,
+  ENTER_UI_FAILED
+};
+static EnterUiState g_enterUiState = ENTER_UI_IDLE;
+static uint32_t g_enterUiStartMs = 0;
+static long g_enterSamples[ENTER_CAPTURE_SAMPLE_BUF_N];
+static uint32_t g_enterSampleMs[ENTER_CAPTURE_SAMPLE_BUF_N];
+static uint8_t g_enterSampleHead = 0;
+static uint8_t g_enterSampleCount = 0;
+static uint8_t g_enterRawDecimationPhase = 0;
+static long g_enterStartOffsetRaw = 0;
+static long g_enterStartZtCounts = 0;
+static float g_enterStartCpg = 0.0f;
+#if ENABLE_MQTT
+static bool g_enterStartHadMqttCommand = false;
+static char g_enterStartMqttUuid[37] = {0};
+static char g_enterStartMqttSessionId[65] = {0};
+static char g_enterStartMqttCommandId[65] = {0};
+static uint32_t g_enterStartMqttProductId = 0;
+#endif
+
 // Manual TARE reference capture: save ref offset only after tare is applied
 static bool g_captureReferenceAfterTare = false;
 static bool g_clearStackAfterTare = false;
@@ -226,6 +253,13 @@ void printHelp();
 void serial_task();
 void parseCommand(const char* cmd);
 void handleKeyEvent(KeyCode key);
+static bool isEnterSignalReady();
+static bool enterPreflight(float currentWeight, long workingOffset, uint32_t nowMs, bool audible);
+static bool commitEnterWeight(float currentWeight, long workingOffset, uint32_t commitNow);
+static void startEnterCapture(uint32_t nowMs);
+static void enterCaptureNoteRaw(long rawUse, uint32_t nowMs);
+static void updateEnterCapture(uint32_t nowMs, bool haveNewWork);
+static void updateEnterUiTimeout(uint32_t nowMs);
 bool autoTareOnBoot(uint16_t maxSamples);
 bool initHX711();
 long readRawHXOnceBlocking(uint32_t timeoutMs);
@@ -319,6 +353,14 @@ void serial_task() {
 }
 
 void parseCommand(const char* cmd) {
+  if (g_enterUiState != ENTER_UI_IDLE) {
+    bool stackMutation = strcmp(cmd, "stack clear") == 0;
+    bool calMutation = strncmp(cmd, "cal ", 4) == 0 && strcmp(cmd + 4, "status") != 0;
+    if (stackMutation || calMutation) {
+      Serial.println(F("[CMD] Bloccato: acquisizione ENTER"));
+      return;
+    }
+  }
 #if ENABLE_MQTT
   if (Net::isMqttResponsePending()) {
     bool stackMutation = strcmp(cmd, "stack clear") == 0;
@@ -753,8 +795,422 @@ static void saveWifiUserEnabledToNVS(bool en) {
 }
 #endif
 
+// ========================= ENTER ACQUISITION =========================
+enum EnterCaptureBuildResult : uint8_t {
+  ENTER_CAPTURE_INVALID = 0,
+  ENTER_CAPTURE_READY,
+  ENTER_CAPTURE_MOVING
+};
+
+static bool isEnterSignalReady() {
+  if (stEnable) {
+    int nStable = constrain((int)ceil((float)ST_TO_STABLE_MS / SAMPLE_MS), 2, 64);
+    return ScaleState::getWeighState() == ScaleState::STATE_STABLE &&
+      ScaleFilters::histCount() >= nStable;
+  }
+
+  int nQuiet = constrain((int)ceil(400.0f / SAMPLE_MS), 2, 64);
+  return ScaleFilters::histCount() >= nQuiet &&
+    ScaleFilters::rangeLastNSamples(nQuiet) <= LIVE_ENTER_RANGE_G &&
+    fabsf(ScaleFilters::slopeLastNSamples(nQuiet)) <= LIVE_ENTER_SLOPE_GPS;
+}
+
+static bool enterCaptureContextMatches() {
+  if (g_enterUiState != ENTER_UI_ACQUIRING) return true;
+  if (hxHealth_state(&g_hxHealth) != HX_HEALTH_OK || g_overloadActive) return false;
+  if (ScaleState::getOffsetRaw() != g_enterStartOffsetRaw ||
+      ScaleState::getZtCounts() != g_enterStartZtCounts ||
+      fabsf(ScaleState::getScaleCpg() - g_enterStartCpg) > 0.0001f) return false;
+
+#if ENABLE_MQTT
+  if (Net::isMqttResponsePending()) return false;
+  bool active = Net::isMqttCommandActive();
+  bool connected = Net::isMqttConnected();
+  if (g_enterStartHadMqttCommand) {
+    return active && connected &&
+      strcmp(Net::getMqttCommandUuid(), g_enterStartMqttUuid) == 0 &&
+      strcmp(Net::getMqttCommandSessionId(), g_enterStartMqttSessionId) == 0 &&
+      strcmp(Net::getMqttCommandId(), g_enterStartMqttCommandId) == 0 &&
+      Net::getMqttCommandProductId() == g_enterStartMqttProductId;
+  }
+  return !active && !connected;
+#else
+  return true;
+#endif
+}
+
+static bool enterPreflight(float currentWeight, long workingOffset,
+                           uint32_t nowMs, bool audible) {
+  if (hxHealth_state(&g_hxHealth) != HX_HEALTH_OK) {
+    Serial.println(F("[STACK] ENTER bloccato (HX non OK)"));
+    if (audible) buzzerError();
+    return false;
+  }
+  if (lastSampleMs == 0 || (uint32_t)(nowMs - lastSampleMs) > (SAMPLE_MS * 2UL)) {
+    Serial.println(F("[STACK] ENTER bloccato (snapshot vecchio)"));
+    if (audible) buzzerWarn();
+    return false;
+  }
+  if (!isfinite(currentWeight) || currentWeight <= 0.0f || workingOffset == 0 ||
+      !isfinite(ScaleState::getScaleCpg()) || fabsf(ScaleState::getScaleCpg()) <= 0.01f) {
+    Serial.println(F("[STACK] Weight <= 0, ignoring ENTER"));
+    if (audible) buzzerWarn();
+    return false;
+  }
+  if (g_overloadActive) {
+    Serial.println(F("[STACK] ENTER bloccato (SOVRACCARICO)"));
+    if (audible) buzzerError();
+    return false;
+  }
+  if (WeighStack::count() >= WeighStack::MAX_ITEMS) {
+    Serial.println(F("[STACK] Full, cannot push"));
+    if (audible) buzzerError();
+    return false;
+  }
+
+#if ENABLE_MQTT
+  if (Net::isMqttResponsePending()) {
+    Serial.println(F("[STACK] ENTER bloccato (response ACK pending)"));
+    if (audible) buzzerWarn();
+    return false;
+  }
+  bool hadMqttCommand = Net::isMqttCommandActive();
+  bool mqttConnected = Net::isMqttConnected();
+  if (mqttConnected && !hadMqttCommand) {
+    Serial.println(F("[STACK] ENTER bloccato (nessun comando MQTT)"));
+    if (audible) buzzerWarn();
+    return false;
+  }
+  if (hadMqttCommand && !mqttConnected) {
+    Serial.println(F("[STACK] ENTER bloccato (MQTT offline)"));
+    if (audible) buzzerWarn();
+    return false;
+  }
+  if (!enterCaptureContextMatches()) {
+    Serial.println(F("[STACK] ENTER bloccato (contesto cambiato)"));
+    if (audible) buzzerWarn();
+    return false;
+  }
+#endif
+  return true;
+}
+
+static bool commitEnterWeight(float currentWeight, long workingOffset,
+                              uint32_t commitNow) {
+#if ENABLE_MQTT
+  bool hadMqttCommand = Net::isMqttCommandActive();
+  char mqttUuid[37] = {0};
+  char mqttSessionId[65] = {0};
+  uint32_t mqttProductId = 0;
+  if (hadMqttCommand) {
+    strlcpy(mqttUuid, Net::getMqttCommandUuid(), sizeof(mqttUuid));
+    strlcpy(mqttSessionId, Net::getMqttCommandSessionId(), sizeof(mqttSessionId));
+    mqttProductId = Net::getMqttCommandProductId();
+  }
+#endif
+
+  long oldOffset = ScaleState::getOffsetRaw();
+  long oldZt = ScaleState::getZtCounts();
+  if (!ScaleState::tareApplyWorking(workingOffset, commitNow)) {
+    Serial.println(F("[STACK] Working tare failed"));
+    return false;
+  }
+  gLiveEma = 0.0f;
+  gLiveEmaInit = false;
+  gLiveEmaPrevStEnable = stEnable;
+
+#if ENABLE_MQTT
+  bool pushed = WeighStack::pushCommit(
+    currentWeight, oldOffset, oldZt,
+    hadMqttCommand ? mqttUuid : nullptr,
+    hadMqttCommand ? mqttProductId : 0,
+    hadMqttCommand ? mqttSessionId : nullptr);
+#else
+  bool pushed = WeighStack::pushCommit(currentWeight, oldOffset, oldZt, nullptr, 0, nullptr);
+#endif
+  if (!pushed) {
+    ScaleState::setOffsetRaw(oldOffset);
+    ScaleState::setZtCounts(oldZt);
+    ScaleState::resetFiltersAndState();
+    ScaleState::setTareUiActive(false);
+    Serial.println(F("[STACK] Push failed, tare rolled back"));
+    return false;
+  }
+
+  Serial.print(F("[STACK] Push: "));
+  Serial.print(currentWeight, 0);
+  Serial.print(F("g (count="));
+  Serial.print(WeighStack::count());
+  Serial.println(F(")"));
+
+#if ENABLE_MQTT
+  if (hadMqttCommand) {
+    char confirmResponseId[WeighStack::RESPONSE_ID_CAP] = {0};
+    if (!Net::mqttConfirmActiveCommand(
+          mqttUuid, currentWeight, confirmResponseId, sizeof(confirmResponseId))) {
+      WeighStack::pop();
+      ScaleState::setOffsetRaw(oldOffset);
+      ScaleState::setZtCounts(oldZt);
+      ScaleState::resetFiltersAndState();
+      ScaleState::setTareUiActive(false);
+      Serial.println(F("[STACK] Confirm failed, commit rolled back"));
+      return false;
+    }
+    if (confirmResponseId[0] != '\0') {
+      (void)WeighStack::setLastConfirmResponseId(confirmResponseId);
+    }
+  }
+#endif
+
+  ScaleState::setTareUiActive(false);
+  return true;
+}
+
+static void showEnterSuccess() {
+  g_enterUiState = ENTER_UI_SUCCESS;
+  ui_renderEnterResult(true, false);
+  lastOledMs = millis();
+  buzzerOk();
+  g_enterUiStartMs = millis();
+  g_tareKeyLockUntilMs = g_enterUiStartMs + ENTER_SUCCESS_HOLD_MS;
+  Audio::requestPlayMp3(Track::ENTER_PRESSED);
+}
+
+static void showEnterFailure(bool movingWeight) {
+  g_enterUiState = movingWeight ? ENTER_UI_FAILED_MOVING : ENTER_UI_FAILED;
+  ui_renderEnterResult(false, movingWeight);
+  lastOledMs = millis();
+  buzzerError();
+  g_enterUiStartMs = millis();
+  g_tareKeyLockUntilMs = g_enterUiStartMs + ENTER_FAIL_HOLD_MS;
+}
+
+static void startEnterCapture(uint32_t nowMs) {
+  g_enterUiState = ENTER_UI_ACQUIRING;
+  g_enterUiStartMs = nowMs;
+  g_enterSampleHead = 0;
+  g_enterSampleCount = 0;
+  g_enterRawDecimationPhase = 0;
+  g_enterStartOffsetRaw = ScaleState::getOffsetRaw();
+  g_enterStartZtCounts = ScaleState::getZtCounts();
+  g_enterStartCpg = ScaleState::getScaleCpg();
+#if ENABLE_MQTT
+  g_enterStartHadMqttCommand = Net::isMqttCommandActive();
+  g_enterStartMqttUuid[0] = '\0';
+  g_enterStartMqttSessionId[0] = '\0';
+  g_enterStartMqttCommandId[0] = '\0';
+  g_enterStartMqttProductId = 0;
+  if (g_enterStartHadMqttCommand) {
+    strlcpy(g_enterStartMqttUuid, Net::getMqttCommandUuid(), sizeof(g_enterStartMqttUuid));
+    strlcpy(g_enterStartMqttSessionId, Net::getMqttCommandSessionId(), sizeof(g_enterStartMqttSessionId));
+    strlcpy(g_enterStartMqttCommandId, Net::getMqttCommandId(), sizeof(g_enterStartMqttCommandId));
+    g_enterStartMqttProductId = Net::getMqttCommandProductId();
+  }
+#endif
+  g_overlayType = OVERLAY_NONE;
+  ui_renderEnterCapture(0);
+  lastOledMs = millis();
+  buzzerWarn();
+  g_enterUiStartMs = millis();
+  Serial.println(F("[ENTER] Acquisizione avviata"));
+}
+
+static void enterCaptureNoteRaw(long rawUse, uint32_t nowMs) {
+  if (g_enterUiState != ENTER_UI_ACQUIRING) return;
+  if ((uint32_t)(nowMs - g_enterUiStartMs) < ENTER_CAPTURE_SETTLE_MS) return;
+
+  g_enterRawDecimationPhase++;
+  if (g_enterRawDecimationPhase < ENTER_CAPTURE_RAW_DECIMATION) return;
+  g_enterRawDecimationPhase = 0;
+
+  if (g_enterSampleCount > 0) {
+    uint8_t previous = (uint8_t)((g_enterSampleHead + ENTER_CAPTURE_SAMPLE_BUF_N - 1) %
+                                 ENTER_CAPTURE_SAMPLE_BUF_N);
+    if ((uint32_t)(nowMs - g_enterSampleMs[previous]) > ENTER_CAPTURE_SAMPLE_MAX_AGE_MS) {
+      // A short early interruption may still recover with a full continuous
+      // window; a late interruption naturally leaves too little time.
+      g_enterSampleHead = 0;
+      g_enterSampleCount = 0;
+    }
+  }
+
+  g_enterSamples[g_enterSampleHead] = rawUse;
+  g_enterSampleMs[g_enterSampleHead] = nowMs;
+  g_enterSampleHead = (uint8_t)((g_enterSampleHead + 1) % ENTER_CAPTURE_SAMPLE_BUF_N);
+  if (g_enterSampleCount < ENTER_CAPTURE_SAMPLE_BUF_N) g_enterSampleCount++;
+}
+
+static long enterWinsorize(long value, long low, long high) {
+  if (value < low) return low;
+  if (value > high) return high;
+  return value;
+}
+
+static uint8_t buildEnterCaptureCenter(uint32_t nowMs,
+                                       long* centerRawOut,
+                                       float* slopeGpsOut,
+                                       float* rangeGOut) {
+  if (centerRawOut) *centerRawOut = 0;
+  if (slopeGpsOut) *slopeGpsOut = 999999.0f;
+  if (rangeGOut) *rangeGOut = 999999.0f;
+  uint8_t n = g_enterSampleCount;
+  if (n < ENTER_CAPTURE_MIN_SAMPLES ||
+      !isfinite(g_enterStartCpg) || fabsf(g_enterStartCpg) <= 0.01f) {
+    return ENTER_CAPTURE_INVALID;
+  }
+
+  uint8_t oldest = (uint8_t)((g_enterSampleHead + ENTER_CAPTURE_SAMPLE_BUF_N - n) %
+                             ENTER_CAPTURE_SAMPLE_BUF_N);
+  uint8_t latestIdx = (uint8_t)((g_enterSampleHead + ENTER_CAPTURE_SAMPLE_BUF_N - 1) %
+                                ENTER_CAPTURE_SAMPLE_BUF_N);
+  uint32_t firstMs = g_enterSampleMs[oldest];
+  uint32_t latestMs = g_enterSampleMs[latestIdx];
+  uint32_t spanMs = latestMs - firstMs;
+  if (spanMs < ENTER_CAPTURE_WINDOW_MIN_MS || spanMs > ENTER_CAPTURE_WINDOW_MAX_MS ||
+      (uint32_t)(nowMs - latestMs) > ENTER_CAPTURE_SAMPLE_MAX_AGE_MS) {
+    return ENTER_CAPTURE_INVALID;
+  }
+
+  long chronological[ENTER_CAPTURE_SAMPLE_BUF_N];
+  uint32_t sampleTimes[ENTER_CAPTURE_SAMPLE_BUF_N];
+  long sorted[ENTER_CAPTURE_SAMPLE_BUF_N];
+  for (uint8_t i = 0; i < n; i++) {
+    uint8_t idx = (uint8_t)((oldest + i) % ENTER_CAPTURE_SAMPLE_BUF_N);
+    chronological[i] = g_enterSamples[idx];
+    sampleTimes[i] = g_enterSampleMs[idx];
+    sorted[i] = chronological[i];
+    if (i > 0 &&
+        (uint32_t)(sampleTimes[i] - sampleTimes[i - 1]) > ENTER_CAPTURE_SAMPLE_MAX_AGE_MS) {
+      return ENTER_CAPTURE_INVALID;
+    }
+  }
+  for (uint8_t i = 1; i < n; i++) {
+    long key = sorted[i];
+    int j = (int)i - 1;
+    while (j >= 0 && sorted[j] > key) {
+      sorted[j + 1] = sorted[j];
+      j--;
+    }
+    sorted[j + 1] = key;
+  }
+
+  uint8_t trim = n / 8;
+  if (trim == 0 || (uint8_t)(trim * 2) >= n) return ENTER_CAPTURE_INVALID;
+  uint8_t i0 = trim;
+  uint8_t i1 = n - trim;
+  long centralMin = sorted[i0];
+  long centralMax = sorted[i1 - 1];
+  int64_t centerSum = 0;
+  for (uint8_t i = i0; i < i1; i++) centerSum += sorted[i];
+  uint8_t centerN = i1 - i0;
+  if (centerN == 0) return ENTER_CAPTURE_INVALID;
+  long centerRaw = (long)(centerSum / centerN);
+
+  uint8_t edgeN = n / 4;
+  if (edgeN == 0 || (uint8_t)(edgeN * 2) > n) return ENTER_CAPTURE_INVALID;
+  int64_t firstSum = 0;
+  int64_t lastSum = 0;
+  uint32_t firstTimeSum = 0;
+  uint32_t lastTimeSum = 0;
+  for (uint8_t i = 0; i < edgeN; i++) {
+    uint8_t lastPos = n - edgeN + i;
+    firstSum += enterWinsorize(chronological[i], centralMin, centralMax);
+    lastSum += enterWinsorize(chronological[lastPos], centralMin, centralMax);
+    firstTimeSum += sampleTimes[i] - firstMs;
+    lastTimeSum += sampleTimes[lastPos] - firstMs;
+  }
+  float firstAvg = (float)firstSum / (float)edgeN;
+  float lastAvg = (float)lastSum / (float)edgeN;
+  uint32_t firstCenterMs = firstTimeSum / edgeN;
+  uint32_t lastCenterMs = lastTimeSum / edgeN;
+  uint32_t dtMs = lastCenterMs - firstCenterMs;
+  if (dtMs == 0) return ENTER_CAPTURE_INVALID;
+  float slopeGps = fabsf((lastAvg - firstAvg) / g_enterStartCpg) /
+    ((float)dtMs / 1000.0f);
+  float rangeG = fabsf((float)(centralMax - centralMin) / g_enterStartCpg);
+  if (slopeGpsOut) *slopeGpsOut = slopeGps;
+  if (rangeGOut) *rangeGOut = rangeG;
+  if (slopeGps > ENTER_CAPTURE_MAX_SLOPE_GPS) return ENTER_CAPTURE_MOVING;
+  if (centerRawOut) *centerRawOut = centerRaw;
+  return ENTER_CAPTURE_READY;
+}
+
+static void updateEnterCapture(uint32_t nowMs, bool haveNewWork) {
+  if (g_enterUiState != ENTER_UI_ACQUIRING) return;
+  if (!enterCaptureContextMatches()) {
+    Serial.println(F("[ENTER] Acquisizione annullata (contesto)"));
+    showEnterFailure(false);
+    return;
+  }
+
+  uint32_t elapsedMs = nowMs - g_enterUiStartMs;
+  if (haveNewWork && elapsedMs >= ENTER_CAPTURE_SETTLE_MS && isEnterSignalReady()) {
+    float currentWeight = (float)(stEnable ? ScaleState::getDispWorkLast()
+                                           : ScaleState::getDispLiveLast());
+    long workingOffset = g_lastRawFiltered;
+    if (!enterPreflight(currentWeight, workingOffset, nowMs, false) ||
+        !commitEnterWeight(currentWeight, workingOffset, nowMs)) {
+      showEnterFailure(false);
+      return;
+    }
+    Serial.println(F("[ENTER] STABLE raggiunto"));
+    showEnterSuccess();
+    return;
+  }
+
+  if (elapsedMs < ENTER_CAPTURE_MAX_MS) return;
+
+  long centerRaw = 0;
+  float slopeGps = 0.0f;
+  float rangeG = 0.0f;
+  uint8_t result = buildEnterCaptureCenter(nowMs, &centerRaw, &slopeGps, &rangeG);
+  Serial.print(F("[ENTER] CAP n="));
+  Serial.print(g_enterSampleCount);
+  Serial.print(F(" r="));
+  Serial.print(rangeG, 2);
+  Serial.print(F(" s="));
+  Serial.println(slopeGps, 2);
+  if (result != ENTER_CAPTURE_READY) {
+    showEnterFailure(result == ENTER_CAPTURE_MOVING);
+    return;
+  }
+
+  long effectiveStart = g_enterStartOffsetRaw + g_enterStartZtCounts;
+  float measuredG = (float)(centerRaw - effectiveStart) / g_enterStartCpg;
+  if (!isfinite(measuredG) || fabsf(measuredG) > MAX_DISPLAY_G) {
+    Serial.println(F("[ENTER] Centro robusto fuori campo"));
+    showEnterFailure(false);
+    return;
+  }
+  float recordedG = (float)lroundf(measuredG);
+  if (!enterPreflight(recordedG, centerRaw, nowMs, false) ||
+      !commitEnterWeight(recordedG, centerRaw, nowMs)) {
+    showEnterFailure(false);
+    return;
+  }
+  Serial.println(F("[ENTER] Centro robusto accettato"));
+  showEnterSuccess();
+}
+
+static void updateEnterUiTimeout(uint32_t nowMs) {
+  uint32_t holdMs = 0;
+  if (g_enterUiState == ENTER_UI_SUCCESS) holdMs = ENTER_SUCCESS_HOLD_MS;
+  else if (g_enterUiState == ENTER_UI_FAILED_MOVING || g_enterUiState == ENTER_UI_FAILED) {
+    holdMs = ENTER_FAIL_HOLD_MS;
+  }
+  if (holdMs > 0 && (uint32_t)(nowMs - g_enterUiStartMs) >= holdMs) {
+    g_enterUiState = ENTER_UI_IDLE;
+    g_enterUiStartMs = 0;
+    lastOledMs = 0;
+  }
+}
+
 // ========================= KEYPAD HANDLER =========================
 void handleKeyEvent(KeyCode key) {
+  if (g_enterUiState != ENTER_UI_IDLE) {
+    Serial.println(F("[KEYPAD] Ignorato durante ENTER"));
+    return;
+  }
   // Keep the behavioral lock separate from UI state. This prevents duplicate
   // ENTER events, tare restarts, and stack changes during the real operation.
   uint32_t keyNow = millis();
@@ -866,7 +1322,6 @@ void handleKeyEvent(KeyCode key) {
 
     case KEY_ENTER: {
       Serial.println(F("[KEYPAD] ENTER pressed"));
-      buzzerKeyClick();
 
       // Dismiss overlay if active
       if (g_overlayType != OVERLAY_NONE) {
@@ -874,144 +1329,21 @@ void handleKeyEvent(KeyCode key) {
         lastOledMs = 0;
       }
 
-      if (hxHealth_state(&g_hxHealth) != HX_HEALTH_OK) {
-        Serial.println(F("[STACK] ENTER bloccato (HX non OK)"));
-        buzzerError();
-        break;
-      }
-
       uint32_t commitNow = millis();
-      if (lastSampleMs == 0 ||
-          (uint32_t)(commitNow - lastSampleMs) > (SAMPLE_MS * 2UL)) {
-        Serial.println(F("[STACK] ENTER bloccato (snapshot vecchio)"));
-        buzzerWarn();
-        break;
-      }
-
-      // WORK accepts only weights already validated by the state machine.
-      // LIVE still requires a short quiet window on the WORK sample stream.
-      if (stEnable) {
-        int nStable = constrain((int)ceil((float)ST_TO_STABLE_MS / SAMPLE_MS), 2, 64);
-        if (ScaleState::getWeighState() != ScaleState::STATE_STABLE ||
-            ScaleFilters::histCount() < nStable) {
-          Serial.println(F("[STACK] ENTER bloccato (peso instabile)"));
-          buzzerWarn();
-          break;
-        }
-      } else {
-        int nQuiet = constrain((int)ceil(400.0f / SAMPLE_MS), 2, 64);
-        if (ScaleFilters::histCount() < nQuiet ||
-            ScaleFilters::rangeLastNSamples(nQuiet) > LIVE_ENTER_RANGE_G ||
-            fabsf(ScaleFilters::slopeLastNSamples(nQuiet)) > LIVE_ENTER_SLOPE_GPS) {
-          Serial.println(F("[STACK] ENTER bloccato (LIVE instabile)"));
-          buzzerWarn();
-          break;
-        }
-      }
-
-      // Read current display weight and the matching filtered RAW snapshot.
       float currentWeight = (float)(stEnable ? ScaleState::getDispWorkLast() : ScaleState::getDispLiveLast());
       long workingOffset = g_lastRawFiltered;
+      if (!enterPreflight(currentWeight, workingOffset, commitNow, true)) break;
 
-      // If weight <= 0, ignore everything (no push, no tare, no MQTT)
-      if (currentWeight <= 0.0f || workingOffset == 0) {
-        Serial.println(F("[STACK] Weight <= 0, ignoring ENTER"));
-        buzzerWarn();
+      if (!isEnterSignalReady()) {
+        startEnterCapture(commitNow);
         break;
       }
 
-      // Preflight: do not tare if the stack cannot record the weight.
-      if (WeighStack::count() >= WeighStack::MAX_ITEMS) {
-        Serial.println(F("[STACK] Full, cannot push"));
-        buzzerError();
+      if (!commitEnterWeight(currentWeight, workingOffset, commitNow)) {
+        showEnterFailure(false);
         break;
       }
-
-#if ENABLE_MQTT
-      bool hadMqttCommand = Net::isMqttCommandActive();
-      bool mqttConnected = Net::isMqttConnected();
-      char mqttUuid[37] = {0};
-      char mqttSessionId[65] = {0};
-      uint32_t mqttProductId = 0;
-      if (mqttConnected && !hadMqttCommand) {
-        Serial.println(F("[STACK] ENTER bloccato (nessun comando MQTT)"));
-        buzzerWarn();
-        break;
-      }
-      if (hadMqttCommand && !mqttConnected) {
-        Serial.println(F("[STACK] ENTER bloccato (MQTT offline)"));
-        buzzerWarn();
-        break;
-      }
-      if (hadMqttCommand) {
-        strlcpy(mqttUuid, Net::getMqttCommandUuid(), sizeof(mqttUuid));
-        strlcpy(mqttSessionId, Net::getMqttCommandSessionId(), sizeof(mqttSessionId));
-        mqttProductId = Net::getMqttCommandProductId();
-      }
-#endif
-
-      // Atomic local commit: working zero uses the same filtered RAW snapshot
-      // as the stable weight. It does not open another fallible sample window.
-      long oldOffset = ScaleState::getOffsetRaw();
-      long oldZt = ScaleState::getZtCounts();
-      if (!ScaleState::tareApplyWorking(workingOffset, commitNow)) {
-        Serial.println(F("[STACK] Working tare failed"));
-        buzzerError();
-        break;
-      }
-      gLiveEma = 0.0f;
-      gLiveEmaInit = false;
-      gLiveEmaPrevStEnable = stEnable;
-
-#if ENABLE_MQTT
-      bool pushed = WeighStack::pushCommit(
-        currentWeight, oldOffset, oldZt,
-        hadMqttCommand ? mqttUuid : nullptr,
-        hadMqttCommand ? mqttProductId : 0,
-        hadMqttCommand ? mqttSessionId : nullptr);
-#else
-      bool pushed = WeighStack::pushCommit(currentWeight, oldOffset, oldZt, nullptr, 0, nullptr);
-#endif
-      if (!pushed) {
-        // Defensive path: preflight makes this branch normally unreachable.
-        ScaleState::setOffsetRaw(oldOffset);
-        ScaleState::setZtCounts(oldZt);
-        ScaleState::resetFiltersAndState();
-        ScaleState::setTareUiActive(false);
-        Serial.println(F("[STACK] Push failed, tare rolled back"));
-        buzzerError();
-        break;
-      }
-
-      Serial.print(F("[STACK] Push: "));
-      Serial.print(currentWeight, 0);
-      Serial.print(F("g (count="));
-      Serial.print(WeighStack::count());
-      Serial.println(F(")"));
-
-#if ENABLE_MQTT
-      if (hadMqttCommand) {
-        // The browser may advance only after the new zero has been applied.
-        char confirmResponseId[WeighStack::RESPONSE_ID_CAP] = {0};
-        if (!Net::mqttConfirmActiveCommand(
-              mqttUuid, currentWeight, confirmResponseId, sizeof(confirmResponseId))) {
-          WeighStack::pop();
-          ScaleState::setOffsetRaw(oldOffset);
-          ScaleState::setZtCounts(oldZt);
-          ScaleState::resetFiltersAndState();
-          ScaleState::setTareUiActive(false);
-          Serial.println(F("[STACK] Confirm failed, commit rolled back"));
-          buzzerError();
-          break;
-        }
-        if (confirmResponseId[0] != '\0') {
-          (void)WeighStack::setLastConfirmResponseId(confirmResponseId);
-        }
-      }
-#endif
-
-      g_tareKeyLockUntilMs = commitNow + TARE_OK_HOLD_MS;
-      Audio::requestPlayMp3(Track::ENTER_PRESSED);
+      showEnterSuccess();
       break;
     }
 
@@ -1744,7 +2076,7 @@ void loop() {
     }
   }
 
-  if (!tareCritical && Net::mqttPopUndoAck()) {
+  if (!tareCritical && g_enterUiState == ENTER_UI_IDLE && Net::mqttPopUndoAck()) {
     const WeighStack::Entry* top = WeighStack::peek();
     bool matchingEntry = g_remoteUndoAwaitingAck && top &&
       strcmp(top->confirmResponseId, g_remoteUndoConfirmId) == 0;
@@ -1759,14 +2091,15 @@ void loop() {
   }
 
   // Due bip di avviso se MQTT si disconnette (WiFi ancora up)
-  if (!tareCritical && Net::mqttPopDisconnectBeep() && WiFi.isConnected()) {
+  if (!tareCritical && g_enterUiState == ENTER_UI_IDLE &&
+      Net::mqttPopDisconnectBeep() && WiFi.isConnected()) {
     buzzerWarn();
     delay(120);
     buzzerWarn();
   }
 
   // Bip distintivo quando arriva un nuovo comando weigh da MQTT
-  if (!tareCritical && Net::mqttPopCommandRxBeep()) {
+  if (!tareCritical && g_enterUiState == ENTER_UI_IDLE && Net::mqttPopCommandRxBeep()) {
     buzzerMqttRx();
   }
 #endif
@@ -1774,6 +2107,7 @@ void loop() {
   serial_task();
 
   uint32_t now = millis();
+  updateEnterUiTimeout(now);
 
   // Audio
   Audio::task(now);
@@ -1788,8 +2122,18 @@ void loop() {
   bool mqttOutboxPending = false;
 #endif
 
+  // ENTER acquisition/results are self-closing and ignore every key so a
+  // second press cannot create a duplicate commit or dismiss the feedback.
+  if (g_enterUiState != ENTER_UI_IDLE) {
+    CalWizard::cancelLongPress();
+    g_skipShortPending = false;
+    if (keypad_is_pressed(KEY_SKIP)) g_skipBlockedUntilRelease = true;
+    if (key != KEY_NONE) {
+      Serial.println(F("[KEYPAD] Ignorato durante ENTER"));
+      key = KEY_NONE;
+    }
   // A RAM outbox is a locked transaction until durable browser ACK.
-  if (mqttOutboxPending) {
+  } else if (mqttOutboxPending) {
     CalWizard::cancelLongPress();
     g_skipShortPending = false;
     if (keypad_is_pressed(KEY_SKIP)) g_skipBlockedUntilRelease = true;
@@ -1857,8 +2201,13 @@ void loop() {
     handleKeyEvent(key);
   }
 
+  // Key feedback is intentionally blocking for a few milliseconds. Refresh
+  // the loop timestamp before sampling so a newly-started ENTER window cannot
+  // see a pre-beep timestamp and wrap its elapsed-time calculation.
+  now = millis();
+
   // Start manual tare after the debounced release so press/release vibration
-  // stays outside the 32-sample evaluation window.
+  // stays outside the evaluation window.
   if (g_manualTareArmed && !keypad_is_pressed(KEY_TARE)) {
     g_manualTareArmed = false;
     g_manualTareArmMs = 0;
@@ -2075,6 +2424,7 @@ void loop() {
     float cpg = ScaleState::getScaleCpg();
     if (ScaleFilters::rawSpikeGuard(rawMed, now, cpg, &rawUse)) {
       ScaleState::tareAccumSample(rawUse);
+      enterCaptureNoteRaw(rawUse, now);
 
       gLiveSum += rawUse;
       gLiveCnt++;
@@ -2188,7 +2538,7 @@ void loop() {
     }
 
     // Zero-Tracking
-    if (ScaleState::isZtEnabled()) {
+    if (ScaleState::isZtEnabled() && g_enterUiState != ENTER_UI_ACQUIRING) {
       if (UNLOAD_SNAP_ENABLE) {
         int nSlopeUnload = constrain((int)ceil((float)UNLOAD_SLOPE_WIN_MS / SAMPLE_MS), 2, 64);
         float slopeUnload = ScaleFilters::slopeLastNSamples(nSlopeUnload);
@@ -2239,6 +2589,10 @@ void loop() {
       hxHealth_noteValid(&g_hxHealth, now, (float)ScaleState::getDispWorkLast());
     }
   }
+
+  // STABLE wins over the timeout when both happen on the same WORK sample.
+  updateEnterCapture(now, haveNewWork);
+  now = millis();
 
   // Tara apply / fail
   uint32_t tareNow = millis();
@@ -2353,7 +2707,18 @@ void loop() {
       return;
     }
 
-    if (g_inactivitySleepStage == INACT_ZZZ) {
+    if (g_enterUiState == ENTER_UI_ACQUIRING) {
+      uint32_t elapsedMs = now - g_enterUiStartMs;
+      uint8_t progress = (uint8_t)min(100UL,
+        (elapsedMs * 100UL) / ENTER_CAPTURE_MAX_MS);
+      ui_renderEnterCapture(progress);
+    } else if (g_enterUiState == ENTER_UI_SUCCESS) {
+      ui_renderEnterResult(true, false);
+    } else if (g_enterUiState == ENTER_UI_FAILED_MOVING) {
+      ui_renderEnterResult(false, true);
+    } else if (g_enterUiState == ENTER_UI_FAILED) {
+      ui_renderEnterResult(false, false);
+    } else if (g_inactivitySleepStage == INACT_ZZZ) {
       ui_renderSleepZzz();
     } else if (CalWizard::isLongPressInProgress()) {
       // Long press in corso: mostra barra di progresso

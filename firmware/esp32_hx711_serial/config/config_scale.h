@@ -61,8 +61,25 @@ static const float    TARE_MANUAL_MAX_SLOPE_GPS     = 10.0f;
 static const float    LIVE_ENTER_RANGE_G            = 2.5f;
 static const float    LIVE_ENTER_SLOPE_GPS          = 2.0f;
 
-// The post-ENTER working tare does not open a new window: it applies the WORK
-// snapshot that was already filtered and validated as STABLE.
+// Bounded ENTER acquisition used when the normal STABLE gate is not ready.
+// Raw samples are decimated to about 40 Hz so the 64-slot window spans most
+// of the 1.5 s progress bar. Range is diagnostic; sustained drift rejects.
+// The fallback slope is deliberately looser than the normal LIVE gate so a
+// centered liquid oscillation is not mistaken for continued pouring.
+static const uint32_t ENTER_CAPTURE_MAX_MS            = 1500;
+static const uint32_t ENTER_CAPTURE_SETTLE_MS         = 60;
+static const uint8_t  ENTER_CAPTURE_SAMPLE_BUF_N      = 64;
+static const uint8_t  ENTER_CAPTURE_MIN_SAMPLES       = 48;
+static const uint8_t  ENTER_CAPTURE_RAW_DECIMATION    = 2;
+static const uint32_t ENTER_CAPTURE_SAMPLE_MAX_AGE_MS = 75;
+static const uint32_t ENTER_CAPTURE_WINDOW_MIN_MS     = 1000;
+static const uint32_t ENTER_CAPTURE_WINDOW_MAX_MS     = 1600;
+static const float    ENTER_CAPTURE_MAX_SLOPE_GPS     = 4.0f;
+static const uint32_t ENTER_SUCCESS_HOLD_MS            = 1300;
+static const uint32_t ENTER_FAIL_HOLD_MS               = 2000;
+
+// The post-ENTER working tare never opens a second sampling window: the quiet
+// path uses the current filtered WORK raw; the fallback uses its robust center.
 
 // ========================= LIMITE DISPLAY =========================
 static const float MAX_DISPLAY_G   = 16000.0f;      // Soglia fault simmetrica ±16 kg

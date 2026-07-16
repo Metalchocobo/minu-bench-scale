@@ -698,6 +698,45 @@ void ui_renderTareStatus(ScaleState::TareUiState state, bool autoMode) {
   oled.sendBuffer();
 }
 
+void ui_renderEnterCapture(uint8_t progress) {
+  if (progress > 100) progress = 100;
+
+  oled.clearBuffer();
+  oled.setFont(u8g2_font_6x12_tr);
+  drawCenteredText("ACQUISIZIONE PESO", 16);
+
+  const int16_t barX = 20;
+  const int16_t barY = 27;
+  const int16_t barW = 216;
+  const int16_t barH = 14;
+  oled.drawFrame(barX, barY, barW, barH);
+  int16_t fillW = (int16_t)(((uint32_t)(barW - 4) * progress) / 100U);
+  if (fillW > 0) oled.drawBox(barX + 2, barY + 2, fillW, barH - 4);
+
+  char pct[8];
+  snprintf(pct, sizeof(pct), "%u%%", (unsigned)progress);
+  drawCenteredText(pct, 58);
+  oled.sendBuffer();
+}
+
+void ui_renderEnterResult(bool success, bool movingWeight) {
+  oled.clearBuffer();
+
+  if (success) {
+    oled.setFont(u8g2_font_logisoso24_tf);
+    drawCenteredText("REGISTRATO", 36);
+    oled.setFont(u8g2_font_6x12_tr);
+    drawCenteredText("Tara applicata", 58);
+  } else {
+    oled.setFont(u8g2_font_6x12_tr);
+    drawCenteredText(movingWeight ? "PESO IN MOVIMENTO" : "ACQUISIZIONE FALLITA", 17);
+    oled.setFont(u8g2_font_logisoso16_tf);
+    drawCenteredText("NON REGISTRATO", 49);
+  }
+
+  oled.sendBuffer();
+}
+
 
 void ui_renderHxError(bool hard, bool showLast, long lastG) {
   oled.clearBuffer();
