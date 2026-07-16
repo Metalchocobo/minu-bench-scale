@@ -929,10 +929,16 @@ void handleKeyEvent(KeyCode key) {
 
 #if ENABLE_MQTT
       bool hadMqttCommand = Net::isMqttCommandActive();
+      bool mqttConnected = Net::isMqttConnected();
       char mqttUuid[37] = {0};
       char mqttSessionId[65] = {0};
       uint32_t mqttProductId = 0;
-      if (hadMqttCommand && !Net::isMqttConnected()) {
+      if (mqttConnected && !hadMqttCommand) {
+        Serial.println(F("[STACK] ENTER bloccato (nessun comando MQTT)"));
+        buzzerWarn();
+        break;
+      }
+      if (hadMqttCommand && !mqttConnected) {
         Serial.println(F("[STACK] ENTER bloccato (MQTT offline)"));
         buzzerWarn();
         break;

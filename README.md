@@ -400,7 +400,7 @@ Comandi seriali:
 
 Se le credenziali non sono configurate, MQTT resta inattivo (nessun tentativo di connessione).
 
-Porta bilancia: **8883** (MQTTS/TLS). Porta browser: **8884** (WSS/TLS). Il certificato CA ISRG Root X1 è nel firmware. `MQTT_SCALE_NAME` e `MQTT_FW_VERSION` sono definiti in `net_ota_cloud.h`; la versione corrente è **1.2.4**.
+Porta bilancia: **8883** (MQTTS/TLS). Porta browser: **8884** (WSS/TLS). Il certificato CA ISRG Root X1 è nel firmware. `MQTT_SCALE_NAME` e `MQTT_FW_VERSION` sono definiti in `net_ota_cloud.h`; la versione corrente è **1.3.0**.
 
 ### Topic e QoS effettivo
 
@@ -408,39 +408,49 @@ La bilancia si identifica con il MAC STA letto direttamente dall'eFuse ESP32 (lo
 
 | Topic | Direzione | QoS | Retain | Uso |
 |---|---|---:|---:|---|
-| `minu/scale/{scale_id}/command` | Browser → bilancia | 1 | sì | `weigh` e `clear` session-scoped |
-| `minu/scale/{scale_id}/response` | Bilancia → browser | 0 | no | `confirm`, `skip` e `undo`; affidabilità tramite retry applicativo |
+| `minu/scale/{scale_id}/command` | Browser → bilancia | 1 | sì | `weigh` e `clear` fenced da sessione e comando |
+| `minu/scale/{scale_id}/response` | Bilancia → browser | 0 | no | `command_ack` transitorio; `confirm`, `skip` e `undo` durable con retry applicativo |
 | `minu/scale/{scale_id}/ack` | Browser → bilancia | 1 | no | `response_ack` applicativo |
 | `minu/scale/{scale_id}/status` | Bilancia → browser | online/sleeping 0; LWT offline 1 | sì | stato operativo, nome e versione firmware |
 | `minu/scale/{scale_id}/owner` | Browser → browser | 1 | sì | lease della scheda che controlla la bilancia |
 
 PubSubClient pubblica a QoS 0: per questo una response non viene considerata consegnata dal solo risultato di `publish()`. Il buffer della libreria viene impostato e verificato a runtime con `mqttClient.setBufferSize(512)`; il solo define `MQTT_MAX_PACKET_SIZE` non è sufficiente.
 
-### Payload session-aware
+### Payload session-aware e command fence
 
 Comando di pesatura:
 
 ```json
-{"type":"weigh","uuid":"...","product_id":123,"name":"Zucchero","target_weight":450,"session_id":"..."}
+{"type":"weigh","uuid":"...","product_id":123,"name":"Zucchero","target_weight":450,"session_id":"...","command_id":"..."}
 ```
 
-Pulizia comando e LWT browser:
+`command_id` identifica una singola attivazione del comando, è lungo 8–64 caratteri e ammette lettere ASCII, cifre, `-` e `_`. Il valore vuoto resta ammesso soltanto per compatibilità con i browser precedenti. Il Manager conserva l'ID sui retry soltanto quando sessione, UUID, prodotto, nome e target sono identici; una variazione semantica genera un ID nuovo. Un replay identico con lo stesso `command_id` non reinizializza il comando e riemette `command_ack`; lo stesso ID riutilizzato con contenuto diverso viene ignorato senza ACK e senza modificare lo stato attivo.
+
+Pulizia comando:
 
 ```json
-{"type":"clear","session_id":"..."}
+{"type":"clear","session_id":"...","command_id":"..."}
 ```
 
-Senza response pending la bilancia accetta `clear` soltanto se il `session_id` coincide con quello del comando attivo. Un clear legacy senza sessione può pulire solo un comando legacy; il LWT di una vecchia scheda non può annullare il comando di una nuova sessione né cambiare la sessione usata da un successivo `undo`. Durante un outbox pending, invece, il `clear` non cancella nulla: se è session-aware ritargetta alla propria sessione la response già staged.
+Senza response pending la bilancia accetta `clear` soltanto se la fence è coerente: un comando con `command_id` richiede lo stesso ID e la stessa sessione; un comando v1.2 senza ID ma con sessione richiede un clear senza ID della stessa sessione. Solo un comando realmente legacy, privo sia di `command_id` sia di `session_id`, può essere cancellato da un clear senza ID che riporta la sessione del Manager nuovo. Un clear vecchio non può quindi cancellare un'attivazione tokenizzata. Durante un outbox pending ogni `weigh` e `clear` viene ignorato.
+
+Conferma transitoria di attivazione firmware:
+
+```json
+{"type":"command_ack","command_id":"...","session_id":"...","uuid":"...","product_id":123,"state":"active"}
+```
+
+Il firmware pubblica `command_ack` sul topic `response` dopo avere attivato un `weigh` con `command_id` e lo ripubblica per ogni replay identico dello stesso ID. Questo ACK è QoS 0, non usa l'outbox, non contiene `response_id` e non rappresenta una mutazione Laravel: se viene perso, il browser ripubblica lo stesso `weigh`. I comandi precedenti senza `command_id` non producono il nuovo ACK.
 
 Response firmware:
 
 ```json
-{"type":"confirm","uuid":"...","product_id":123,"session_id":"...","response_id":"a1b2c3d40000012300000001","actual_weight":448.0}
-{"type":"skip","uuid":"...","product_id":123,"session_id":"...","response_id":"a1b2c3d40000012300000002"}
+{"type":"confirm","uuid":"...","product_id":123,"session_id":"...","command_id":"...","response_id":"a1b2c3d40000012300000001","actual_weight":448.0}
+{"type":"skip","uuid":"...","product_id":123,"session_id":"...","command_id":"...","response_id":"a1b2c3d40000012300000002"}
 {"type":"undo","uuid":"...","product_id":123,"session_id":"...","response_id":"a1b2c3d40000012300000003","undo_of_response_id":"a1b2c3d40000012300000001"}
 ```
 
-`undo` è prodotto soltanto da un CLEAR breve su una voce session-aware reversibile. Fa riferimento alla receipt del `confirm` originario; una voce locale o legacy priva di tale receipt viene annullata soltanto sul firmware.
+`confirm` e `skip` riportano il `command_id` originale quando il comando lo possiede. `undo` è prodotto soltanto da un CLEAR breve su una voce session-aware reversibile: non inventa un nuovo `command_id`, perché la correlazione durabile è già espressa da `undo_of_response_id`, che punta alla receipt del `confirm` originario. Una voce locale o legacy priva di tale receipt viene annullata soltanto sul firmware.
 
 ACK browser:
 
@@ -448,9 +458,9 @@ ACK browser:
 {"type":"response_ack","response_id":"a1b2c3d40000012300000001"}
 ```
 
-Il firmware conserva una sola response session-aware in RAM e la ripubblica ogni **1 secondo** finché riceve l'ACK corrispondente. Durante questa attesa ENTER, SKIP e altri commit reversibili sono bloccati.
+Il firmware conserva una sola response session-aware in RAM e la ripubblica ogni **1 secondo** finché riceve l'ACK corrispondente. Il payload staged, inclusi `session_id`, l'eventuale `command_id` e `response_id`, resta byte-per-byte immutabile. Durante questa attesa ENTER, SKIP e altri commit reversibili sono bloccati; i `weigh` e `clear` MQTT ricevuti vengono ignorati senza `command_ack`.
 
-Per firmware/browser v1.2 l'ordine è transazionale:
+Per firmware/browser v1.3 l'ordine è transazionale:
 
 1. il browser invia a Laravel la response completa, inclusi `scale_id`, `response_id`, `product_id`, UUID e azione;
 2. Laravel registra una receipt durabile e applica la mutazione nella stessa transazione; il replay identico è idempotente;
@@ -458,27 +468,33 @@ Per firmware/browser v1.2 l'ordine è transazionale:
 4. soltanto dopo il PUBACK del clear pubblica `response_ack` e ne attende il PUBACK QoS 1;
 5. infine aggiorna la UI. Su errore REST, conflitto o rete assente non invia clear/ACK: l'outbox firmware continua il retry.
 
-La `session_id` è routing di consegna, non identità immutabile della receipt. Se durante un outbox pending arriva un nuovo `weigh` o `clear` session-aware, il firmware ritargetta alla nuova sessione la stessa `response_id` già staged e la ripubblica, senza cancellare l'outbox. Il `weigh` non viene ancora attivato e il browser potrà ripubblicarlo dopo receipt/clear/ACK; il `clear` copre anche il recupero da una nuova scheda quando non esiste un ingrediente successivo da ripubblicare. Un takeover legacy senza sessione viene ignorato per non perdere l'outbox.
+Il PUBACK broker di `response_ack` non prova che il firmware fosse ancora online e l'abbia elaborato. Uno status `offline` o `sleeping` invalida quindi una consegna non conclusa; se il firmware ripubblica una response già persistita, il browser ripete clear e ACK senza ripetere REST o callback UI. Una response dello stesso prodotto della pagina, incluso `undo`, forza la riconciliazione anche se l'ingrediente desiderato è già avanzato o assente; una response di un altro prodotto viene conciliata senza cancellare il comando corrente.
 
-I browser legacy restano supportati: un comando privo di `session_id` usa response one-shot senza `response_id`, senza receipt/ACK applicativo e senza undo remoto.
+La coppia (`scale_id`, `response_id`) resta l'identità della receipt. La `session_id` e l'eventuale `command_id` del payload staged descrivono l'origine e non vengono ritargettati. Solo un `response_ack` con la `response_id` esatta chiude l'outbox e azzera il comando; ACK estranei, nuovi comandi e clear non possono alterarlo. Se il browser desidera attivare un comando arrivato mentre l'outbox era pending, lo ripubblica dopo avere completato receipt, clear retained e ACK.
+
+I browser precedenti restano supportati. Un comando v1.2 privo di `command_id` ma con sessione può essere cancellato solo da un clear anch'esso privo di ID con la stessa `session_id`; per un comando realmente legacy senza sessione il clear può riportare la sessione del Manager nuovo. Un comando privo di `session_id` usa response one-shot senza `response_id`, senza receipt/ACK applicativo e senza undo remoto.
 
 ### Ownership browser
 
-Ogni scheda browser usa un `session_id` stabile durante reload e reconnect, così può completare un'eventuale response pending. Un Web Lock esclusivo impedisce a una scheda duplicata di riusare l'ID copiato da `sessionStorage`; il fallback cross-tab ruota l'ID anche quando la presenza di un'altra istanza resta incerta. Il topic owner retained contiene `user_id`, nome operatore, `session_id` e timestamp. Il proprietario rinnova il lease ogni **10 secondi**; dopo **30 secondi** senza rinnovo un'altra scheda può reclamarlo. Anche due schede dello stesso utente sono quindi istanze distinte. Una scheda non proprietaria resta connessa, non pubblica comandi e mostra chi detiene il controllo.
+Ogni scheda browser usa un `session_id` stabile durante reload e reconnect, un `connection_id` diverso per ogni documento e un nuovo `command_id` per ogni attivazione logica, conservato nei retry dello stesso comando. Un Web Lock esclusivo impedisce a una scheda duplicata di riusare l'ID copiato da `sessionStorage`; il fallback cross-tab ruota l'ID anche quando la presenza di un'altra istanza resta incerta. Il topic owner retained contiene anche `connection_id` e `lease_id`: il controllo è confermato soltanto dall'eco esatta di utente, sessione, connessione e lease. Il proprietario rinnova il lease ogni **10 secondi**; dopo **30 secondi** senza rinnovo un'altra scheda può reclamarlo. Anche due schede dello stesso utente sono quindi istanze distinte. Una scheda non proprietaria resta connessa, non pubblica comandi e mostra chi detiene il controllo.
 
 **Alla connessione:**
 - la bilancia pubblica status `online` retained con scale ID, nome e firmware version;
 - registra un LWT `offline` retained;
 - si sottoscrive a `command` e `ack` richiedendo QoS 1;
-- il browser attende la conferma del lease owner prima di pubblicare o ripubblicare un comando attivo.
+- il browser attende i SUBACK di response/status/owner/command, uno status fresco e la conferma esatta del lease prima di pubblicare o ripubblicare un comando attivo; una coorte SUBACK incompleta o rifiutata resta non-ready e viene ritentata per intero sullo stesso tentativo di connessione;
+- il browser non registra un LWT che modifichi `command`: su `pagehide` invalida i callback e chiude localmente il socket senza pubblicare clear o owner release;
+- la UI è verde soltanto dopo l'eco retained del comando e il relativo `command_ack` firmware; durante reconnect o riparazione resta in sincronizzazione.
+
+Cambio e disassociazione bilancia sono bloccati finché una response è in sincronizzazione. Se la response inizia mentre il salvataggio del cambio è già in corso, la transizione MQTT attende in modo non bloccante la fine della consegna. Clear e rilascio owner sulla vecchia bilancia vengono pubblicati soltanto dalla connessione che possiede il lease esatto.
 
 **Comando `weigh`:** il browser invia UUID ingrediente, `product_id`, nome e peso target. La bilancia emette un bip distintivo di ricezione, azzera il timer inattività e mostra il target sul display (icona target + grammi).
 
-**Comando `clear`:** annulla soltanto il comando della sessione corrispondente. Non modifica lo stack locale.
+**Comando `clear`:** per i comandi tokenizzati annulla soltanto la stessa coppia `session_id + command_id`; le eccezioni compatibili per v1.2/legacy sono quelle descritte sopra. Non modifica lo stack locale.
 
 ### Tasti (con MQTT attivo)
 
-- **ENTER**: con peso valido, stabile e non in sovraccarico applica lo zero di lavoro, registra un commit reversibile e prepara `confirm`; per un comando session-aware resta pending fino alla receipt Laravel e all'ACK browser
+- **ENTER**: quando MQTT è connesso richiede un comando `weigh` attivo; senza comando emette un warning e non applica tara, push o audio di successo. Con comando valido prepara `confirm` e resta pending fino alla receipt Laravel e all'ACK browser. In modalità standalone il commit locale resta disponibile quando MQTT non è connesso o il WiFi è spento
 - **SKIP breve**: scatta al rilascio e prepara `skip` per il comando attivo; senza comando emette un buzzer di avviso
 - **SKIP tenuto 5 secondi**: apre il wizard calibrazione senza inviare prima uno `skip`
 - **CLEAR breve**: annulla subito una voce locale; per una voce con receipt session-aware prepara `undo` e ripristina offset/zero-tracking soltanto al relativo ACK
