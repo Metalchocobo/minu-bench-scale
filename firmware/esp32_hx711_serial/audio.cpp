@@ -95,6 +95,20 @@ static SavedSnapshot g_savedSnapshot = {};
 static bool g_savedChecked = false;
 static bool g_savedValid   = false;
 
+static void loadUserEnabled() {
+  Preferences p;
+  if (!p.begin("minu_audio", true)) return;
+  g_userEnabled = p.getBool("user_enabled", true);
+  p.end();
+}
+
+static void persistUserEnabled() {
+  Preferences p;
+  if (!p.begin("minu_audio", false)) return;
+  p.putBool("user_enabled", g_userEnabled);
+  p.end();
+}
+
 static void printDiagCode(uint8_t code) {
   switch (code) {
     case DIAG_BEGIN:         Serial.print(F("BEGIN")); break;
@@ -320,6 +334,8 @@ static void startNow(uint16_t track, uint32_t capSeconds) {
 // ========================= API PUBBLICHE =========================
 
 void begin() {
+  loadUserEnabled();
+
   pinMode(DFPLAYER_EN_PIN, OUTPUT);
   dfpPowerSet(false);
   g_dfpPowered   = false;
@@ -472,7 +488,10 @@ void stopNow(bool clearQueue) {
 
 void hardReset(bool clearQueue) {
   Serial.println(F("[MP3] reset"));
-  g_userEnabled = true;
+  if (!g_userEnabled) {
+    g_userEnabled = true;
+    persistUserEnabled();
+  }
   beginRecovery(clearQueue);
 }
 
@@ -481,10 +500,12 @@ bool toggleEnabled() {
     diagRecord(DIAG_MANUAL_OFF);
     diagPersist(DIAG_MANUAL_OFF);
     g_userEnabled = false;
+    persistUserEnabled();
     powerOffNow();
     Serial.println(F("[MP3] manual OFF; log salvato"));
   } else {
     g_userEnabled = true;
+    persistUserEnabled();
     diagRecord(DIAG_MANUAL_ON);
     beginRecovery(true);
     Serial.println(F("[MP3] manual ON"));

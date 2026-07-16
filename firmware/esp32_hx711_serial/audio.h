@@ -46,8 +46,9 @@ void stopNow(bool clearQueue = false);
 // Hard reset DFPlayer (power-cycle via MOSFET, non-blocking recovery)
 void hardReset(bool clearQueue = true);
 
-// Toggle manuale da tastiera. OFF taglia VCC e salva uno snapshot diagnostico;
-// ON avvia un power-cycle non bloccante. Ritorna il nuovo stato abilitato.
+// Toggle manuale da tastiera persistito in NVS. OFF taglia VCC e salva uno
+// snapshot diagnostico; ON avvia un power-cycle non bloccante.
+// Ritorna il nuovo stato abilitato.
 bool toggleEnabled();
 
 // Stato operativo richiesto e readiness effettiva lato firmware.

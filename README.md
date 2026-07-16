@@ -319,7 +319,7 @@ Caratteristiche:
 - **Nessun reset** dello stato/pesata: riprende esattamente dove era.
 - WiFi/OTA vengono sospesi prima dello sleep e riattivati dopo il wake **solo se l'utente ha lasciato il WiFi ON**.
 - **SLEEP breve**: al rilascio avvia la sequenza di standby manuale (schermata **Zzz...** per ~5 s + audio 0003), poi light-sleep anche se è presente un semplice comando `weigh` MQTT. Una response in attesa di receipt/ACK, un upload OTA o il sovraccarico continuano invece a bloccarlo.
-- **SLEEP tenuto per 2 secondi**: non entra in standby; commuta il DFPlayer tra **AUDIO OFF** e **AUDIO ON**, con conferma sul display e buzzer.
+- **SLEEP tenuto per 2 secondi**: non entra in standby; commuta il DFPlayer tra **AUDIO OFF** e **AUDIO ON**, salva la scelta in NVS e la mantiene dopo riavvii e spegnimenti completi, con conferma sul display e buzzer.
 
 ### Indicatore esterno sleep (LED)
 Quando il display è spento, per capire che la bilancia è in sleep, usa un LED su:
@@ -400,7 +400,7 @@ Comandi seriali:
 
 Se le credenziali non sono configurate, MQTT resta inattivo (nessun tentativo di connessione).
 
-Porta bilancia: **8883** (MQTTS/TLS). Porta browser: **8884** (WSS/TLS). Il certificato CA ISRG Root X1 è nel firmware. `MQTT_SCALE_NAME` e `MQTT_FW_VERSION` sono definiti in `net_ota_cloud.h`; la versione corrente è **1.2.3**.
+Porta bilancia: **8883** (MQTTS/TLS). Porta browser: **8884** (WSS/TLS). Il certificato CA ISRG Root X1 è nel firmware. `MQTT_SCALE_NAME` e `MQTT_FW_VERSION` sono definiti in `net_ota_cloud.h`; la versione corrente è **1.2.4**.
 
 ### Topic e QoS effettivo
 
@@ -639,14 +639,14 @@ Comportamento attuale:
 - **SLEEP tenuto per 2 secondi** commuta manualmente il DFPlayer:
   - da ON a OFF: chiude UART, svuota la coda, taglia VCC via GPIO2 e salva uno snapshot diagnostico;
   - da OFF a ON: esegue un power-cycle non bloccante e mostra prima `RIAVVIO MODULO...`, poi `DFPLAYER PRONTO`;
-  - lo stato OFF resta valido durante il light-sleep e il wake; dopo un reboot completo l'audio riparte abilitato.
+  - la scelta ON/OFF viene salvata nella NVS `minu_audio` e ripristinata dopo light-sleep, reboot e interruzioni di alimentazione; sui dispositivi senza preferenza salvata il valore predefinito resta ON.
 - Il comando seriale `mp3 reset` forza lo stesso hard reset per debug da banco.
 - Viene spento **quando la bilancia entra in standby/light-sleep per inattività** e anche **prima del light-sleep per batteria scarica**.
 
 Diagnostica audio:
 - un ring buffer RAM conserva gli ultimi **24 eventi** (`request`, `play`, assenza transizione BUSY, timeout, reset, ready e toggle manuali); sopravvive al light-sleep ma non a un'interruzione di alimentazione;
 - al timeout e quando l'operatore passa manualmente ad AUDIO OFF viene salvato in NVS un solo snapshot compatto con stato, traccia, BUSY e comando GPIO2; non vengono eseguite scritture flash per ogni riproduzione;
-- `mp3 history` stampa snapshot persistente e cronologia RAM; `mp3 history clear` cancella entrambi;
+- `mp3 history` stampa snapshot persistente e cronologia RAM; `mp3 history clear` cancella entrambi senza modificare la preferenza AUDIO ON/OFF;
 - `mp3 status` include anche enable manuale, stato alimentazione firmware, UART e livello GPIO2.
 
 Nota: il firmware mantiene comunque il percorso “cold-start” sul primo `mp3` (utile se in futuro vuoi tornare all’accensione on-demand).
