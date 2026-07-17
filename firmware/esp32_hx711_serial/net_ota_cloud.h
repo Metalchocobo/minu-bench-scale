@@ -41,7 +41,7 @@
   // e vengono salvati in NVS (persistono tra aggiornamenti firmware).
   // Comandi: mqtt set "host" "user" "pass", mqtt creds, mqtt clear, mqtt apply
   #define MQTT_PORT       8883          // MQTTS (TLS)
-  #define MQTT_FW_VERSION "1.3.0"
+  #define MQTT_FW_VERSION "1.4.0"
   #define MQTT_SCALE_NAME "Minu Bench Scale"  // Nome visibile nel browser
 #endif
 
@@ -88,6 +88,15 @@ namespace Net {
 
   // Stage/publish a skip for the active command.
   bool mqttSkipActiveCommand();
+
+  // A confirm_request is queued by the MQTT callback and consumed by the main
+  // loop so the remote action follows the exact same ENTER path as the keypad.
+  bool mqttPopConfirmRequest();
+
+  // Transient request state. Neither state advances the Manager UI: only the
+  // durable confirm response and its application ACK complete a weighing.
+  void mqttMarkConfirmRequestStaged();
+  void mqttFailConfirmRequest(const char* reason);
 
   // Stage/publish an undo receipt before a reversible remote stack entry is
   // removed locally. Session-aware only; the RAM outbox retries until ACK.

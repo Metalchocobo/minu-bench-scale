@@ -44,7 +44,7 @@
   "C:\Users\shado\arduino-cli\arduino-cli.exe" compile --fqbn esp32:esp32:esp32 -u -p COM3 "D:\xampp\htdocs\bench-scale\minu-bench-scale\firmware\esp32_hx711_serial"
   ```
 - After making firmware changes, **always verify the code compiles** if arduino-cli is available in the sandbox. If not, carefully check for syntax/type errors manually.
-- Flash usage is tight: ~92% program space. Be mindful of string literals and large const arrays.
+- Flash usage is tight: ~94% program space. Be mindful of string literals and large const arrays.
 
 ---
 
@@ -57,7 +57,7 @@ Two separate projects that communicate via MQTT:
 1. **Firmware (ESP32):** `firmware/esp32_hx711_serial/`
    - Arduino IDE project, compiled with arduino-cli
    - Board: `esp32:esp32:esp32` (ESP32 core v3.3.5)
-   - Flash: ~92% program, ~17% RAM (tight on flash, be mindful of string literals)
+   - Flash: ~94% program, ~20% RAM (tight on flash, be mindful of string literals)
 
 2. **Laravel gestionale:** External project at `D:\xampp\htdocs\minu\manager\` (not in this repo)
    - Laravel 11, Backpack 6, Tabler theme, vertical layout
@@ -76,18 +76,19 @@ Two separate projects that communicate via MQTT:
 
 | Topic | Direzione | Retain | QoS effettivo |
 |---|---|---|---|
-| `minu/scale/{scale_id}/command` | Browser → bilancia | sì | 1 |
-| `minu/scale/{scale_id}/response` | Bilancia → browser | no | 0; `command_ack` transitorio, response durable con retry applicativo |
+| `minu/scale/{scale_id}/command` | Browser → bilancia | `weigh`/`clear` sì; `confirm_request` no | 1 |
+| `minu/scale/{scale_id}/response` | Bilancia → browser | no | 0; `command_ack`/`confirm_request_ack` transitori, response durable con retry applicativo |
 | `minu/scale/{scale_id}/ack` | Browser → bilancia | no | 1 |
 | `minu/scale/{scale_id}/status` | Bilancia → browser | sì | online/sleeping 0; LWT offline 1 |
 | `minu/scale/{scale_id}/owner` | Browser → browser | sì | 1 |
 
 Invarianti del protocollo corrente:
 
-- Ogni scheda mantiene il proprio `session_id` durante reload/reconnect. Un Web Lock esclusivo, con fallback cross-tab fail-safe, rileva una copia live dello stesso `sessionStorage` e ruota l'ID della scheda duplicata. Ogni attivazione logica `weigh` v1.3 usa inoltre un `command_id` univoco di 8–64 caratteri `[A-Za-z0-9_-]`, conservato nei retry soltanto a parità di sessione, UUID, prodotto, nome e target; ogni variazione semantica genera un ID nuovo e il valore vuoto è solo legacy.
-- Ogni documento browser usa un `connection_id` distinto e ogni acquisizione owner un `lease_id`; il controllo è valido solo dopo l'eco esatta di utente, sessione, connessione e lease. Il browser non usa un LWT che muti `command`, invalida lo status a ogni reconnect e considera la bilancia pronta solo dopo tutti i SUBACK, status fresco, ownership, retained command coerente e `command_ack`. Una coorte SUBACK fallita viene ritentata integralmente senza riusare callback di epoch precedenti.
+- Ogni scheda mantiene il proprio `session_id` durante reload/reconnect. Un Web Lock esclusivo, con fallback cross-tab fail-safe, rileva una copia live dello stesso `sessionStorage` e ruota l'ID della scheda duplicata. Ogni attivazione logica `weigh` usa inoltre un `command_id` univoco di 8–64 caratteri `[A-Za-z0-9_-]`, conservato nei retry soltanto a parità di sessione, UUID, prodotto, nome e target; ogni variazione semantica genera un ID nuovo e il valore vuoto è solo legacy.
+- Ogni documento browser usa un `connection_id` distinto e ogni acquisizione owner un `lease_id`; il controllo è valido solo dopo l'eco esatta di utente, sessione, connessione e lease. Il browser non usa un LWT che muti `command`, invalida lo status a ogni reconnect e considera la bilancia pronta solo dopo tutti i SUBACK, status fresco, ownership, retained command coerente e `command_ack`. Da firmware 1.4 il replay dello stesso comando aggiorna solo la connessione e l'ACK la riecheggia, senza ruotare il `command_id`. Una coorte SUBACK fallita viene ritentata integralmente senza riusare callback di epoch precedenti.
 - Senza outbox pending un `clear` può annullare un comando v1.3 soltanto quando coincidono sia `session_id` sia `command_id`. Un comando v1.2 senza ID ma session-aware richiede un clear senza ID della stessa sessione. Un comando realmente legacy senza entrambi gli ID accetta un clear senza command ID anche se il Manager nuovo aggiunge la propria sessione; un clear con command ID non cancella mai un comando legacy.
-- Per ogni `weigh` tokenizzato attivato il firmware pubblica sul topic `response` un `command_ack` transitorio con `command_id`, `session_id`, UUID, `product_id` e `state=active`. Un duplicato identico con lo stesso ID non reinizializza il comando e riemette l'ACK; lo stesso ID con contenuto conflittuale viene ignorato senza ACK e non sovrascrive lo stato attivo.
+- Per ogni `weigh` tokenizzato attivato il firmware pubblica sul topic `response` un `command_ack` transitorio con `command_id`, `session_id`, `connection_id`, UUID, `product_id` e `state=active`. Un duplicato identico con lo stesso ID non reinizializza il comando e riemette l'ACK; lo stesso ID con contenuto conflittuale viene ignorato senza ACK e non sovrascrive lo stato attivo.
+- Il pulsante Conferma del Manager 1.4 pubblica una `confirm_request` QoS 1 non retained con `request_id`, sessione, connessione, comando, UUID e prodotto. Il firmware la accoda e usa lo stesso percorso e lock TARE del tasto ENTER. Retry dello stesso ID riemettono `confirm_request_ack` senza un secondo commit; una cache RAM conserva gli ultimi due `failed`/`rejected`, impedendo la riesecuzione finché l'ID resta in uno dei due slot. Un altro ID durante acquisizione/outbox è rejected. `accepted`/`staged` non avanzano la pagina: solo il `confirm` durabile completato da Laravel, clear e `response_ack` cambia ingrediente.
 - I `confirm`/`skip` v1.3 riportano il `command_id` originale quando presente, oltre a UUID ingrediente, `product_id`, `session_id` e `response_id`. `undo` non inventa un command ID: usa `undo_of_response_id` come riferimento durabile.
 - CLEAR breve è un undo LIFO reale: lo stack conserva offset/zero-tracking precedenti e la provenienza remota. Per una voce session-aware il firmware emette `undo` con nuovo `response_id` e `undo_of_response_id`, poi applica pop e ripristino locale soltanto all'ACK successivo alla persistenza Laravel; una voce senza receipt viene annullata subito e solo localmente. CLEAR lungo svuota soltanto lo stack locale. Con un outbox pending entrambi i CLEAR restano bloccati.
 - PubSubClient pubblica le response a QoS 0: il firmware conserva una response durable in RAM e la ritenta ogni secondo finché riceve il `response_ack` esatto sul topic `ack`. Il `command_ack` non usa questo outbox.
@@ -97,7 +98,7 @@ Invarianti del protocollo corrente:
 - Cambio e disassociazione bilancia sono bloccati durante una response in corso; se la response parte durante il PUT di selezione, la transizione MQTT attende il coordinator idle. Solo l'owner esatto può pubblicare clear o release durante disconnect/cambio.
 - La coppia (`scale_id`, `response_id`) identifica univocamente la receipt. La fingerprint confronta `scale_id`, prodotto, UUID ingrediente, azione, peso e riferimento undo; esclude la `session_id`, che resta routing/audit.
 - I payload legacy privi di `session_id` restano compatibili, senza outbox/ACK applicativo.
-- L'outbox è totalmente immutabile: durante un pending ogni `weigh` e `clear`, incluso il retry dello stesso comando, viene ignorato senza `command_ack` e non può cambiare payload, sessione, command ID o response ID. Solo il `response_ack` corrispondente chiude l'outbox; un comando desiderato va ripubblicato dopo receipt/clear/ACK.
+- L'outbox è totalmente immutabile: durante un pending ogni `weigh` e `clear`, incluso il retry dello stesso comando, viene ignorato senza `command_ack` e non può cambiare payload, sessione, command ID o response ID. Il retry della `confirm_request` già staged riemette soltanto lo stato; richieste diverse sono busy. Solo il `response_ack` corrispondente chiude l'outbox; un comando desiderato va ripubblicato dopo receipt/clear/ACK.
 - Finché l'outbox è pending sono bloccati TARE/ENTER/SKIP/CLEAR, long-press e mutazioni del wizard, `stack clear` seriale e tutti i `cal ...` mutanti; `cal status` resta ammesso.
 - Quando MQTT è connesso, ENTER richiede un comando `weigh` attivo: senza comando produce solo un warning e non applica tara di lavoro, push o audio di successo. Il commit standalone resta disponibile quando MQTT non è connesso o il WiFi è spento; un comando attivo con MQTT offline resta bloccato.
 
@@ -154,7 +155,7 @@ All secrets follow the same pattern — **never hardcoded**, always in ESP32 NVS
 - **ArduinoJson** v7.3.0
 
 ### General ESP32
-- **Flash is 92% full.** Every `F()` macro, every string literal counts. Avoid verbose log messages. Reuse format strings where possible.
+- **Flash is 94% full.** Every `F()` macro, every string literal counts. Avoid verbose log messages. Reuse format strings where possible.
 - **Loop must be non-blocking.** No `delay()` longer than ~50ms in the main loop. Use state machines and timestamp-based logic.
 - **GPIO34-39 are input-only** and have no internal pull-up/pull-down. If using these for digital input, add external pull resistors.
 - INA219: soltanto letture I2C riuscite, finite, plausibili e fresche possono aggiornare filtri, charging o protezione sleep; la soglia hard-low richiede conferma temporale.
@@ -213,11 +214,11 @@ On DigitalOcean VPS, config at `/etc/mosquitto/conf.d/minu.conf`:
 - `tls_version tlsv1.2` required for ESP32 compatibility
 - Do NOT set `cafile` to the same file as `certfile` (causes Mosquitto error)
 
-## Current State (as of 2026-07-16)
+## Current State (as of 2026-07-17)
 
-- Firmware ESP32 operativo: TLS/NTP, MQTT, status `online/sleeping/offline`, backoff, `weigh`/`clear` fenced da `command_id`, `command_ack`, `confirm`/`skip`/`undo` e outbox immutabile con retry/ACK applicativo.
+- Firmware ESP32 operativo: TLS/NTP, MQTT, status `online/sleeping/offline`, backoff, `weigh`/`clear` fenced da `command_id`, ENTER remoto idempotente, `command_ack`, `confirm`/`skip`/`undo` e outbox immutabile con retry/ACK applicativo.
 - Credenziali WiFi, OTA e MQTT persistite in NVS; nessun segreto nel sorgente.
 - Auto-TARE fail-soft sul rumore e TARE manuale tollerante alle vibrazioni, INA219 validato/fresh, hard-low debounced, sovraccarico esplicito, reset WDT coerente, wake key consumato e stack undo LIFO operativi.
 - Browser MQTT operativo nel Manager con identità sessione/connessione separata, owner lease esatto, command repair/ACK, lifecycle senza LWT mutante, REST-before-ACK, deduplica response e compatibilità legacy.
 - Laravel operativo con CRUD bilance, associazione utente-bilancia, discovery MQTT, pagina pesatura e receipt idempotenti per confirm/skip/undo.
-- `MQTT_FW_VERSION` corrente: `1.3.0`.
+- `MQTT_FW_VERSION` corrente: `1.4.0`.

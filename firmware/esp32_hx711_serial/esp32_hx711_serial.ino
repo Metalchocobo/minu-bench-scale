@@ -161,6 +161,7 @@ static char g_enterStartMqttUuid[37] = {0};
 static char g_enterStartMqttSessionId[65] = {0};
 static char g_enterStartMqttCommandId[65] = {0};
 static uint32_t g_enterStartMqttProductId = 0;
+static bool g_remoteConfirmActive = false;
 #endif
 
 // Manual TARE reference capture: save ref offset only after tare is applied
@@ -1015,6 +1016,46 @@ static void startEnterCapture(uint32_t nowMs) {
   Serial.println(F("[ENTER] Acquisizione avviata"));
 }
 
+static void finishRemoteConfirmRequest(bool staged, const char* reason) {
+#if ENABLE_MQTT
+  if (!g_remoteConfirmActive) return;
+  if (staged) Net::mqttMarkConfirmRequestStaged();
+  else Net::mqttFailConfirmRequest(reason);
+  g_remoteConfirmActive = false;
+#else
+  (void)staged;
+  (void)reason;
+#endif
+}
+
+static void beginEnterAction(uint32_t commitNow, bool audible) {
+  if (g_overlayType != OVERLAY_NONE) {
+    g_overlayType = OVERLAY_NONE;
+    lastOledMs = 0;
+  }
+
+  float currentWeight = (float)(stEnable ? ScaleState::getDispWorkLast()
+                                         : ScaleState::getDispLiveLast());
+  long workingOffset = g_lastRawFiltered;
+  if (!enterPreflight(currentWeight, workingOffset, commitNow, audible)) {
+    finishRemoteConfirmRequest(false, "not_ready");
+    return;
+  }
+
+  if (!isEnterSignalReady()) {
+    startEnterCapture(commitNow);
+    return;
+  }
+
+  if (!commitEnterWeight(currentWeight, workingOffset, commitNow)) {
+    finishRemoteConfirmRequest(false, "commit");
+    showEnterFailure(false);
+    return;
+  }
+  finishRemoteConfirmRequest(true, nullptr);
+  showEnterSuccess();
+}
+
 static void enterCaptureNoteRaw(long rawUse, uint32_t nowMs) {
   if (g_enterUiState != ENTER_UI_ACQUIRING) return;
   if ((uint32_t)(nowMs - g_enterUiStartMs) < ENTER_CAPTURE_SETTLE_MS) return;
@@ -1139,6 +1180,7 @@ static void updateEnterCapture(uint32_t nowMs, bool haveNewWork) {
   if (g_enterUiState != ENTER_UI_ACQUIRING) return;
   if (!enterCaptureContextMatches()) {
     Serial.println(F("[ENTER] Acquisizione annullata (contesto)"));
+    finishRemoteConfirmRequest(false, "context");
     showEnterFailure(false);
     return;
   }
@@ -1148,12 +1190,18 @@ static void updateEnterCapture(uint32_t nowMs, bool haveNewWork) {
     float currentWeight = (float)(stEnable ? ScaleState::getDispWorkLast()
                                            : ScaleState::getDispLiveLast());
     long workingOffset = g_lastRawFiltered;
-    if (!enterPreflight(currentWeight, workingOffset, nowMs, false) ||
-        !commitEnterWeight(currentWeight, workingOffset, nowMs)) {
+    if (!enterPreflight(currentWeight, workingOffset, nowMs, false)) {
+      finishRemoteConfirmRequest(false, "not_ready");
+      showEnterFailure(false);
+      return;
+    }
+    if (!commitEnterWeight(currentWeight, workingOffset, nowMs)) {
+      finishRemoteConfirmRequest(false, "commit");
       showEnterFailure(false);
       return;
     }
     Serial.println(F("[ENTER] STABLE raggiunto"));
+    finishRemoteConfirmRequest(true, nullptr);
     showEnterSuccess();
     return;
   }
@@ -1171,6 +1219,8 @@ static void updateEnterCapture(uint32_t nowMs, bool haveNewWork) {
   Serial.print(F(" s="));
   Serial.println(slopeGps, 2);
   if (result != ENTER_CAPTURE_READY) {
+    finishRemoteConfirmRequest(
+      false, result == ENTER_CAPTURE_MOVING ? "moving" : "capture");
     showEnterFailure(result == ENTER_CAPTURE_MOVING);
     return;
   }
@@ -1179,16 +1229,23 @@ static void updateEnterCapture(uint32_t nowMs, bool haveNewWork) {
   float measuredG = (float)(centerRaw - effectiveStart) / g_enterStartCpg;
   if (!isfinite(measuredG) || fabsf(measuredG) > MAX_DISPLAY_G) {
     Serial.println(F("[ENTER] Centro robusto fuori campo"));
+    finishRemoteConfirmRequest(false, "capture");
     showEnterFailure(false);
     return;
   }
   float recordedG = (float)lroundf(measuredG);
-  if (!enterPreflight(recordedG, centerRaw, nowMs, false) ||
-      !commitEnterWeight(recordedG, centerRaw, nowMs)) {
+  if (!enterPreflight(recordedG, centerRaw, nowMs, false)) {
+    finishRemoteConfirmRequest(false, "not_ready");
+    showEnterFailure(false);
+    return;
+  }
+  if (!commitEnterWeight(recordedG, centerRaw, nowMs)) {
+    finishRemoteConfirmRequest(false, "commit");
     showEnterFailure(false);
     return;
   }
   Serial.println(F("[ENTER] Centro robusto accettato"));
+  finishRemoteConfirmRequest(true, nullptr);
   showEnterSuccess();
 }
 
@@ -1206,6 +1263,12 @@ static void updateEnterUiTimeout(uint32_t nowMs) {
 }
 
 // ========================= KEYPAD HANDLER =========================
+static bool isTareBehaviorLocked(uint32_t nowMs) {
+  bool timedTareLock = g_tareKeyLockUntilMs != 0 &&
+    (int32_t)(g_tareKeyLockUntilMs - nowMs) > 0;
+  return g_manualTareArmed || ScaleState::isTareActive() || timedTareLock;
+}
+
 void handleKeyEvent(KeyCode key) {
   if (g_enterUiState != ENTER_UI_IDLE) {
     Serial.println(F("[KEYPAD] Ignorato durante ENTER"));
@@ -1222,9 +1285,7 @@ void handleKeyEvent(KeyCode key) {
     return;
   }
 #endif
-  bool timedTareLock = g_tareKeyLockUntilMs != 0 &&
-    (int32_t)(g_tareKeyLockUntilMs - keyNow) > 0;
-  if (g_manualTareArmed || ScaleState::isTareActive() || timedTareLock) {
+  if (isTareBehaviorLocked(keyNow)) {
     Serial.println(F("[KEYPAD] Ignorato durante TARE"));
     return;
   }
@@ -1322,28 +1383,7 @@ void handleKeyEvent(KeyCode key) {
 
     case KEY_ENTER: {
       Serial.println(F("[KEYPAD] ENTER pressed"));
-
-      // Dismiss overlay if active
-      if (g_overlayType != OVERLAY_NONE) {
-        g_overlayType = OVERLAY_NONE;
-        lastOledMs = 0;
-      }
-
-      uint32_t commitNow = millis();
-      float currentWeight = (float)(stEnable ? ScaleState::getDispWorkLast() : ScaleState::getDispLiveLast());
-      long workingOffset = g_lastRawFiltered;
-      if (!enterPreflight(currentWeight, workingOffset, commitNow, true)) break;
-
-      if (!isEnterSignalReady()) {
-        startEnterCapture(commitNow);
-        break;
-      }
-
-      if (!commitEnterWeight(currentWeight, workingOffset, commitNow)) {
-        showEnterFailure(false);
-        break;
-      }
-      showEnterSuccess();
+      beginEnterAction(millis(), true);
       break;
     }
 
@@ -2108,6 +2148,24 @@ void loop() {
 
   uint32_t now = millis();
   updateEnterUiTimeout(now);
+
+#if ENABLE_MQTT
+  if (!tareCritical && Net::mqttPopConfirmRequest()) {
+    bool remoteBusy = g_enterUiState != ENTER_UI_IDLE ||
+      isTareBehaviorLocked(now) || CalWizard::isActive() ||
+      CalWizard::isLongPressInProgress();
+#if ENABLE_WIFI_OTA
+    remoteBusy = remoteBusy || Net::isOtaInProgress();
+#endif
+    if (remoteBusy) {
+      Net::mqttFailConfirmRequest("busy");
+    } else {
+      Serial.println(F("[ENTER] Richiesta dal Manager"));
+      g_remoteConfirmActive = true;
+      beginEnterAction(now, true);
+    }
+  }
+#endif
 
   // Audio
   Audio::task(now);

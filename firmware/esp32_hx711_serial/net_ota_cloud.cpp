@@ -326,6 +326,7 @@ static bool   mqtt_cmdActive       = false;
 static char   mqtt_cmdUuid[37]     = {0};  // UUID standard 36 chars + null
 static char   mqtt_cmdSessionId[65] = {0}; // Empty for legacy commands
 static char   mqtt_cmdCommandId[65] = {0}; // Empty for pre-v1.3 commands
+static char   mqtt_cmdConnectionId[65] = {0}; // Current browser document
 static char   mqtt_lastSessionId[65] = {0};
 static char   mqtt_cmdName[32]     = {0};  // Nome ingrediente (troncato)
 static float  mqtt_cmdTargetWeight = 0.0f;
@@ -345,6 +346,35 @@ static char     mqtt_responsePayload[384] = {0};
 static uint32_t mqtt_responseLastPublishMs = 0;
 static uint32_t mqtt_responseCounter = 0;
 static const uint32_t MQTT_RESPONSE_RETRY_MS = 1000;
+
+// Idempotent, transient Manager request to execute the physical ENTER flow.
+enum MqttConfirmRequestState : uint8_t {
+  MQTT_CONFIRM_REQUEST_NONE = 0,
+  MQTT_CONFIRM_REQUEST_QUEUED,
+  MQTT_CONFIRM_REQUEST_RUNNING,
+  MQTT_CONFIRM_REQUEST_STAGED,
+  MQTT_CONFIRM_REQUEST_FAILED
+};
+
+struct MqttConfirmRequestFingerprint {
+  char requestId[65];
+  char sessionId[65];
+  char connectionId[65];
+  char commandId[65];
+  char uuid[37];
+  uint32_t productId;
+};
+
+static MqttConfirmRequestState mqtt_confirmRequestState = MQTT_CONFIRM_REQUEST_NONE;
+static MqttConfirmRequestFingerprint mqtt_confirmRequest = {};
+static char mqtt_confirmRequestReason[20] = {0};
+static const uint8_t MQTT_CONFIRM_TERMINAL_CACHE_SIZE = 2;
+static bool mqtt_terminalRequestValid[MQTT_CONFIRM_TERMINAL_CACHE_SIZE] = {};
+static MqttConfirmRequestFingerprint
+  mqtt_terminalRequests[MQTT_CONFIRM_TERMINAL_CACHE_SIZE] = {};
+static char mqtt_terminalRequestStates[MQTT_CONFIRM_TERMINAL_CACHE_SIZE][10] = {};
+static char mqtt_terminalRequestReasons[MQTT_CONFIRM_TERMINAL_CACHE_SIZE][20] = {};
+static uint8_t mqtt_terminalRequestNext = 0;
 
 // Riconnessione con backoff esponenziale
 static bool     mqtt_setupDone       = false;
@@ -369,9 +399,28 @@ static bool     mqtt_identityValid   = false;
 static void mqttCallback(char* topic, byte* payload, unsigned int length);
 static bool mqttAttemptConnect();
 static void mqttResetCommand();
+static void mqttResetConfirmRequest();
 static void mqttResetPendingResponse();
 static bool mqttPublishPendingResponse();
 static bool mqttPublishCommandAck();
+static bool mqttPublishConfirmRequestAck(const char* requestId,
+                                         const char* commandId,
+                                         const char* connectionId,
+                                         const char* state,
+                                         const char* reason);
+static bool mqttConfirmRequestMatches(
+  const MqttConfirmRequestFingerprint& stored,
+  const char* requestId, const char* sessionId, const char* connectionId,
+  const char* commandId, const char* uuid, uint32_t productId);
+static void mqttStoreConfirmRequest(
+  MqttConfirmRequestFingerprint& stored,
+  const char* requestId, const char* sessionId, const char* connectionId,
+  const char* commandId, const char* uuid, uint32_t productId);
+static int8_t mqttFindTerminalConfirmRequest(const char* requestId);
+static void mqttRememberTerminalConfirmRequest(
+  const char* requestId, const char* sessionId, const char* connectionId,
+  const char* commandId, const char* uuid, uint32_t productId,
+  const char* state, const char* reason);
 static void mqttGenerateResponseId();
 static bool mqttPublishStatus(const char* state);
 
@@ -403,9 +452,17 @@ static void mqttResetCommand() {
   mqtt_cmdUuid[0] = '\0';
   mqtt_cmdSessionId[0] = '\0';
   mqtt_cmdCommandId[0] = '\0';
+  mqtt_cmdConnectionId[0] = '\0';
   mqtt_cmdName[0] = '\0';
   mqtt_cmdTargetWeight = 0.0f;
   mqtt_cmdProductId = 0;
+  mqttResetConfirmRequest();
+}
+
+static void mqttResetConfirmRequest() {
+  mqtt_confirmRequestState = MQTT_CONFIRM_REQUEST_NONE;
+  memset(&mqtt_confirmRequest, 0, sizeof(mqtt_confirmRequest));
+  mqtt_confirmRequestReason[0] = '\0';
 }
 
 static bool mqttIsSafeCommandId(const char* commandId) {
@@ -451,14 +508,88 @@ static bool mqttPublishCommandAck() {
   if (!mqtt_cmdActive || mqtt_cmdCommandId[0] == '\0' ||
       !mqttClient.connected()) return false;
 
-  char payload[320];
+  char payload[384];
   int written = snprintf(payload, sizeof(payload),
-    "{\"type\":\"command_ack\",\"command_id\":\"%s\",\"session_id\":\"%s\",\"uuid\":\"%s\",\"product_id\":%lu,\"state\":\"active\"}",
-    mqtt_cmdCommandId, mqtt_cmdSessionId, mqtt_cmdUuid,
+    "{\"type\":\"command_ack\",\"command_id\":\"%s\",\"session_id\":\"%s\",\"connection_id\":\"%s\",\"uuid\":\"%s\",\"product_id\":%lu,\"state\":\"active\"}",
+    mqtt_cmdCommandId, mqtt_cmdSessionId, mqtt_cmdConnectionId, mqtt_cmdUuid,
     (unsigned long)mqtt_cmdProductId);
   return written > 0 && written < (int)sizeof(payload) &&
     mqttClient.publish(
       mqtt_topicRsp, (const uint8_t*)payload, strlen(payload), false);
+}
+
+static bool mqttPublishConfirmRequestAck(const char* requestId,
+                                         const char* commandId,
+                                         const char* connectionId,
+                                         const char* state,
+                                         const char* reason) {
+  if (!mqttClient.connected() || !requestId || !commandId ||
+      !connectionId || !state) return false;
+  char payload[384];
+  int written = snprintf(payload, sizeof(payload),
+    "{\"type\":\"confirm_request_ack\",\"request_id\":\"%s\",\"command_id\":\"%s\",\"connection_id\":\"%s\",\"state\":\"%s\",\"reason\":\"%s\"}",
+    requestId, commandId, connectionId, state, reason ? reason : "");
+  return written > 0 && written < (int)sizeof(payload) &&
+    mqttClient.publish(
+      mqtt_topicRsp, (const uint8_t*)payload, strlen(payload), false);
+}
+
+static bool mqttConfirmRequestMatches(
+    const MqttConfirmRequestFingerprint& stored,
+    const char* requestId, const char* sessionId, const char* connectionId,
+    const char* commandId, const char* uuid, uint32_t productId) {
+  return strcmp(stored.requestId, requestId) == 0 &&
+    strcmp(stored.sessionId, sessionId) == 0 &&
+    strcmp(stored.connectionId, connectionId) == 0 &&
+    strcmp(stored.commandId, commandId) == 0 &&
+    strcmp(stored.uuid, uuid) == 0 && stored.productId == productId;
+}
+
+static void mqttStoreConfirmRequest(
+    MqttConfirmRequestFingerprint& stored,
+    const char* requestId, const char* sessionId, const char* connectionId,
+    const char* commandId, const char* uuid, uint32_t productId) {
+  strlcpy(stored.requestId, requestId, sizeof(stored.requestId));
+  strlcpy(stored.sessionId, sessionId, sizeof(stored.sessionId));
+  strlcpy(stored.connectionId, connectionId, sizeof(stored.connectionId));
+  strlcpy(stored.commandId, commandId, sizeof(stored.commandId));
+  strlcpy(stored.uuid, uuid, sizeof(stored.uuid));
+  stored.productId = productId;
+}
+
+static int8_t mqttFindTerminalConfirmRequest(const char* requestId) {
+  for (uint8_t index = 0; index < MQTT_CONFIRM_TERMINAL_CACHE_SIZE; index++) {
+    if (mqtt_terminalRequestValid[index] &&
+        strcmp(mqtt_terminalRequests[index].requestId, requestId) == 0) {
+      return (int8_t)index;
+    }
+  }
+  return -1;
+}
+
+static void mqttRememberTerminalConfirmRequest(
+    const char* requestId, const char* sessionId, const char* connectionId,
+    const char* commandId, const char* uuid, uint32_t productId,
+    const char* state, const char* reason) {
+  int8_t knownIndex = mqttFindTerminalConfirmRequest(requestId);
+  uint8_t index = knownIndex >= 0
+    ? (uint8_t)knownIndex : mqtt_terminalRequestNext;
+  mqttStoreConfirmRequest(
+    mqtt_terminalRequests[index], requestId, sessionId, connectionId,
+    commandId, uuid, productId);
+  strlcpy(
+    mqtt_terminalRequestStates[index], state,
+    sizeof(mqtt_terminalRequestStates[index]));
+  strlcpy(
+    mqtt_terminalRequestReasons[index], reason ? reason : "",
+    sizeof(mqtt_terminalRequestReasons[index]));
+  mqtt_terminalRequestValid[index] = true;
+  if (knownIndex < 0) {
+    mqtt_terminalRequestNext =
+      (uint8_t)((index + 1) % MQTT_CONFIRM_TERMINAL_CACHE_SIZE);
+  }
+  mqttPublishConfirmRequestAck(
+    requestId, commandId, connectionId, state, reason);
 }
 
 static bool mqttPublishStatus(const char* state) {
@@ -505,9 +636,98 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length) {
     return;
   }
 
-  if (strcmp(type, "weigh") == 0) {
+  if (strcmp(type, "confirm_request") == 0) {
+    const char* requestId = doc["request_id"] | "";
+    const char* sessionId = doc["session_id"] | "";
+    const char* connectionId = doc["connection_id"] | "";
+    const char* commandId = doc["command_id"] | "";
+    const char* uuid = doc["uuid"] | "";
+    uint32_t productId = doc["product_id"].is<uint32_t>()
+      ? doc["product_id"].as<uint32_t>() : 0;
+
+    bool idsValid = requestId[0] != '\0' && commandId[0] != '\0' &&
+      sessionId[0] != '\0' && connectionId[0] != '\0' && uuid[0] != '\0' &&
+      strlen(requestId) < sizeof(mqtt_confirmRequest.requestId) &&
+      strlen(sessionId) < sizeof(mqtt_confirmRequest.sessionId) &&
+      strlen(connectionId) < sizeof(mqtt_confirmRequest.connectionId) &&
+      strlen(commandId) < sizeof(mqtt_confirmRequest.commandId) &&
+      strlen(uuid) < sizeof(mqtt_confirmRequest.uuid) &&
+      mqttIsSafeCommandId(requestId) && mqttIsSafeCommandId(connectionId) &&
+      mqttIsSafeCommandId(commandId);
+    if (!idsValid) {
+      Serial.println(F("[MQTT] confirm_request con ID non valido"));
+      return;
+    }
+
+    if (mqtt_confirmRequestState != MQTT_CONFIRM_REQUEST_NONE &&
+        strcmp(mqtt_confirmRequest.requestId, requestId) == 0) {
+      if (!mqttConfirmRequestMatches(
+            mqtt_confirmRequest, requestId, sessionId, connectionId,
+            commandId, uuid, productId)) {
+        mqttPublishConfirmRequestAck(
+          requestId, commandId, connectionId, "rejected", "conflict");
+        return;
+      }
+      const char* replayState = "accepted";
+      if (mqtt_confirmRequestState == MQTT_CONFIRM_REQUEST_STAGED) replayState = "staged";
+      else if (mqtt_confirmRequestState == MQTT_CONFIRM_REQUEST_FAILED) replayState = "failed";
+      mqttPublishConfirmRequestAck(
+        requestId, commandId, mqtt_confirmRequest.connectionId,
+        replayState, mqtt_confirmRequestReason);
+      return;
+    }
+
+    int8_t terminalIndex = mqttFindTerminalConfirmRequest(requestId);
+    if (terminalIndex >= 0) {
+      uint8_t index = (uint8_t)terminalIndex;
+      if (mqttConfirmRequestMatches(
+            mqtt_terminalRequests[index], requestId, sessionId, connectionId,
+            commandId, uuid, productId)) {
+        mqttPublishConfirmRequestAck(
+          requestId, commandId, connectionId,
+          mqtt_terminalRequestStates[index], mqtt_terminalRequestReasons[index]);
+      } else {
+        mqttPublishConfirmRequestAck(
+          requestId, commandId, connectionId, "rejected", "conflict");
+      }
+      return;
+    }
+
+    bool exactCommand = mqtt_cmdActive &&
+      strcmp(mqtt_cmdSessionId, sessionId) == 0 &&
+      strcmp(mqtt_cmdConnectionId, connectionId) == 0 &&
+      strcmp(mqtt_cmdCommandId, commandId) == 0 &&
+      strcmp(mqtt_cmdUuid, uuid) == 0 && mqtt_cmdProductId == productId;
+    if (!exactCommand) {
+      mqttRememberTerminalConfirmRequest(
+        requestId, sessionId, connectionId, commandId, uuid, productId,
+        "rejected", "stale");
+      return;
+    }
+
+    if (mqtt_responsePending ||
+        (mqtt_confirmRequestState != MQTT_CONFIRM_REQUEST_NONE &&
+         mqtt_confirmRequestState != MQTT_CONFIRM_REQUEST_FAILED)) {
+      mqttRememberTerminalConfirmRequest(
+        requestId, sessionId, connectionId, commandId, uuid, productId,
+        "rejected", "busy");
+      return;
+    }
+
+    mqttStoreConfirmRequest(
+      mqtt_confirmRequest, requestId, sessionId, connectionId,
+      commandId, uuid, productId);
+    mqtt_confirmRequestReason[0] = '\0';
+    mqtt_confirmRequestState = MQTT_CONFIRM_REQUEST_QUEUED;
+    mqtt_activityFlag = true;
+    mqttPublishConfirmRequestAck(
+      requestId, commandId, connectionId, "accepted", "");
+    Serial.println(F("[MQTT] confirm_request accodata"));
+
+  } else if (strcmp(type, "weigh") == 0) {
     const char* uuid   = doc["uuid"];
     const char* sessionId = doc["session_id"] | "";
+    const char* connectionId = doc["connection_id"] | "";
     const char* commandId = doc["command_id"] | "";
     float targetWeight = doc["target_weight"] | 0.0f;
     uint32_t productId = doc["product_id"].is<uint32_t>()
@@ -516,14 +736,20 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length) {
 
     if (!uuid || strlen(uuid) == 0 || strlen(uuid) >= sizeof(mqtt_cmdUuid) ||
         strlen(sessionId) >= sizeof(mqtt_cmdSessionId) ||
+        strlen(connectionId) >= sizeof(mqtt_cmdConnectionId) ||
         strlen(commandId) >= sizeof(mqtt_cmdCommandId) ||
-        !mqttIsSafeCommandId(commandId)) {
+        !mqttIsSafeCommandId(connectionId) || !mqttIsSafeCommandId(commandId)) {
       Serial.println(F("[MQTT] weigh con ID non valido, ignorato"));
       return;
     }
 
     if (mqtt_responsePending) {
       Serial.println(F("[MQTT] CMD weigh ignorato: response ACK pending"));
+      return;
+    }
+    if (mqtt_confirmRequestState == MQTT_CONFIRM_REQUEST_QUEUED ||
+        mqtt_confirmRequestState == MQTT_CONFIRM_REQUEST_RUNNING) {
+      Serial.println(F("[MQTT] CMD weigh ignorato: confirm_request pending"));
       return;
     }
 
@@ -546,6 +772,7 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length) {
       bool samePayload = sameUuid && sameSession && sameProduct &&
         sameTarget && sameName;
       if (samePayload) {
+        strlcpy(mqtt_cmdConnectionId, connectionId, sizeof(mqtt_cmdConnectionId));
         Serial.println(F("[MQTT] CMD weigh duplicato: stato invariato"));
         mqttPublishCommandAck();
       } else {
@@ -559,12 +786,15 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length) {
     bool isNewWeigh = (!mqtt_cmdActive) || (!sameCommand) || (!sameTarget);
 
     // Salva comando attivo
+    mqttResetConfirmRequest();
     strncpy(mqtt_cmdUuid, uuid, sizeof(mqtt_cmdUuid) - 1);
     mqtt_cmdUuid[sizeof(mqtt_cmdUuid) - 1] = '\0';
     strncpy(mqtt_cmdSessionId, sessionId, sizeof(mqtt_cmdSessionId) - 1);
     mqtt_cmdSessionId[sizeof(mqtt_cmdSessionId) - 1] = '\0';
     strncpy(mqtt_cmdCommandId, commandId, sizeof(mqtt_cmdCommandId) - 1);
     mqtt_cmdCommandId[sizeof(mqtt_cmdCommandId) - 1] = '\0';
+    strncpy(mqtt_cmdConnectionId, connectionId, sizeof(mqtt_cmdConnectionId) - 1);
+    mqtt_cmdConnectionId[sizeof(mqtt_cmdConnectionId) - 1] = '\0';
     strncpy(mqtt_cmdName, name, sizeof(mqtt_cmdName) - 1);
     mqtt_cmdName[sizeof(mqtt_cmdName) - 1] = '\0';
     mqtt_cmdTargetWeight = targetWeight;
@@ -598,6 +828,11 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length) {
     // may close the outbox and reset its command.
     if (mqtt_responsePending) {
       Serial.println(F("[MQTT] CMD clear ignorato: response ACK pending"));
+      return;
+    }
+    if (mqtt_confirmRequestState == MQTT_CONFIRM_REQUEST_QUEUED ||
+        mqtt_confirmRequestState == MQTT_CONFIRM_REQUEST_RUNNING) {
+      Serial.println(F("[MQTT] CMD clear ignorato: confirm_request pending"));
       return;
     }
 
@@ -827,6 +1062,35 @@ const char* getMqttLastSessionId() {
 
 uint32_t getMqttCommandProductId() {
   return mqtt_cmdProductId;
+}
+
+bool mqttPopConfirmRequest() {
+  if (mqtt_confirmRequestState != MQTT_CONFIRM_REQUEST_QUEUED) return false;
+  mqtt_confirmRequestState = MQTT_CONFIRM_REQUEST_RUNNING;
+  return true;
+}
+
+void mqttMarkConfirmRequestStaged() {
+  if (mqtt_confirmRequestState != MQTT_CONFIRM_REQUEST_RUNNING) return;
+  mqtt_confirmRequestState = MQTT_CONFIRM_REQUEST_STAGED;
+  mqtt_confirmRequestReason[0] = '\0';
+  mqttPublishConfirmRequestAck(
+    mqtt_confirmRequest.requestId, mqtt_confirmRequest.commandId,
+    mqtt_confirmRequest.connectionId, "staged", "");
+}
+
+void mqttFailConfirmRequest(const char* reason) {
+  if (mqtt_confirmRequestState != MQTT_CONFIRM_REQUEST_RUNNING &&
+      mqtt_confirmRequestState != MQTT_CONFIRM_REQUEST_QUEUED) return;
+  mqtt_confirmRequestState = MQTT_CONFIRM_REQUEST_FAILED;
+  strlcpy(
+    mqtt_confirmRequestReason, reason ? reason : "not_ready",
+    sizeof(mqtt_confirmRequestReason));
+  mqttRememberTerminalConfirmRequest(
+    mqtt_confirmRequest.requestId, mqtt_confirmRequest.sessionId,
+    mqtt_confirmRequest.connectionId, mqtt_confirmRequest.commandId,
+    mqtt_confirmRequest.uuid, mqtt_confirmRequest.productId,
+    "failed", mqtt_confirmRequestReason);
 }
 
 bool mqttConfirmActiveCommand(const char* expectedUuid, float actualWeight,

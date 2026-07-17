@@ -402,7 +402,7 @@ Comandi seriali:
 
 Se le credenziali non sono configurate, MQTT resta inattivo (nessun tentativo di connessione).
 
-Porta bilancia: **8883** (MQTTS/TLS). Porta browser: **8884** (WSS/TLS). Il certificato CA ISRG Root X1 è nel firmware. `MQTT_SCALE_NAME` e `MQTT_FW_VERSION` sono definiti in `net_ota_cloud.h`; la versione corrente è **1.3.0**.
+Porta bilancia: **8883** (MQTTS/TLS). Porta browser: **8884** (WSS/TLS). Il certificato CA ISRG Root X1 è nel firmware. `MQTT_SCALE_NAME` e `MQTT_FW_VERSION` sono definiti in `net_ota_cloud.h`; la versione corrente è **1.4.0**.
 
 ### Topic e QoS effettivo
 
@@ -410,8 +410,8 @@ La bilancia si identifica con il MAC STA letto direttamente dall'eFuse ESP32 (lo
 
 | Topic | Direzione | QoS | Retain | Uso |
 |---|---|---:|---:|---|
-| `minu/scale/{scale_id}/command` | Browser → bilancia | 1 | sì | `weigh` e `clear` fenced da sessione e comando |
-| `minu/scale/{scale_id}/response` | Bilancia → browser | 0 | no | `command_ack` transitorio; `confirm`, `skip` e `undo` durable con retry applicativo |
+| `minu/scale/{scale_id}/command` | Browser → bilancia | 1 | `weigh`/`clear` sì; `confirm_request` no | comando retained e richiesta ENTER remota fenced |
+| `minu/scale/{scale_id}/response` | Bilancia → browser | 0 | no | `command_ack`/`confirm_request_ack` transitori; `confirm`, `skip` e `undo` durable con retry applicativo |
 | `minu/scale/{scale_id}/ack` | Browser → bilancia | 1 | no | `response_ack` applicativo |
 | `minu/scale/{scale_id}/status` | Bilancia → browser | online/sleeping 0; LWT offline 1 | sì | stato operativo, nome e versione firmware |
 | `minu/scale/{scale_id}/owner` | Browser → browser | 1 | sì | lease della scheda che controlla la bilancia |
@@ -423,10 +423,10 @@ PubSubClient pubblica a QoS 0: per questo una response non viene considerata con
 Comando di pesatura:
 
 ```json
-{"type":"weigh","uuid":"...","product_id":123,"name":"Zucchero","target_weight":450,"session_id":"...","command_id":"..."}
+{"type":"weigh","uuid":"...","product_id":123,"name":"Zucchero","target_weight":450,"session_id":"...","connection_id":"...","command_id":"..."}
 ```
 
-`command_id` identifica una singola attivazione del comando, è lungo 8–64 caratteri e ammette lettere ASCII, cifre, `-` e `_`. Il valore vuoto resta ammesso soltanto per compatibilità con i browser precedenti. Il Manager conserva l'ID sui retry soltanto quando sessione, UUID, prodotto, nome e target sono identici; una variazione semantica genera un ID nuovo. Un replay identico con lo stesso `command_id` non reinizializza il comando e riemette `command_ack`; lo stesso ID riutilizzato con contenuto diverso viene ignorato senza ACK e senza modificare lo stato attivo.
+`command_id` identifica una singola attivazione del comando, è lungo 8–64 caratteri e ammette lettere ASCII, cifre, `-` e `_`. Il valore vuoto resta ammesso soltanto per compatibilità con i browser precedenti. Il Manager conserva l'ID sui retry soltanto quando sessione, UUID, prodotto, nome e target sono identici; una variazione semantica genera un ID nuovo. Un replay identico con lo stesso `command_id` non reinizializza il comando e riemette `command_ack`; su reload aggiorna soltanto il `connection_id` del documento corrente. Lo stesso ID riutilizzato con contenuto business diverso viene ignorato senza ACK e senza modificare lo stato attivo.
 
 Pulizia comando:
 
@@ -439,10 +439,19 @@ Senza response pending la bilancia accetta `clear` soltanto se la fence è coere
 Conferma transitoria di attivazione firmware:
 
 ```json
-{"type":"command_ack","command_id":"...","session_id":"...","uuid":"...","product_id":123,"state":"active"}
+{"type":"command_ack","command_id":"...","session_id":"...","connection_id":"...","uuid":"...","product_id":123,"state":"active"}
 ```
 
-Il firmware pubblica `command_ack` sul topic `response` dopo avere attivato un `weigh` con `command_id` e lo ripubblica per ogni replay identico dello stesso ID. Questo ACK è QoS 0, non usa l'outbox, non contiene `response_id` e non rappresenta una mutazione Laravel: se viene perso, il browser ripubblica lo stesso `weigh`. I comandi precedenti senza `command_id` non producono il nuovo ACK.
+Il firmware pubblica `command_ack` sul topic `response` dopo avere attivato un `weigh` con `command_id` e lo ripubblica per ogni replay identico dello stesso ID. Da firmware 1.4 riecheggia anche la connessione corrente, così un documento ricaricato non diventa pronto prima che il firmware abbia visto il suo nuovo `connection_id`. Questo ACK è QoS 0, non usa l'outbox, non contiene `response_id` e non rappresenta una mutazione Laravel: se viene perso, il browser ripubblica lo stesso `weigh`. I comandi precedenti senza `command_id` non producono il nuovo ACK.
+
+Conferma remota dal Manager:
+
+```json
+{"type":"confirm_request","request_id":"...","session_id":"...","connection_id":"...","command_id":"...","uuid":"...","product_id":123}
+{"type":"confirm_request_ack","request_id":"...","command_id":"...","connection_id":"...","state":"accepted|staged|failed|rejected","reason":"..."}
+```
+
+`confirm_request` è QoS 1 ma **non retained**. È accettata soltanto dalla connessione corrente e per l'esatta identità del `weigh`; il callback MQTT la accoda e il loop esegue lo stesso percorso di ENTER fisico: preflight, lock TARE, eventuale acquisizione da 1,5 s, zero di lavoro, push reversibile e staging del `confirm`. `request_id` rende idempotenti doppio click e retry: lo stesso ID riemette l'ultimo ACK senza ripetere ENTER, un ID diverso durante acquisizione/outbox riceve `rejected/busy`. Una cache RAM conserva gli ultimi due esiti terminali `failed`/`rejected`: finché l'ID resta in uno dei due slot, la perdita del relativo ACK QoS 0 non può trasformarlo più tardi in un nuovo ENTER. `accepted` e `staged` sono solo stati transitori e non fanno avanzare il Manager; `failed`/`rejected` lasciano attivo lo stesso ingrediente. L'unico successo funzionale resta la response durable `confirm` completata da Laravel, clear e `response_ack`.
 
 Response firmware:
 
@@ -460,9 +469,11 @@ ACK browser:
 {"type":"response_ack","response_id":"a1b2c3d40000012300000001"}
 ```
 
-Il firmware conserva una sola response session-aware in RAM e la ripubblica ogni **1 secondo** finché riceve l'ACK corrispondente. Il payload staged, inclusi `session_id`, l'eventuale `command_id` e `response_id`, resta byte-per-byte immutabile. Durante questa attesa ENTER, SKIP e altri commit reversibili sono bloccati; i `weigh` e `clear` MQTT ricevuti vengono ignorati senza `command_ack`.
+Il firmware conserva una sola response session-aware in RAM e la ripubblica ogni **1 secondo** finché riceve l'ACK corrispondente. Il payload staged, inclusi `session_id`, l'eventuale `command_id` e `response_id`, resta byte-per-byte immutabile. Durante questa attesa ENTER, SKIP e altri commit reversibili sono bloccati; i `weigh` e `clear` MQTT ricevuti vengono ignorati senza `command_ack`. Il retry della `confirm_request` che ha già prodotto quell'outbox riemette soltanto `staged`; ogni altra richiesta è rifiutata come busy.
 
-Per firmware/browser v1.3 l'ordine è transazionale:
+Outbox e cache dei due esiti terminali sono RAM: un reboot le perde, e più di due request terminali diversi possono espellere il più vecchio. Il Manager normale mantiene una sola richiesta irrisolta per scheda; una garanzia attraverso reboot o publisher concorrenti richiederebbe un journal persistente dedicato.
+
+Per firmware/browser v1.4 l'ordine è transazionale:
 
 1. il browser invia a Laravel la response completa, inclusi `scale_id`, `response_id`, `product_id`, UUID e azione;
 2. Laravel registra una receipt durabile e applica la mutazione nella stessa transazione; il replay identico è idempotente;
@@ -488,15 +499,18 @@ Ogni scheda browser usa un `session_id` stabile durante reload e reconnect, un `
 - il browser non registra un LWT che modifichi `command`: su `pagehide` invalida i callback e chiude localmente il socket senza pubblicare clear o owner release;
 - la UI è verde soltanto dopo l'eco retained del comando e il relativo `command_ack` firmware; durante reconnect o riparazione resta in sincronizzazione.
 
-Cambio e disassociazione bilancia sono bloccati finché una response è in sincronizzazione. Se la response inizia mentre il salvataggio del cambio è già in corso, la transizione MQTT attende in modo non bloccante la fine della consegna. Clear e rilascio owner sulla vecchia bilancia vengono pubblicati soltanto dalla connessione che possiede il lease esatto.
+Cambio e disassociazione bilancia sono bloccati finché una `confirm_request` è irrisolta o una response è in sincronizzazione. Se la response inizia mentre il salvataggio del cambio è già in corso, la transizione MQTT attende in modo non bloccante la fine della consegna. Clear e rilascio owner sulla vecchia bilancia vengono pubblicati soltanto dalla connessione che possiede il lease esatto.
 
 **Comando `weigh`:** il browser invia UUID ingrediente, `product_id`, nome e peso target. La bilancia emette un bip distintivo di ricezione, azzera il timer inattività e mostra il target sul display (icona target + grammi).
+
+**Comando `confirm_request`:** il pulsante Conferma del Manager, con bilancia associata, chiede alla bilancia di eseguire ENTER. Non sostituisce il retained `weigh`, non chiama direttamente la conferma Laravel e viene ritentato con lo stesso `request_id` finché il firmware comunica `staged`, `failed` o `rejected`.
 
 **Comando `clear`:** per i comandi tokenizzati annulla soltanto la stessa coppia `session_id + command_id`; le eccezioni compatibili per v1.2/legacy sono quelle descritte sopra. Non modifica lo stack locale.
 
 ### Tasti (con MQTT attivo)
 
 - **ENTER**: quando MQTT è connesso richiede un comando `weigh` attivo; senza comando emette un warning e non applica tara, push o audio di successo. Se il peso non è ancora quieto avvia la barra di acquisizione da 1,5 s e conserva l'identità esatta del comando fino al commit. Con comando valido prepara `confirm` e resta pending fino alla receipt Laravel e all'ACK browser. In modalità standalone il commit locale resta disponibile quando MQTT non è connesso o il WiFi è spento
+- **Conferma dal Manager**: con firmware 1.4+ richiama lo stesso flusso di ENTER. La pagina non cambia ingrediente su `accepted`/`staged` né su errore; avanza soltanto dopo la persistenza durable della pesata e l'ACK end-to-end
 - **SKIP breve**: scatta al rilascio e prepara `skip` per il comando attivo; senza comando emette un buzzer di avviso
 - **SKIP tenuto 5 secondi**: apre il wizard calibrazione senza inviare prima uno `skip`
 - **CLEAR breve**: annulla subito una voce locale; per una voce con receipt session-aware prepara `undo` e ripristina offset/zero-tracking soltanto al relativo ACK
@@ -534,7 +548,7 @@ Stack pesate in RAM (LIFO, max 50 elementi). Ogni voce conserva grammi, offset e
 ### Workflow tipico
 
 1. Metti contenitore, premi **TARA** → avvia tara manuale; se riesce azzera stack e salva la tara di riferimento
-2. Aggiungi ingrediente e premi **ENTER** → se è già quieto accetta subito; altrimenti mostra la barra **ACQUISIZIONE PESO** fino a 1,5 s, poi accetta appena STABLE o usa il centro robusto se non c'è deriva. A quel punto applica lo zero di lavoro, registra nello stack e prepara il `confirm` MQTT
+2. Aggiungi ingrediente e premi **ENTER** sulla bilancia oppure **Conferma** nel Manager → se è già quieto accetta subito; altrimenti mostra la barra **ACQUISIZIONE PESO** fino a 1,5 s, poi accetta appena STABLE o usa il centro robusto se non c'è deriva. A quel punto applica lo zero di lavoro, registra nello stack e prepara il `confirm` MQTT
 3. Ripeti per ogni ingrediente
 4. **TOTAL** (breve) → mostra overlay di controllo con **Registrato**, **Effettivo** e **Differenza** (10 secondi)
 5. **CLEAR** (breve) → annulla realmente l'ultima pesata: subito se locale, oppure dopo receipt/ACK dell'`undo` se associata a Laravel; a quel punto ripristina offset/zero-tracking e rimuove la voce LIFO
@@ -567,6 +581,7 @@ Stack pesate in RAM (LIFO, max 50 elementi). Ogni voce conserva grammi, offset e
 ### Interazione con MQTT
 
 - ENTER session-aware esegue: validazione → zero di lavoro → push reversibile → staging del `confirm` → associazione della receipt generata alla voce. Se lo staging non riesce, push e zero vengono annullati.
+- La richiesta remota del Manager non duplica questa logica: viene consumata nel loop, rispetta lo stesso lock TARE e chiama lo stesso helper di ENTER. Un fallimento non genera `confirm`, quindi Laravel e la pagina restano sull'ingrediente corrente.
 - CLEAR breve legge la voce senza rimuoverla. Se contiene una receipt remota, prepara un nuovo outbox `undo` con `undo_of_response_id`; offset/zero-tracking vengono ripristinati e la voce viene rimossa soltanto dopo l'ACK browser, quindi dopo la persistenza Laravel. Se il primo publish QoS 0 fallisce, lo stato locale resta invariato e l'outbox continua i retry.
 - Una voce locale o legacy senza receipt viene annullata subito e solo localmente; non viene inventato un undo Laravel non correlabile.
 - Durante una response in attesa di receipt/ACK sono bloccati TARE, ENTER, SKIP, qualsiasi CLEAR incluso quello lungo e le mutazioni del wizard di calibrazione. Gli stessi comandi seriali mutanti restano bloccati durante acquisizione e feedback ENTER: `stack clear` e tutti i `cal ...` tranne `cal status`.

@@ -13,7 +13,23 @@ struct Weigh {
   uint32_t productId = 0;
   float targetWeight = 0.0f;
   std::string name;
+  std::string connectionId;
 };
+
+struct ConfirmRequest {
+  std::string requestId;
+  std::string sessionId;
+  std::string connectionId;
+  std::string commandId;
+  std::string uuid;
+  uint32_t productId = 0;
+};
+
+bool sameConfirmRequest(const ConfirmRequest& left, const ConfirmRequest& right) {
+  return left.requestId == right.requestId && left.sessionId == right.sessionId &&
+    left.connectionId == right.connectionId && left.commandId == right.commandId &&
+    left.uuid == right.uuid && left.productId == right.productId;
+}
 
 enum class WeighResult {
   Activated,
@@ -28,6 +44,25 @@ enum class EnterMode {
   StandaloneCommit,
   BlockedNoCommand,
   BlockedOfflineCommand,
+};
+
+enum class ConfirmRequestResult {
+  Accepted,
+  AcceptedReplay,
+  StagedReplay,
+  FailedReplay,
+  RejectedStale,
+  RejectedConflict,
+  RejectedBusy,
+  Invalid,
+};
+
+enum class ConfirmRequestState {
+  None,
+  Queued,
+  Running,
+  Staged,
+  Failed,
 };
 
 EnterMode evaluateEnter(bool mqttConnected, bool commandActive) {
@@ -66,10 +101,47 @@ struct ProtocolModel {
   std::string responsePayload;
   unsigned activations = 0;
   unsigned commandAcks = 0;
+  ConfirmRequestState confirmRequestState = ConfirmRequestState::None;
+  ConfirmRequest activeConfirmRequest;
+  bool terminalRequestValid[2] = {};
+  ConfirmRequest terminalRequests[2];
+  ConfirmRequestResult terminalResults[2] = {
+    ConfirmRequestResult::Invalid, ConfirmRequestResult::Invalid};
+  unsigned terminalRequestNext = 0;
+  unsigned confirmExecutions = 0;
+
+  void resetConfirmRequest() {
+    confirmRequestState = ConfirmRequestState::None;
+    activeConfirmRequest = {};
+  }
+
+  ConfirmRequestResult rememberTerminal(
+      const ConfirmRequest& request, ConfirmRequestResult result) {
+    unsigned index = terminalRequestNext;
+    for (unsigned candidate = 0; candidate < 2; ++candidate) {
+      if (terminalRequestValid[candidate] &&
+          terminalRequests[candidate].requestId == request.requestId) {
+        index = candidate;
+        break;
+      }
+    }
+    const bool replacingKnown = terminalRequestValid[index] &&
+      terminalRequests[index].requestId == request.requestId;
+    terminalRequestValid[index] = true;
+    terminalRequests[index] = request;
+    terminalResults[index] = result;
+    if (!replacingKnown) terminalRequestNext = (index + 1) % 2;
+    return result;
+  }
 
   WeighResult weigh(const Weigh& incoming) {
-    if (!isSafeCommandId(incoming.commandId)) return WeighResult::Invalid;
+    if (!isSafeCommandId(incoming.commandId) ||
+        !isSafeCommandId(incoming.connectionId)) return WeighResult::Invalid;
     if (responsePending) return WeighResult::IgnoredPending;
+    if (confirmRequestState == ConfirmRequestState::Queued ||
+        confirmRequestState == ConfirmRequestState::Running) {
+      return WeighResult::IgnoredPending;
+    }
 
     if (active && !incoming.commandId.empty() &&
         incoming.commandId == command.commandId) {
@@ -83,9 +155,11 @@ struct ProtocolModel {
         return WeighResult::Conflict;
       }
       ++commandAcks;
+      command.connectionId = incoming.connectionId;
       return WeighResult::Duplicate;
     }
 
+    resetConfirmRequest();
     active = true;
     command = incoming;
     command.name = normalizedName(incoming.name);
@@ -95,7 +169,8 @@ struct ProtocolModel {
   }
 
   bool clear(const std::string& sessionId, const std::string& commandId) {
-    if (responsePending || !active) return false;
+    if (responsePending || confirmRequestState == ConfirmRequestState::Queued ||
+        confirmRequestState == ConfirmRequestState::Running || !active) return false;
     const bool fullyLegacy = command.commandId.empty() && command.sessionId.empty();
     const bool sessionMatches = fullyLegacy || sessionId == command.sessionId;
     const bool commandMatches = command.commandId.empty()
@@ -104,7 +179,69 @@ struct ProtocolModel {
     if (!sessionMatches || !commandMatches) return false;
     active = false;
     command = {};
+    resetConfirmRequest();
     return true;
+  }
+
+  ConfirmRequestResult confirmRequest(const ConfirmRequest& incoming) {
+    if (!isSafeCommandId(incoming.requestId) || incoming.requestId.empty() ||
+        !isSafeCommandId(incoming.commandId) || incoming.commandId.empty() ||
+        !isSafeCommandId(incoming.connectionId) || incoming.connectionId.empty()) {
+      return ConfirmRequestResult::Invalid;
+    }
+
+    if (confirmRequestState != ConfirmRequestState::None &&
+        incoming.requestId == activeConfirmRequest.requestId) {
+      if (!sameConfirmRequest(incoming, activeConfirmRequest)) {
+        return ConfirmRequestResult::RejectedConflict;
+      }
+      if (confirmRequestState == ConfirmRequestState::Staged) {
+        return ConfirmRequestResult::StagedReplay;
+      }
+      if (confirmRequestState == ConfirmRequestState::Failed) {
+        return ConfirmRequestResult::FailedReplay;
+      }
+      return ConfirmRequestResult::AcceptedReplay;
+    }
+    for (unsigned index = 0; index < 2; ++index) {
+      if (!terminalRequestValid[index] ||
+          incoming.requestId != terminalRequests[index].requestId) continue;
+      return sameConfirmRequest(incoming, terminalRequests[index])
+        ? terminalResults[index] : ConfirmRequestResult::RejectedConflict;
+    }
+
+    const bool exact = active && incoming.sessionId == command.sessionId &&
+      incoming.connectionId == command.connectionId &&
+      incoming.commandId == command.commandId && incoming.uuid == command.uuid &&
+      incoming.productId == command.productId;
+    if (!exact) {
+      return rememberTerminal(incoming, ConfirmRequestResult::RejectedStale);
+    }
+    if (responsePending || (confirmRequestState != ConfirmRequestState::None &&
+        confirmRequestState != ConfirmRequestState::Failed)) {
+      return rememberTerminal(incoming, ConfirmRequestResult::RejectedBusy);
+    }
+    activeConfirmRequest = incoming;
+    confirmRequestState = ConfirmRequestState::Queued;
+    return ConfirmRequestResult::Accepted;
+  }
+
+  bool popConfirmRequest() {
+    if (confirmRequestState != ConfirmRequestState::Queued) return false;
+    confirmRequestState = ConfirmRequestState::Running;
+    ++confirmExecutions;
+    return true;
+  }
+
+  void failConfirmRequest() {
+    assert(confirmRequestState == ConfirmRequestState::Running);
+    confirmRequestState = ConfirmRequestState::Failed;
+    rememberTerminal(activeConfirmRequest, ConfirmRequestResult::FailedReplay);
+  }
+
+  void markConfirmRequestStaged() {
+    assert(confirmRequestState == ConfirmRequestState::Running && responsePending);
+    confirmRequestState = ConfirmRequestState::Staged;
   }
 
   void stageResponse(std::string id, std::string payload) {
@@ -121,6 +258,7 @@ struct ProtocolModel {
     responsePayload.clear();
     active = false;
     command = {};
+    resetConfirmRequest();
     return true;
   }
 };
@@ -238,6 +376,176 @@ void testCommandIdValidation() {
   invalid.commandId = std::string(65, 'x');
   assert(invalidModel.weigh(invalid) == WeighResult::Invalid);
   assert(!invalidModel.active && invalidModel.commandAcks == 1);
+
+  ProtocolModel connectionModel;
+  Weigh connection = valid;
+  connection.connectionId = "bad\"connection";
+  assert(connectionModel.weigh(connection) == WeighResult::Invalid);
+  connection.connectionId = "connection-1";
+  assert(connectionModel.weigh(connection) == WeighResult::Activated);
+  connection.connectionId = "bad\\connection";
+  assert(connectionModel.weigh(connection) == WeighResult::Invalid);
+  assert(connectionModel.command.connectionId == "connection-1");
+}
+
+void testRemoteConfirmRequestIsFencedAndIdempotent() {
+  ProtocolModel model;
+  Weigh command{"command-1", "session-1", "uuid-1", 10, 125.0f, "Milk"};
+  command.connectionId = "connection-1";
+  assert(model.weigh(command) == WeighResult::Activated);
+
+  const ConfirmRequest request{
+    "request-1", "session-1", "connection-1", "command-1", "uuid-1", 10};
+  assert(model.confirmRequest(request) == ConfirmRequestResult::Accepted);
+  assert(model.confirmRequest(request) == ConfirmRequestResult::AcceptedReplay);
+  assert(!model.clear("session-1", "command-1"));
+  assert(model.popConfirmRequest());
+  assert(!model.popConfirmRequest());
+  assert(model.confirmExecutions == 1);
+
+  ConfirmRequest second = request;
+  second.requestId = "request-2";
+  assert(model.confirmRequest(second) == ConfirmRequestResult::RejectedBusy);
+
+  model.failConfirmRequest();
+  assert(model.confirmRequest(request) == ConfirmRequestResult::FailedReplay);
+  assert(model.confirmRequest(second) == ConfirmRequestResult::RejectedBusy);
+  ConfirmRequest third = request;
+  third.requestId = "request-3";
+  assert(model.confirmRequest(third) == ConfirmRequestResult::Accepted);
+  assert(model.popConfirmRequest());
+  assert(model.confirmExecutions == 2);
+  assert(model.confirmRequest(request) == ConfirmRequestResult::FailedReplay);
+  assert(model.confirmRequest(second) == ConfirmRequestResult::RejectedBusy);
+  assert(model.confirmExecutions == 2);
+}
+
+void testRemoteConfirmStagedRequestCannotRunTwice() {
+  ProtocolModel model;
+  Weigh command{"command-1", "session-1", "uuid-1", 10, 125.0f, "Milk"};
+  command.connectionId = "connection-1";
+  assert(model.weigh(command) == WeighResult::Activated);
+  const ConfirmRequest request{
+    "request-1", "session-1", "connection-1", "command-1", "uuid-1", 10};
+  assert(model.confirmRequest(request) == ConfirmRequestResult::Accepted);
+  assert(model.popConfirmRequest());
+  model.stageResponse("response-1", "immutable-confirm");
+  model.markConfirmRequestStaged();
+
+  assert(model.confirmRequest(request) == ConfirmRequestResult::StagedReplay);
+  ConfirmRequest other = request;
+  other.requestId = "request-2";
+  assert(model.confirmRequest(other) == ConfirmRequestResult::RejectedBusy);
+  assert(model.responsePayload == "immutable-confirm");
+  assert(model.confirmExecutions == 1);
+  assert(!model.responseAck("wrong-response"));
+  assert(model.confirmRequest(request) == ConfirmRequestResult::StagedReplay);
+  assert(model.responseAck("response-1"));
+  assert(model.confirmRequest(request) == ConfirmRequestResult::RejectedStale);
+  assert(model.confirmRequest(other) == ConfirmRequestResult::RejectedBusy);
+}
+
+void testRemoteConfirmConnectionRetargetDoesNotReuseRequest() {
+  ProtocolModel model;
+  Weigh command{"command-1", "session-1", "uuid-1", 10, 125.0f, "Milk"};
+  command.connectionId = "connection-1";
+  assert(model.weigh(command) == WeighResult::Activated);
+  ConfirmRequest request{
+    "request-1", "session-1", "connection-1", "command-1", "uuid-1", 10};
+  assert(model.confirmRequest(request) == ConfirmRequestResult::Accepted);
+
+  Weigh reload = command;
+  reload.connectionId = "connection-2";
+  assert(model.weigh(reload) == WeighResult::IgnoredPending);
+  assert(model.command.connectionId == "connection-1");
+  assert(model.popConfirmRequest());
+  model.failConfirmRequest();
+  assert(model.weigh(reload) == WeighResult::Duplicate);
+  assert(model.command.connectionId == "connection-2");
+  assert(model.confirmRequest(request) == ConfirmRequestResult::FailedReplay);
+
+  request.connectionId = "connection-2";
+  assert(model.confirmRequest(request) == ConfirmRequestResult::RejectedConflict);
+  assert(model.confirmExecutions == 1);
+}
+
+void testRemoteConfirmTerminalRejectSurvivesFenceChange() {
+  ProtocolModel model;
+  Weigh command{"command-1", "session-1", "uuid-1", 10, 125.0f, "Milk"};
+  command.connectionId = "connection-1";
+  assert(model.weigh(command) == WeighResult::Activated);
+
+  ConfirmRequest stale{
+    "request-1", "session-1", "connection-2", "command-1", "uuid-1", 10};
+  assert(model.confirmRequest(stale) == ConfirmRequestResult::RejectedStale);
+
+  Weigh reload = command;
+  reload.connectionId = "connection-2";
+  assert(model.weigh(reload) == WeighResult::Duplicate);
+  assert(model.confirmRequest(stale) == ConfirmRequestResult::RejectedStale);
+
+  ConfirmRequest conflict = stale;
+  conflict.uuid = "uuid-2";
+  assert(model.confirmRequest(conflict) == ConfirmRequestResult::RejectedConflict);
+  assert(model.confirmRequest(stale) == ConfirmRequestResult::RejectedStale);
+  assert(model.confirmExecutions == 0);
+}
+
+void testRemoteConfirmTerminalCacheEvictsOnlyTheOldestRequest() {
+  ProtocolModel model;
+  Weigh command{"command-1", "session-1", "uuid-1", 10, 125.0f, "Milk"};
+  command.connectionId = "connection-1";
+  assert(model.weigh(command) == WeighResult::Activated);
+
+  ConfirmRequest first{
+    "request-1", "session-1", "connection-2", "command-1", "uuid-1", 10};
+  ConfirmRequest second = first;
+  second.requestId = "request-2";
+  second.connectionId = "connection-3";
+  ConfirmRequest third = first;
+  third.requestId = "request-3";
+  third.connectionId = "connection-4";
+  assert(model.confirmRequest(first) == ConfirmRequestResult::RejectedStale);
+  assert(model.confirmRequest(second) == ConfirmRequestResult::RejectedStale);
+  assert(model.confirmRequest(third) == ConfirmRequestResult::RejectedStale);
+
+  Weigh reload = command;
+  reload.connectionId = "connection-2";
+  assert(model.weigh(reload) == WeighResult::Duplicate);
+  assert(model.confirmRequest(first) == ConfirmRequestResult::Accepted);
+  assert(model.confirmRequest(second) == ConfirmRequestResult::RejectedStale);
+  assert(model.confirmRequest(third) == ConfirmRequestResult::RejectedStale);
+  assert(model.popConfirmRequest());
+  assert(model.confirmExecutions == 1);
+}
+
+void testRemoteConfirmRejectsStaleOrInvalidFence() {
+  ProtocolModel model;
+  Weigh command{"command-1", "session-1", "uuid-1", 10, 125.0f, "Milk"};
+  command.connectionId = "connection-1";
+  assert(model.weigh(command) == WeighResult::Activated);
+  ConfirmRequest request{
+    "request-1", "session-1", "connection-1", "command-1", "uuid-1", 10};
+
+  ConfirmRequest stale = request;
+  stale.sessionId = "session-2";
+  assert(model.confirmRequest(stale) == ConfirmRequestResult::RejectedStale);
+  stale = request;
+  stale.requestId = "request-2";
+  stale.commandId = "command-2";
+  assert(model.confirmRequest(stale) == ConfirmRequestResult::RejectedStale);
+  stale = request;
+  stale.requestId = "request-3";
+  stale.uuid = "uuid-2";
+  assert(model.confirmRequest(stale) == ConfirmRequestResult::RejectedStale);
+  stale = request;
+  stale.requestId = "request-4";
+  stale.productId = 11;
+  assert(model.confirmRequest(stale) == ConfirmRequestResult::RejectedStale);
+  stale = request;
+  stale.requestId = "short";
+  assert(model.confirmRequest(stale) == ConfirmRequestResult::Invalid);
+  assert(model.confirmExecutions == 0);
 }
 
 void testMaximumPayloadsFitBuffers() {
@@ -245,23 +553,40 @@ void testMaximumPayloadsFitBuffers() {
   const std::string sessionId(64, 's');
   const std::string uuid(36, 'u');
   const std::string responseId(24, 'r');
+  const std::string connectionId(64, 'n');
+  const std::string requestId(64, 'q');
   const std::string topic = "minu/scale/123456789abc/response";
+  const std::string commandTopic = "minu/scale/123456789abc/command";
 
   const std::string commandAck =
     "{\"type\":\"command_ack\",\"command_id\":\"" + commandId +
-    "\",\"session_id\":\"" + sessionId + "\",\"uuid\":\"" + uuid +
+    "\",\"session_id\":\"" + sessionId + "\",\"connection_id\":\"" +
+    connectionId + "\",\"uuid\":\"" + uuid +
     "\",\"product_id\":4294967295,\"state\":\"active\"}";
   const std::string confirm =
     "{\"type\":\"confirm\",\"uuid\":\"" + uuid +
     "\",\"product_id\":4294967295,\"session_id\":\"" + sessionId +
     "\",\"command_id\":\"" + commandId + "\",\"response_id\":\"" +
     responseId + "\",\"actual_weight\":-123456.7}";
+  const std::string confirmRequest =
+    "{\"type\":\"confirm_request\",\"request_id\":\"" + requestId +
+    "\",\"session_id\":\"" + sessionId + "\",\"connection_id\":\"" +
+    connectionId + "\",\"command_id\":\"" + commandId +
+    "\",\"uuid\":\"" + uuid + "\",\"product_id\":4294967295}";
+  const std::string confirmRequestAck =
+    "{\"type\":\"confirm_request_ack\",\"request_id\":\"" + requestId +
+    "\",\"command_id\":\"" + commandId + "\",\"connection_id\":\"" +
+    connectionId +
+    "\",\"state\":\"rejected\",\"reason\":\"context_changed\"}";
 
-  assert(commandAck.size() < 320);
+  assert(commandAck.size() < 384);
   assert(confirm.size() < 384);
+  assert(confirmRequestAck.size() < 384);
   // MQTT_MAX_PACKET_SIZE also includes topic and packet framing.
   assert(topic.size() + commandAck.size() + 8 < 512);
   assert(topic.size() + confirm.size() + 8 < 512);
+  assert(topic.size() + confirmRequestAck.size() + 8 < 512);
+  assert(commandTopic.size() + confirmRequest.size() + 8 < 512);
 }
 
 } // namespace
@@ -273,6 +598,12 @@ int main() {
   testDuplicateNormalizesLongName();
   testPendingResponseIsByteImmutable();
   testCommandIdValidation();
+  testRemoteConfirmRequestIsFencedAndIdempotent();
+  testRemoteConfirmStagedRequestCannotRunTwice();
+  testRemoteConfirmConnectionRetargetDoesNotReuseRequest();
+  testRemoteConfirmTerminalRejectSurvivesFenceChange();
+  testRemoteConfirmTerminalCacheEvictsOnlyTheOldestRequest();
+  testRemoteConfirmRejectsStaleOrInvalidFence();
   testMaximumPayloadsFitBuffers();
   std::cout << "firmware MQTT protocol harness: OK\n";
   return 0;
