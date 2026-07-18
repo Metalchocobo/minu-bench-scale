@@ -41,7 +41,7 @@
   // e vengono salvati in NVS (persistono tra aggiornamenti firmware).
   // Comandi: mqtt set "host" "user" "pass", mqtt creds, mqtt clear, mqtt apply
   #define MQTT_PORT       8883          // MQTTS (TLS)
-  #define MQTT_FW_VERSION "1.4.0"
+  #define MQTT_FW_VERSION "1.4.3"
   #define MQTT_SCALE_NAME "Minu Bench Scale"  // Nome visibile nel browser
 #endif
 
@@ -79,6 +79,7 @@ namespace Net {
 
   // True se connesso al broker MQTT
   bool isMqttConnected();
+  bool isMqttConnectInProgress();
 
   // Stage a confirm for the active command. Session-aware commands stay active
   // until the browser acknowledges the generated response_id.
@@ -106,13 +107,29 @@ namespace Net {
   // Restituisce il scale_id (MAC formattato)
   const char* getScaleId();
 
-  // Stato comando attivo
+  // Raw command presence is kept separate from actionability so an MQTT
+  // disconnect cannot accidentally turn a remote command into a standalone
+  // weigh. Connection-aware commands are actionable only while the exact
+  // browser owner lease is fresh.
   bool   isMqttCommandActive();
+  bool   isMqttCommandActionable();
   bool   isMqttResponsePending();
+  // A pending response remains immutable and retries in background, but it
+  // stops locking the physical operator after the remote consumer detaches or
+  // the bounded delivery window expires.
+  bool   isMqttResponseOperatorLocked();
+  bool   isMqttLocalFallbackActive();
+  // True only while a fresh Manager owner is attached and local fallback is
+  // not active. This is intentionally separate from broker connectivity.
+  bool   isMqttManagerAttached();
+  // Physical TARE/ENTER always win over a stalled durable delivery. The
+  // existing outbox remains immutable while subsequent work becomes local.
+  bool   mqttDetachForLocalInput();
   float  getMqttTargetWeight();
   const char* getMqttCommandUuid();
   const char* getMqttCommandName();
   const char* getMqttCommandSessionId();
+  const char* getMqttCommandConnectionId();
   const char* getMqttCommandId();
   const char* getMqttLastSessionId();
   uint32_t getMqttCommandProductId();
@@ -122,6 +139,11 @@ namespace Net {
 
   // True once after the browser ACKs a durable undo REST commit.
   bool mqttPopUndoAck();
+
+  // True once when an undo outbox becomes detached. The main loop applies the
+  // already-requested local restore immediately; a later ACK must not apply it
+  // a second time after local work has resumed.
+  bool mqttPopDetachedUndo();
 
   // Ritorna true una sola volta se MQTT si è disconnesso (per buzzer x2 nel .ino)
   bool mqttPopDisconnectBeep();

@@ -24,7 +24,6 @@ static const uint32_t HX711_INIT_TIMEOUT_MS = 1200;  // Timeout init
 
 // ========================= WATCHDOG / BUS TIMEOUT =========================
 static const uint32_t LOOP_WDT_TIMEOUT_MS      = 8000;   // Task watchdog loop
-static const uint32_t MQTT_TLS_WDT_TIMEOUT_MS  = 20000;  // Guard durante handshake TLS
 static const uint16_t I2C_TIMEOUT_MS           = 50;     // Timeout transazioni Wire
 
 // ========================= AUTO-TARE BOOT =========================

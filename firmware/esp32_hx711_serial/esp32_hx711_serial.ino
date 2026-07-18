@@ -157,8 +157,10 @@ static long g_enterStartZtCounts = 0;
 static float g_enterStartCpg = 0.0f;
 #if ENABLE_MQTT
 static bool g_enterStartHadMqttCommand = false;
+static bool g_enterStartLocalFallback = false;
 static char g_enterStartMqttUuid[37] = {0};
 static char g_enterStartMqttSessionId[65] = {0};
+static char g_enterStartMqttConnectionId[65] = {0};
 static char g_enterStartMqttCommandId[65] = {0};
 static uint32_t g_enterStartMqttProductId = 0;
 static bool g_remoteConfirmActive = false;
@@ -174,6 +176,8 @@ static bool g_skipShortPending = false;
 static bool g_skipBlockedUntilRelease = false;
 static bool g_remoteUndoAwaitingAck = false;
 static char g_remoteUndoConfirmId[WeighStack::RESPONSE_ID_CAP] = {0};
+static KeyCode g_deferredLocalKey = KEY_NONE;
+static bool g_detachedUndoKeyGuard = false;
 
 static void showStackCompareOverlay(uint32_t nowMs) {
   float stackTotal = WeighStack::total();
@@ -236,6 +240,23 @@ static bool restoreTopStackEntryAfterUndo(uint32_t nowMs) {
   Serial.println(F(")"));
   return true;
 }
+
+#if ENABLE_MQTT
+static bool applyDetachedUndoNow() {
+  if (!Net::mqttPopDetachedUndo()) return false;
+  const WeighStack::Entry* top = WeighStack::peek();
+  bool matchingEntry = g_remoteUndoAwaitingAck && top &&
+    strcmp(top->confirmResponseId, g_remoteUndoConfirmId) == 0;
+  bool restored = matchingEntry && restoreTopStackEntryAfterUndo(millis());
+  g_remoteUndoAwaitingAck = false;
+  g_remoteUndoConfirmId[0] = '\0';
+  g_detachedUndoKeyGuard = restored;
+  Serial.println(restored
+    ? F("[STACK] UNDO locale applicato; sync continua in background")
+    : F("[STACK] UNDO detached senza entry locale"));
+  return true;
+}
+#endif
 
 // Log HX
 static bool     g_hxLogEnabled  = false;
@@ -638,8 +659,8 @@ void parseCommand(const char* cmd) {
       Serial.print(F("  Configurato: ")); Serial.println(Net::isMqttConfigured() ? "si" : "no");
       Serial.print(F("  Connesso:    ")); Serial.println(Net::isMqttConnected() ? "si" : "no");
       Serial.print(F("  Scale ID:    ")); Serial.println(Net::getScaleId());
-      Serial.print(F("  Cmd attivo:  ")); Serial.println(Net::isMqttCommandActive() ? "si" : "no");
-      if (Net::isMqttCommandActive()) {
+      Serial.print(F("  Cmd attivo:  ")); Serial.println(Net::isMqttCommandActionable() ? "si" : "no");
+      if (Net::isMqttCommandActionable()) {
         Serial.print(F("  UUID:        ")); Serial.println(Net::getMqttCommandUuid());
         Serial.print(F("  Target (g):  ")); Serial.println(Net::getMqttTargetWeight(), 1);
       }
@@ -824,15 +845,19 @@ static bool enterCaptureContextMatches() {
       fabsf(ScaleState::getScaleCpg() - g_enterStartCpg) > 0.0001f) return false;
 
 #if ENABLE_MQTT
-  if (Net::isMqttResponsePending()) return false;
-  bool active = Net::isMqttCommandActive();
+  if (Net::isMqttResponseOperatorLocked()) return false;
+  bool active = Net::isMqttCommandActionable();
   bool connected = Net::isMqttConnected();
   if (g_enterStartHadMqttCommand) {
     return active && connected &&
       strcmp(Net::getMqttCommandUuid(), g_enterStartMqttUuid) == 0 &&
       strcmp(Net::getMqttCommandSessionId(), g_enterStartMqttSessionId) == 0 &&
+      strcmp(Net::getMqttCommandConnectionId(), g_enterStartMqttConnectionId) == 0 &&
       strcmp(Net::getMqttCommandId(), g_enterStartMqttCommandId) == 0 &&
       Net::getMqttCommandProductId() == g_enterStartMqttProductId;
+  }
+  if (g_enterStartLocalFallback) {
+    return Net::isMqttLocalFallbackActive() && !active;
   }
   return !active && !connected;
 #else
@@ -870,19 +895,21 @@ static bool enterPreflight(float currentWeight, long workingOffset,
   }
 
 #if ENABLE_MQTT
-  if (Net::isMqttResponsePending()) {
+  if (Net::isMqttResponseOperatorLocked()) {
     Serial.println(F("[STACK] ENTER bloccato (response ACK pending)"));
     if (audible) buzzerWarn();
     return false;
   }
-  bool hadMqttCommand = Net::isMqttCommandActive();
+  bool commandPresent = Net::isMqttCommandActive();
+  bool hadMqttCommand = Net::isMqttCommandActionable();
   bool mqttConnected = Net::isMqttConnected();
-  if (mqttConnected && !hadMqttCommand) {
+  bool localFallback = Net::isMqttLocalFallbackActive();
+  if (mqttConnected && !hadMqttCommand && !localFallback) {
     Serial.println(F("[STACK] ENTER bloccato (nessun comando MQTT)"));
     if (audible) buzzerWarn();
     return false;
   }
-  if (hadMqttCommand && !mqttConnected) {
+  if (commandPresent && !mqttConnected && !localFallback) {
     Serial.println(F("[STACK] ENTER bloccato (MQTT offline)"));
     if (audible) buzzerWarn();
     return false;
@@ -899,7 +926,15 @@ static bool enterPreflight(float currentWeight, long workingOffset,
 static bool commitEnterWeight(float currentWeight, long workingOffset,
                               uint32_t commitNow) {
 #if ENABLE_MQTT
-  bool hadMqttCommand = Net::isMqttCommandActive();
+  bool commandPresent = Net::isMqttCommandActive();
+  bool hadMqttCommand = Net::isMqttCommandActionable();
+  bool mqttConnected = Net::isMqttConnected();
+  bool localFallback = Net::isMqttLocalFallbackActive();
+  if ((mqttConnected && !hadMqttCommand && !localFallback) ||
+      (!mqttConnected && commandPresent && !localFallback)) {
+    Serial.println(F("[STACK] Commit bloccato (contesto MQTT)"));
+    return false;
+  }
   char mqttUuid[37] = {0};
   char mqttSessionId[65] = {0};
   uint32_t mqttProductId = 0;
@@ -996,14 +1031,17 @@ static void startEnterCapture(uint32_t nowMs) {
   g_enterStartZtCounts = ScaleState::getZtCounts();
   g_enterStartCpg = ScaleState::getScaleCpg();
 #if ENABLE_MQTT
-  g_enterStartHadMqttCommand = Net::isMqttCommandActive();
+  g_enterStartHadMqttCommand = Net::isMqttCommandActionable();
+  g_enterStartLocalFallback = Net::isMqttLocalFallbackActive();
   g_enterStartMqttUuid[0] = '\0';
   g_enterStartMqttSessionId[0] = '\0';
+  g_enterStartMqttConnectionId[0] = '\0';
   g_enterStartMqttCommandId[0] = '\0';
   g_enterStartMqttProductId = 0;
   if (g_enterStartHadMqttCommand) {
     strlcpy(g_enterStartMqttUuid, Net::getMqttCommandUuid(), sizeof(g_enterStartMqttUuid));
     strlcpy(g_enterStartMqttSessionId, Net::getMqttCommandSessionId(), sizeof(g_enterStartMqttSessionId));
+    strlcpy(g_enterStartMqttConnectionId, Net::getMqttCommandConnectionId(), sizeof(g_enterStartMqttConnectionId));
     strlcpy(g_enterStartMqttCommandId, Net::getMqttCommandId(), sizeof(g_enterStartMqttCommandId));
     g_enterStartMqttProductId = Net::getMqttCommandProductId();
   }
@@ -1278,8 +1316,17 @@ void handleKeyEvent(KeyCode key) {
   // ENTER events, tare restarts, and stack changes during the real operation.
   uint32_t keyNow = millis();
 #if ENABLE_MQTT
+  bool pendingRemoteOnlyKey = key == KEY_SKIP || key == KEY_CLEAR;
+  bool localOverrideKey = key == KEY_TARE || key == KEY_ENTER;
+  if (Net::isMqttResponseOperatorLocked() && localOverrideKey) {
+    if (Net::mqttDetachForLocalInput() && applyDetachedUndoNow()) {
+      g_deferredLocalKey = key;
+      return;
+    }
+  }
   if (Net::isMqttResponsePending() &&
-      (key == KEY_TARE || key == KEY_ENTER || key == KEY_SKIP || key == KEY_CLEAR)) {
+      (Net::isMqttResponseOperatorLocked() || pendingRemoteOnlyKey) &&
+      (key == KEY_TARE || key == KEY_ENTER || pendingRemoteOnlyKey)) {
     Serial.println(F("[KEYPAD] Bloccato: response ACK pending"));
     buzzerWarn();
     return;
@@ -1391,13 +1438,14 @@ void handleKeyEvent(KeyCode key) {
       Serial.println(F("[KEYPAD] SKIP pressed"));
       buzzerKeyClick();
 #if ENABLE_MQTT
-      if (Net::isMqttCommandActive() && Net::isMqttConnected()) {
+      if (Net::isMqttCommandActionable() && Net::isMqttConnected()) {
         if (Net::mqttSkipActiveCommand()) {
           Audio::requestPlayMp3(Track::SKIP_PRESSED);
         } else {
           buzzerError();
         }
-      } else if (Net::isMqttConnected() && !Net::isMqttCommandActive()) {
+      } else if (Net::isMqttConnected() && !Net::isMqttCommandActionable() &&
+                 !Net::isMqttLocalFallbackActive()) {
         // Nessun comando attivo: bip di avviso sordo
         buzzerWarn();
       } else {
@@ -2085,8 +2133,8 @@ void loop() {
   // Reset Task Watchdog (evita reboot se loop è vivo)
   feedLoopWatchdog();
 
-  // MQTT/TLS reconnects and their beeps can block sampling. Defer them during
-  // the bounded manual-tare critical section; connected traffic tolerates it.
+  // Defer MQTT callbacks and related UI feedback during the bounded manual-
+  // tare critical section. Connection establishment runs on a separate task.
   uint32_t loopStartMs = millis();
   if (g_manualTareArmed &&
       (uint32_t)(loopStartMs - g_manualTareArmMs) >= TARE_MANUAL_ARM_MAX_MS) {
@@ -2114,6 +2162,10 @@ void loop() {
       Audio::stopNow(true);
       lastOledMs = 0;
     }
+  }
+
+  if (!tareCritical && g_enterUiState == ENTER_UI_IDLE) {
+    (void)applyDetachedUndoNow();
   }
 
   if (!tareCritical && g_enterUiState == ENTER_UI_IDLE && Net::mqttPopUndoAck()) {
@@ -2175,9 +2227,31 @@ void loop() {
   KeyCode key = keypad_get_event();
 
 #if ENABLE_MQTT
+  if (g_detachedUndoKeyGuard && !isTareBehaviorLocked(now)) {
+    g_detachedUndoKeyGuard = false;
+  }
+  if (g_detachedUndoKeyGuard &&
+      (key == KEY_TARE || key == KEY_ENTER)) {
+    g_deferredLocalKey = key;
+    key = KEY_NONE;
+  } else if (!g_detachedUndoKeyGuard && key == KEY_NONE &&
+             g_deferredLocalKey != KEY_NONE &&
+             g_enterUiState == ENTER_UI_IDLE &&
+             !isTareBehaviorLocked(now)) {
+    key = g_deferredLocalKey;
+    g_deferredLocalKey = KEY_NONE;
+    Serial.println(F("[KEYPAD] Input locale ripreso dopo UNDO"));
+  }
+#endif
+
+#if ENABLE_MQTT
   bool mqttOutboxPending = Net::isMqttResponsePending();
+  bool mqttOperatorLocked = Net::isMqttResponseOperatorLocked();
+  bool mqttLocalFallback = Net::isMqttLocalFallbackActive();
 #else
   bool mqttOutboxPending = false;
+  bool mqttOperatorLocked = false;
+  bool mqttLocalFallback = false;
 #endif
 
   // ENTER acquisition/results are self-closing and ignore every key so a
@@ -2195,7 +2269,22 @@ void loop() {
     CalWizard::cancelLongPress();
     g_skipShortPending = false;
     if (keypad_is_pressed(KEY_SKIP)) g_skipBlockedUntilRelease = true;
-    if (key == KEY_TARE || key == KEY_ENTER || key == KEY_SKIP || key == KEY_CLEAR) {
+#if ENABLE_MQTT
+    bool localOverrideKey = key == KEY_TARE || key == KEY_ENTER;
+    if (mqttOperatorLocked && localOverrideKey &&
+        Net::mqttDetachForLocalInput()) {
+      mqttOperatorLocked = false;
+      mqttLocalFallback = true;
+      if (applyDetachedUndoNow()) {
+        g_deferredLocalKey = key;
+        key = KEY_NONE;
+      }
+    }
+#endif
+    bool remoteOnlyKey = key == KEY_SKIP || key == KEY_CLEAR;
+    if ((mqttOperatorLocked &&
+         (key == KEY_TARE || key == KEY_ENTER || remoteOnlyKey)) ||
+        (mqttLocalFallback && remoteOnlyKey)) {
       Serial.println(F("[CAL] Tasto bloccato: response ACK pending"));
       buzzerWarn();
       key = KEY_NONE;
@@ -2271,7 +2360,7 @@ void loop() {
     g_manualTareArmMs = 0;
     bool tareReleaseBlocked = hxHealth_isError(&g_hxHealth) || g_overloadActive;
 #if ENABLE_MQTT
-    tareReleaseBlocked = tareReleaseBlocked || Net::isMqttResponsePending();
+    tareReleaseBlocked = tareReleaseBlocked || Net::isMqttResponseOperatorLocked();
 #endif
     if (tareReleaseBlocked) {
       g_captureReferenceAfterTare = false;
@@ -2383,7 +2472,7 @@ void loop() {
       }
     } else {
       if (!g_sleepLongPressFired) {
-        bool sleepBlocked = g_overloadActive || mqttOutboxPending;
+        bool sleepBlocked = g_overloadActive || mqttOperatorLocked;
 #if ENABLE_WIFI_OTA
         sleepBlocked = sleepBlocked || Net::isOtaInProgress();
 #endif
@@ -2656,7 +2745,7 @@ void loop() {
   uint32_t tareNow = millis();
   bool cancelActiveTare = g_overloadActive;
 #if ENABLE_MQTT
-  cancelActiveTare = cancelActiveTare || Net::isMqttResponsePending();
+  cancelActiveTare = cancelActiveTare || Net::isMqttResponseOperatorLocked();
 #endif
   bool tareCancelled = cancelActiveTare && ScaleState::tareCancel(tareNow);
   ScaleState::TareResult tareResult = tareCancelled
@@ -2713,8 +2802,13 @@ void loop() {
   if (g_overloadActive) allowInactivitySleep = false;
   if (g_inactivitySleepStage == INACT_NONE && Audio::isActive()) allowInactivitySleep = false;
 #if ENABLE_MQTT
-  if (Net::isMqttResponsePending()) allowInactivitySleep = false;
-  if (!manualSleepCountdown && Net::isMqttCommandActive()) allowInactivitySleep = false;
+  if (Net::isMqttResponseOperatorLocked()) allowInactivitySleep = false;
+  bool mqttConnectBusy = Net::isMqttConnectInProgress();
+  if (mqttConnectBusy && !manualSleepCountdown) allowInactivitySleep = false;
+  bool mqttCommandBlocksSleep = Net::isMqttCommandActive() &&
+    !Net::isMqttLocalFallbackActive() &&
+    (!Net::isMqttConnected() || Net::isMqttCommandActionable());
+  if (!manualSleepCountdown && mqttCommandBlocksSleep) allowInactivitySleep = false;
 #endif
 #if ENABLE_WIFI_OTA
   if (Net::isOtaInProgress()) allowInactivitySleep = false;
@@ -2741,6 +2835,13 @@ void loop() {
       }
     } else {
       if ((now - g_inactivityStageStartMs) >= INACTIVITY_ZZZ_MS) {
+#if ENABLE_MQTT
+        // A manual request remains queued while the connect worker releases
+        // the transport; the operator never needs to press SLEEP twice.
+        if (Net::isMqttConnectInProgress()) {
+          return;
+        }
+#endif
         g_inactivitySleepStage = INACT_NONE;
         g_inactivityStageStartMs = 0;
         g_manualSleepRequested = false;
@@ -2842,9 +2943,9 @@ void loop() {
         }
       } else if (!drewTare) {
 #if ENABLE_MQTT
-        bool mqttTarget = Net::isMqttCommandActive();
+        bool mqttTarget = Net::isMqttCommandActionable();
         float mqttTW    = Net::getMqttTargetWeight();
-        const char* mqttName = Net::getMqttCommandName();
+        const char* mqttName = mqttTarget ? Net::getMqttCommandName() : nullptr;
         bool mqttConn   = Net::isMqttConnected();
         bool mqttVis    = WiFi.isConnected();
 #else

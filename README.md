@@ -310,17 +310,17 @@ Comportamento:
 ---
 
 ## 10) Risparmio energetico per inattività (5 minuti)
-Se per **5 minuti** non viene premuto alcun tasto, il peso visualizzato resta fermo entro ±5 g e non esistono comando MQTT o response outbox pending, la bilancia entra in **LIGHT-SLEEP**.
+Se per **5 minuti** non viene premuto alcun tasto, il peso visualizzato resta fermo entro ±5 g e non esistono comando MQTT operativo o response outbox ancora agganciato al Manager, la bilancia entra in **LIGHT-SLEEP**. Un outbox già passato alla modalità locale continua a vivere in RAM e riprende i retry al wake senza tenere acceso il display.
 
 Caratteristiche:
 - Wake: **qualsiasi tasto**.
 - L'inattività viene azzerata anche da una variazione del peso visualizzato **> 5 g** (in LIVE o WORK).
-- Ogni `weigh`/clear MQTT accettato azzera il timer; finché un comando o una response restano pending l'auto-sleep è bloccato.
+- Ogni `weigh`/clear MQTT accettato azzera il timer; un comando operativo o una response ancora agganciata al Manager bloccano l'auto-sleep, mentre dopo il fallback locale non lo bloccano più.
 - Prima della sospensione MQTT viene pubblicato retained `state=sleeping`; il LWT `offline` resta riservato alle disconnessioni impreviste.
 - Il tasto che provoca il wake viene ignorato come comando finché non viene rilasciato.
 - **Nessun reset** dello stato/pesata: riprende esattamente dove era.
 - WiFi/OTA vengono sospesi prima dello sleep e riattivati dopo il wake **solo se l'utente ha lasciato il WiFi ON**.
-- **SLEEP breve**: al rilascio avvia la sequenza di standby manuale (schermata **Zzz...** per ~5 s + audio 0003), poi light-sleep anche se è presente un semplice comando `weigh` MQTT. Una response in attesa di receipt/ACK, un upload OTA o il sovraccarico continuano invece a bloccarlo.
+- **SLEEP breve**: al rilascio avvia la sequenza di standby manuale (schermata **Zzz...** per ~5 s + audio 0003), poi light-sleep anche se è presente un semplice comando `weigh` MQTT. Se il worker MQTT sta connettendo, la richiesta resta accodata e lo sleep parte appena il trasporto viene rilasciato, senza richiedere una seconda pressione. Una response ancora nel lock operatore, un upload OTA o il sovraccarico continuano invece a bloccarlo; una response già detached no.
 - **SLEEP tenuto per 2 secondi**: non entra in standby; commuta il DFPlayer tra **AUDIO OFF** e **AUDIO ON**, salva la scelta in NVS e la mantiene dopo riavvii e spegnimenti completi, con conferma sul display e buzzer.
 
 ### Indicatore esterno sleep (LED)
@@ -402,7 +402,7 @@ Comandi seriali:
 
 Se le credenziali non sono configurate, MQTT resta inattivo (nessun tentativo di connessione).
 
-Porta bilancia: **8883** (MQTTS/TLS). Porta browser: **8884** (WSS/TLS). Il certificato CA ISRG Root X1 è nel firmware. `MQTT_SCALE_NAME` e `MQTT_FW_VERSION` sono definiti in `net_ota_cloud.h`; la versione corrente è **1.4.0**.
+Porta bilancia: **8883** (MQTTS/TLS). Porta browser: **8884** (WSS/TLS). Il certificato CA ISRG Root X1 è nel firmware. `MQTT_SCALE_NAME` e `MQTT_FW_VERSION` sono definiti in `net_ota_cloud.h`; la versione corrente è **1.4.3**.
 
 ### Topic e QoS effettivo
 
@@ -414,7 +414,7 @@ La bilancia si identifica con il MAC STA letto direttamente dall'eFuse ESP32 (lo
 | `minu/scale/{scale_id}/response` | Bilancia → browser | 0 | no | `command_ack`/`confirm_request_ack` transitori; `confirm`, `skip` e `undo` durable con retry applicativo |
 | `minu/scale/{scale_id}/ack` | Browser → bilancia | 1 | no | `response_ack` applicativo |
 | `minu/scale/{scale_id}/status` | Bilancia → browser | online/sleeping 0; LWT offline 1 | sì | stato operativo, nome e versione firmware |
-| `minu/scale/{scale_id}/owner` | Browser → browser | 1 | sì | lease della scheda che controlla la bilancia |
+| `minu/scale/{scale_id}/owner` | Browser → browser + bilancia | 1 | sì | lease della scheda che controlla la bilancia |
 
 PubSubClient pubblica a QoS 0: per questo una response non viene considerata consegnata dal solo risultato di `publish()`. Il buffer della libreria viene impostato e verificato a runtime con `mqttClient.setBufferSize(512)`; il solo define `MQTT_MAX_PACKET_SIZE` non è sufficiente.
 
@@ -428,13 +428,17 @@ Comando di pesatura:
 
 `command_id` identifica una singola attivazione del comando, è lungo 8–64 caratteri e ammette lettere ASCII, cifre, `-` e `_`. Il valore vuoto resta ammesso soltanto per compatibilità con i browser precedenti. Il Manager conserva l'ID sui retry soltanto quando sessione, UUID, prodotto, nome e target sono identici; una variazione semantica genera un ID nuovo. Un replay identico con lo stesso `command_id` non reinizializza il comando e riemette `command_ack`; su reload aggiorna soltanto il `connection_id` del documento corrente. Lo stesso ID riutilizzato con contenuto business diverso viene ignorato senza ACK e senza modificare lo stato attivo.
 
+Da firmware 1.4.1 un `weigh` dotato di `connection_id` è attivabile soltanto quando il retained `owner` è fresco e coincide con la sua coppia sessione/connessione. La bilancia calcola la vita residua dai timestamp originali del lease, quindi un owner retained vecchio non viene ringiovanito al reconnect. Il lease di controllo resta di 30 secondi, ma da 1.4.2 la presenza operativa richiede un heartbeat negli ultimi 15 secondi; con heartbeat ogni 10 secondi una chiusura brutale viene quindi isolata prima della scadenza di takeover. Dopo ogni reconnect attende inoltre il nuovo snapshot retained `command`: il solo owner non può riattivare per un loop un vecchio comando RAM prima dell'arrivo di un eventuale clear o ingrediente nuovo. Se l'owner sparisce o gli snapshot necessari non arrivano, il comando moderno resta raw in RAM ma non è operativo né visibile. Lo sgancio abilita una modalità locale: TARE e ENTER fisici restano utilizzabili anche con MQTT connesso, senza generare una seconda response remota. Un retained `weigh` della connessione sganciata non può riattivarla: serve un heartbeat più nuovo o una nuova connessione. Solo il relativo `command_ack` riaggancia la modalità gestita. I comandi privi di `connection_id` conservano il comportamento legacy.
+
 Pulizia comando:
 
 ```json
-{"type":"clear","session_id":"...","command_id":"..."}
+{"type":"clear","session_id":"...","connection_id":"...","command_id":"..."}
+{"type":"clear","session_id":"...","connection_id":"...","command_id":"...","lifecycle":"pagehide"}
+{"type":"clear","session_id":"...","connection_id":"...","lifecycle":"pagehide"}
 ```
 
-Senza response pending la bilancia accetta `clear` soltanto se la fence è coerente: un comando con `command_id` richiede lo stesso ID e la stessa sessione; un comando v1.2 senza ID ma con sessione richiede un clear senza ID della stessa sessione. Solo un comando realmente legacy, privo sia di `command_id` sia di `session_id`, può essere cancellato da un clear senza ID che riporta la sessione del Manager nuovo. Un clear vecchio non può quindi cancellare un'attivazione tokenizzata. Durante un outbox pending ogni `weigh` e `clear` viene ignorato.
+Senza response pending la bilancia accetta un `clear` live soltanto se la fence è coerente: un comando moderno richiede lo stesso `session_id`, lo stesso `command_id` e un `connection_id` non vuoto. Se esiste un owner fresco, la connessione deve essere la sua; in assenza di owner fresco, il retained clear esatto è trattato come tombstone autorevole del broker. Inoltre, il primo snapshot `command` dopo reconnect è autorevole sul raw RAM: un retained clear moderno lo rimuove anche se nel frattempo il broker è avanzato a un'altra coppia sessione/comando. Il nuovo documento proprietario può così pulire il comando del predecessore, mentre un `pagehide` tardivo della vecchia connessione non può cancellare quello nuovo finché il nuovo owner è vivo. Da 1.4.2 il clear `lifecycle=pagehide`, autenticato dall'esatta sessione/connessione owner, può sganciare subito l'operatore anche senza comando o con una response pending; cancella il raw soltanto quando coincide anche la fence comando e non modifica mai l'outbox. I clear normali REST-before-ACK restano ignorati durante il pending. Le regole v1.2/legacy restano invariate.
 
 Conferma transitoria di attivazione firmware:
 
@@ -442,7 +446,7 @@ Conferma transitoria di attivazione firmware:
 {"type":"command_ack","command_id":"...","session_id":"...","connection_id":"...","uuid":"...","product_id":123,"state":"active"}
 ```
 
-Il firmware pubblica `command_ack` sul topic `response` dopo avere attivato un `weigh` con `command_id` e lo ripubblica per ogni replay identico dello stesso ID. Da firmware 1.4 riecheggia anche la connessione corrente, così un documento ricaricato non diventa pronto prima che il firmware abbia visto il suo nuovo `connection_id`. Questo ACK è QoS 0, non usa l'outbox, non contiene `response_id` e non rappresenta una mutazione Laravel: se viene perso, il browser ripubblica lo stesso `weigh`. I comandi precedenti senza `command_id` non producono il nuovo ACK.
+Il firmware pubblica `command_ack` sul topic `response` dopo avere attivato un `weigh` con `command_id` e lo ripubblica per ogni replay identico dello stesso ID. Da firmware 1.4 riecheggia anche la connessione corrente, così un documento ricaricato non diventa pronto prima che il firmware abbia visto il suo nuovo `connection_id`. Da 1.4.2 ogni nuova eco owner esatta invalida nel Manager la precedente prova di attivazione e forza il replay dello stesso `weigh`: la pagina torna pronta solo sul nuovo ACK, quindi un fallback firmware non può restare nascosto dietro un ACK in cache. Questo ACK è QoS 0, non usa l'outbox, non contiene `response_id` e non rappresenta una mutazione Laravel. I comandi precedenti senza `command_id` non producono il nuovo ACK.
 
 Conferma remota dal Manager:
 
@@ -469,7 +473,7 @@ ACK browser:
 {"type":"response_ack","response_id":"a1b2c3d40000012300000001"}
 ```
 
-Il firmware conserva una sola response session-aware in RAM e la ripubblica ogni **1 secondo** finché riceve l'ACK corrispondente. Il payload staged, inclusi `session_id`, l'eventuale `command_id` e `response_id`, resta byte-per-byte immutabile. Durante questa attesa ENTER, SKIP e altri commit reversibili sono bloccati; i `weigh` e `clear` MQTT ricevuti vengono ignorati senza `command_ack`. Il retry della `confirm_request` che ha già prodotto quell'outbox riemette soltanto `staged`; ogni altra richiesta è rifiutata come busy.
+Il firmware conserva una sola response session-aware in RAM e la ripubblica ogni **1 secondo** finché riceve l'ACK corrispondente. Il payload staged, inclusi `session_id`, l'eventuale `command_id` e `response_id`, resta byte-per-byte immutabile. Il lock fisico di consegna è limitato a **10 secondi**, termina prima su `pagehide` fenced/owner scaduto e viene sganciato immediatamente se l'operatore preme fisicamente TARE o ENTER. L'outbox continua in background, mentre quell'input e i successivi TARE/ENTER diventano esclusivamente locali. SKIP/CLEAR remoto, nuovi `weigh` e nuove response restano serializzati sul singolo outbox. Un eventuale `undo` già staged viene applicato una volta sullo stato locale al detach e non viene riapplicato all'ACK tardivo.
 
 Outbox e cache dei due esiti terminali sono RAM: un reboot le perde, e più di due request terminali diversi possono espellere il più vecchio. Il Manager normale mantiene una sola richiesta irrisolta per scheda; una garanzia attraverso reboot o publisher concorrenti richiederebbe un journal persistente dedicato.
 
@@ -483,20 +487,20 @@ Per firmware/browser v1.4 l'ordine è transazionale:
 
 Il PUBACK broker di `response_ack` non prova che il firmware fosse ancora online e l'abbia elaborato. Uno status `offline` o `sleeping` invalida quindi una consegna non conclusa; se il firmware ripubblica una response già persistita, il browser ripete clear e ACK senza ripetere REST o callback UI. Una response dello stesso prodotto della pagina, incluso `undo`, forza la riconciliazione anche se l'ingrediente desiderato è già avanzato o assente; una response di un altro prodotto viene conciliata senza cancellare il comando corrente.
 
-La coppia (`scale_id`, `response_id`) resta l'identità della receipt. La `session_id` e l'eventuale `command_id` del payload staged descrivono l'origine e non vengono ritargettati. Solo un `response_ack` con la `response_id` esatta chiude l'outbox e azzera il comando; ACK estranei, nuovi comandi e clear non possono alterarlo. Se il browser desidera attivare un comando arrivato mentre l'outbox era pending, lo ripubblica dopo avere completato receipt, clear retained e ACK.
+La coppia (`scale_id`, `response_id`) resta l'identità della receipt. La `session_id` e l'eventuale `command_id` del payload staged descrivono l'origine e non vengono ritargettati. Solo un `response_ack` con la `response_id` esatta chiude l'outbox e azzera il comando; ACK estranei, nuovi comandi, clear e scadenza owner non possono alterarlo. Se il browser desidera attivare un comando arrivato mentre l'outbox era pending, lo ripubblica dopo avere completato receipt, clear retained e ACK.
 
 I browser precedenti restano supportati. Un comando v1.2 privo di `command_id` ma con sessione può essere cancellato solo da un clear anch'esso privo di ID con la stessa `session_id`; per un comando realmente legacy senza sessione il clear può riportare la sessione del Manager nuovo. Un comando privo di `session_id` usa response one-shot senza `response_id`, senza receipt/ACK applicativo e senza undo remoto.
 
 ### Ownership browser
 
-Ogni scheda browser usa un `session_id` stabile durante reload e reconnect, un `connection_id` diverso per ogni documento e un nuovo `command_id` per ogni attivazione logica, conservato nei retry dello stesso comando. Un Web Lock esclusivo impedisce a una scheda duplicata di riusare l'ID copiato da `sessionStorage`; il fallback cross-tab ruota l'ID anche quando la presenza di un'altra istanza resta incerta. Il topic owner retained contiene anche `connection_id` e `lease_id`: il controllo è confermato soltanto dall'eco esatta di utente, sessione, connessione e lease. Il proprietario rinnova il lease ogni **10 secondi**; dopo **30 secondi** senza rinnovo un'altra scheda può reclamarlo. Anche due schede dello stesso utente sono quindi istanze distinte. Una scheda non proprietaria resta connessa, non pubblica comandi e mostra chi detiene il controllo.
+Ogni scheda browser usa un `session_id` stabile durante reload e reconnect, un `connection_id` diverso per ogni documento e un nuovo `command_id` per ogni attivazione logica, conservato nei retry dello stesso comando. Un Web Lock esclusivo impedisce a una scheda duplicata di riusare l'ID copiato da `sessionStorage`; il fallback cross-tab ruota l'ID anche quando la presenza di un'altra istanza resta incerta. Il topic owner retained contiene anche `connection_id` e `lease_id`: il controllo è confermato soltanto dall'eco esatta di utente, sessione, connessione e lease. Il proprietario rinnova il lease ogni **10 secondi**; dopo **30 secondi** senza rinnovo un'altra scheda può reclamarlo. Il firmware richiede però un heartbeat entro **15 secondi** per considerare presente il consumer e rendere operativo un comando moderno; la perdita separa il retry di rete dalla disponibilità dei tasti fisici.
 
 **Alla connessione:**
 - la bilancia pubblica status `online` retained con scale ID, nome e firmware version;
 - registra un LWT `offline` retained;
-- si sottoscrive a `command` e `ack` richiedendo QoS 1;
+- si sottoscrive prima a `owner`, poi a `command` e `ack`, richiedendo QoS 1;
 - il browser attende i SUBACK di response/status/owner/command, uno status fresco e la conferma esatta del lease prima di pubblicare o ripubblicare un comando attivo; una coorte SUBACK incompleta o rifiutata resta non-ready e viene ritentata per intero sullo stesso tentativo di connessione;
-- il browser non registra un LWT che modifichi `command`: su `pagehide` invalida i callback e chiude localmente il socket senza pubblicare clear o owner release;
+- il browser non registra un LWT che modifichi `command`: con firmware 1.4.2, su `pagehide`, l'owner esatto pubblica un solo `clear` retained con `lifecycle=pagehide` e poi chiude il socket in modo graceful, anche senza comando o con una response in corso. Il publish resta best-effort; se il processo viene terminato prima della consegna, il lock operatore di una response cede al primo TARE/ENTER o entro 10 secondi, mentre la presenza operativa owner decade entro 15 secondi;
 - la UI è verde soltanto dopo l'eco retained del comando e il relativo `command_ack` firmware; durante reconnect o riparazione resta in sincronizzazione.
 
 Cambio e disassociazione bilancia sono bloccati finché una `confirm_request` è irrisolta o una response è in sincronizzazione. Se la response inizia mentre il salvataggio del cambio è già in corso, la transizione MQTT attende in modo non bloccante la fine della consegna. Clear e rilascio owner sulla vecchia bilancia vengono pubblicati soltanto dalla connessione che possiede il lease esatto.
@@ -505,22 +509,26 @@ Cambio e disassociazione bilancia sono bloccati finché una `confirm_request` è
 
 **Comando `confirm_request`:** il pulsante Conferma del Manager, con bilancia associata, chiede alla bilancia di eseguire ENTER. Non sostituisce il retained `weigh`, non chiama direttamente la conferma Laravel e viene ritentato con lo stesso `request_id` finché il firmware comunica `staged`, `failed` o `rejected`.
 
-**Comando `clear`:** per i comandi tokenizzati annulla soltanto la stessa coppia `session_id + command_id`; le eccezioni compatibili per v1.2/legacy sono quelle descritte sopra. Non modifica lo stack locale.
+**Comando `clear`:** per i comandi moderni annulla soltanto la stessa coppia `session_id + command_id`; con owner fresco richiede la sua connessione, senza owner accetta il retained tombstone con connessione non vuota. Le eccezioni compatibili per v1.2/legacy sono quelle descritte sopra. Non modifica lo stack locale.
 
 ### Tasti (con MQTT attivo)
 
-- **ENTER**: quando MQTT è connesso richiede un comando `weigh` attivo; senza comando emette un warning e non applica tara, push o audio di successo. Se il peso non è ancora quieto avvia la barra di acquisizione da 1,5 s e conserva l'identità esatta del comando fino al commit. Con comando valido prepara `confirm` e resta pending fino alla receipt Laravel e all'ACK browser. In modalità standalone il commit locale resta disponibile quando MQTT non è connesso o il WiFi è spento
+- **ENTER**: con un owner vivo usa soltanto il comando `weigh` esatto; senza comando emette un warning. Quando non esiste più un consumer remoto, un outbox supera 10 secondi senza ACK oppure l'operatore preme ENTER mentre quell'outbox è ancora agganciato, passa immediatamente alla modalità locale anche con MQTT connesso: applica tara/push locali senza creare una seconda response. Una cattura già iniziata viene annullata se cambia contesto
 - **Conferma dal Manager**: con firmware 1.4+ richiama lo stesso flusso di ENTER. La pagina non cambia ingrediente su `accepted`/`staged` né su errore; avanza soltanto dopo la persistenza durable della pesata e l'ACK end-to-end
 - **SKIP breve**: scatta al rilascio e prepara `skip` per il comando attivo; senza comando emette un buzzer di avviso
 - **SKIP tenuto 5 secondi**: apre il wizard calibrazione senza inviare prima uno `skip`
 - **CLEAR breve**: annulla subito una voce locale; per una voce con receipt session-aware prepara `undo` e ripristina offset/zero-tracking soltanto al relativo ACK
-- Un secondo ENTER/SKIP/CLEAR reversibile durante il pending viene rifiutato, evitando modifiche e response sovrapposte
+- Finché il lock remoto è attaccato SKIP/CLEAR vengono rifiutati. Una pressione fisica di TARE/ENTER forza invece il fallback e prosegue localmente; non crea una seconda response
 
 ### Display MQTT
 
 - **Icona MQTT** (frecce ↑↓) nella barra di stato: visibile quando il WiFi è connesso
   - Fissa: connesso al broker
-  - Lampeggiante: disconnesso dal broker (in attesa di riconnessione)
+  - Lampeggiante: disconnesso dal broker; il fallback locale non altera più questa icona
+- **Badge modalità** compatto nella stessa barra:
+  - `APP`: owner Manager fresco e modalità remota ancora agganciata
+  - `LOC`: nessun Manager operativo, fallback locale oppure trasporto non disponibile
+  - Il badge resta fisso: il lampeggio è riservato alla riconnessione MQTT
 - **Riga info**: valori only, senza label (`WORK | STABLE` / `WORK | UNSTABLE`); in modalità LIVE mostra solo `LIVE`
 - **Ingrediente**: quando arriva un comando `weigh`, il nome ingrediente è mostrato sulla riga sotto (max 15 caratteri; oltre: 15 + tre puntini ravvicinati)
 - **Peso target**: quando è attivo un comando `weigh`, il peso obiettivo viene mostrato accanto all'icona target
@@ -529,8 +537,9 @@ Cambio e disassociazione bilancia sono bloccati finché una `confirm_request` è
 
 - Alla disconnessione dal broker: **doppio beep** buzzer + icona MQTT lampeggiante
 - Riconnessione automatica con **backoff esponenziale** (2s → 4s → 8s → 16s → 30s max)
-- Durante il TLS handshake MQTT il WDT resta attivo ma viene portato temporaneamente a **20s**; finito l'handshake torna a **8s**
-- PubSubClient usa keepalive **15s** e socket timeout **2s**, così una connessione half-open non blocca a lungo il loop
+- DNS, connessione TCP, handshake TLS, MQTT CONNECT e SUBSCRIBE sono eseguiti da un worker FreeRTOS separato con proprietà esclusiva del trasporto. Il loop principale continua quindi a campionare tastiera, HX711 e UI anche se broker o DNS non rispondono
+- Il tentativo usa timeout TCP **2,5s**, handshake TLS **10s**, socket MQTT **1s** e keepalive **15s**; dopo CONNECT il timeout I/O TLS scende a **500ms** e il client passa al loop principale con un handoff atomico
+- Il worker non è registrato nel WDT del loop. Sleep normale e reload credenziali ne attendono l'handoff o richiedono un abort cooperativo, senza accessi concorrenti al client
 - Prima di una sospensione pulita pubblica retained `sleeping`, poi esegue DISCONNECT; il retained non resta quindi falsamente `online`. Il LWT `offline` copre le cadute impreviste.
 - Comando e outbox RAM restano disponibili e, al wake, la connessione e gli eventuali retry vengono ripristinati
 - Il log di sospensione (`[MQTT] Sospeso`) viene emesso solo se c'era stato MQTT attivo da chiudere, evitando spam seriale quando il WiFi e' giu
@@ -584,7 +593,7 @@ Stack pesate in RAM (LIFO, max 50 elementi). Ogni voce conserva grammi, offset e
 - La richiesta remota del Manager non duplica questa logica: viene consumata nel loop, rispetta lo stesso lock TARE e chiama lo stesso helper di ENTER. Un fallimento non genera `confirm`, quindi Laravel e la pagina restano sull'ingrediente corrente.
 - CLEAR breve legge la voce senza rimuoverla. Se contiene una receipt remota, prepara un nuovo outbox `undo` con `undo_of_response_id`; offset/zero-tracking vengono ripristinati e la voce viene rimossa soltanto dopo l'ACK browser, quindi dopo la persistenza Laravel. Se il primo publish QoS 0 fallisce, lo stato locale resta invariato e l'outbox continua i retry.
 - Una voce locale o legacy senza receipt viene annullata subito e solo localmente; non viene inventato un undo Laravel non correlabile.
-- Durante una response in attesa di receipt/ACK sono bloccati TARE, ENTER, SKIP, qualsiasi CLEAR incluso quello lungo e le mutazioni del wizard di calibrazione. Gli stessi comandi seriali mutanti restano bloccati durante acquisizione e feedback ENTER: `stack clear` e tutti i `cal ...` tranne `cal status`.
+- Una response in attesa continua a serializzare SKIP, CLEAR e le mutazioni del wizard. TARE ed ENTER non vengono mai scartati: la prima pressione fisica forza lo sgancio locale immediato, mentre senza input il fail-safe scatta comunque entro 10 secondi. Il payload remoto continua il retry immutabile e le mutazioni seriali/calibrazione restano serializzate sul singolo outbox.
 - Il payload MQTT `clear` inviato dal browser non equivale al tasto CLEAR: pulisce soltanto UUID, target e sessione del comando retained e non modifica lo stack.
 
 ---
@@ -652,7 +661,7 @@ firmware/esp32_hx711_serial/
 - `ScaleConfig::` / `AudioConfig::` / `BatteryConfig::` — parametri configurabili (soglie, timing, tracce)
 
 ### Task Watchdog
-Il firmware include un **Task Watchdog** (8 secondi) attivo già durante il setup, con reset esplicito nei loop di boot intenzionali. Nel loop principale viene resettato a ogni iterazione; durante il TLS MQTT viene esteso temporaneamente a 20s.
+Il firmware include un **Task Watchdog** (8 secondi) attivo già durante il setup, con reset esplicito nei loop di boot intenzionali. Nel loop principale viene resettato a ogni iterazione. Il worker di connessione MQTT è separato e non è registrato nel WDT del loop, quindi DNS/TCP/TLS non richiedono di alterarne il timeout.
 
 All'avvio il firmware verifica che il `loopTask` sia davvero iscritto al WDT: in seriale stampa `[WDT] OK` se l'aggancio e' attivo, oppure `[WDT] FAIL i=... a=... s=...` se init/add/status falliscono. Il reset periodico del watchdog viene eseguito solo dopo questa verifica.
 

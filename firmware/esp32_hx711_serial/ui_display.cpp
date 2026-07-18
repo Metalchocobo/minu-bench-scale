@@ -224,6 +224,18 @@ static void drawMqttIcon(int x, int y, bool connected, bool visible) {
 }
 
 // -----------------------------------------------------------------------------
+// MODALITA' OPERATIVA MANAGER
+// Badge compatto 16x9: APP = owner Manager fresco, LOC = fallback/standalone.
+// Lo stato non lampeggia: il lampeggio resta riservato al trasporto MQTT.
+// -----------------------------------------------------------------------------
+static void drawManagerModeBadge(int x, int y, bool managerAttached) {
+  const char* label = managerAttached ? "APP" : "LOC";
+  oled.setFont(u8g2_font_4x6_tr);
+  oled.drawFrame(x, y, 16, 9);
+  oled.drawStr(x + 2, y + 7, label);
+}
+
+// -----------------------------------------------------------------------------
 // ICONA TARGET (mirino)
 // -----------------------------------------------------------------------------
 static void drawTargetIcon(int x, int y) {
@@ -519,6 +531,9 @@ static void renderWeightString(const char* weightStr, const char* stateLabel,
   drawBatteryIcon(2, 2, batteryLevel, isCharging);
   drawNetIcon(30, 3, netConnected);
   drawMqttIcon(44, 3, mqttConnected, mqttVisible);
+#if ENABLE_MQTT
+  drawManagerModeBadge(56, 1, Net::isMqttManagerAttached());
+#endif
   drawWarnTriangleIconTopRight();
 
   // ------- Info Mode + State (stessa riga) + Ingrediente -------
@@ -633,6 +648,7 @@ void ui_renderTareStatus(ScaleState::TareUiState state, bool autoMode) {
   drawNetIcon(30, 3, netConnected);
 #if ENABLE_MQTT
   drawMqttIcon(44, 3, Net::isMqttConnected(), netConnected);
+  drawManagerModeBadge(56, 1, Net::isMqttManagerAttached());
 #endif
   drawWarnTriangleIconTopRight();
 
