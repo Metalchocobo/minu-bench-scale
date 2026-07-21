@@ -4,6 +4,8 @@
 #include <string>
 #include <utility>
 
+#include "../firmware/esp32_hx711_serial/mqtt_update_cycle.h"
+
 namespace {
 
 struct Weigh {
@@ -831,6 +833,36 @@ void testAsyncReconnectKeepsTransportOwnershipExclusive() {
   assert(worker.mainOwnsTransport());
 }
 
+void testInboundHeartbeatIsProcessedBeforeBoundedFallbackDecision() {
+  unsigned packet = 0;
+  bool ownerFresh = false;
+  bool fallbackEntered = false;
+
+  mqttRunUpdateCycle(
+    [&]() {
+      const unsigned passes = mqttPollInboundBounded(
+        [&]() {
+          packet += 1;
+          if (packet == 2) ownerFresh = true;
+        },
+        [&]() { return packet < 2; },
+        4);
+      assert(passes == 2);
+    },
+    [&]() { fallbackEntered = !ownerFresh; });
+
+  assert(ownerFresh);
+  assert(!fallbackEntered);
+
+  unsigned boundedPasses = 0;
+  const unsigned result = mqttPollInboundBounded(
+    [&]() { boundedPasses += 1; },
+    []() { return true; },
+    4);
+  assert(result == 4);
+  assert(boundedPasses == 4);
+}
+
 void testDetachedModeRejectsStaleRetainedReactivation() {
   assert(!fallbackReattachAllowed(
     true, "connection-1", 100, 100, "connection-1"));
@@ -1232,6 +1264,7 @@ int main() {
   testDetachedUndoPrecedesDeferredLocalCommit();
   testMissingRemoteSnapshotsCannotBlockForever();
   testAsyncReconnectKeepsTransportOwnershipExclusive();
+  testInboundHeartbeatIsProcessedBeforeBoundedFallbackDecision();
   testDetachedModeRejectsStaleRetainedReactivation();
   testDetachedCommandDoesNotBlockSleep();
   testTopBarSeparatesTransportFromManagerMode();

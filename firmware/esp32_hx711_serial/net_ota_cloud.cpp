@@ -1,5 +1,6 @@
 #include "net_ota_cloud.h"
 #include "config/config_scale.h"
+#include "mqtt_update_cycle.h"
 #include <esp_mac.h>
 #include <esp_system.h>
 #include <esp_task_wdt.h>
@@ -430,6 +431,8 @@ static const uint16_t MQTT_SOCKET_TIMEOUT_SEC = 1;
 static const uint32_t MQTT_TCP_CONNECT_TIMEOUT_MS = 2500;
 static const uint32_t MQTT_IO_TIMEOUT_MS = 500;
 static const uint8_t MQTT_TLS_HANDSHAKE_TIMEOUT_SEC = 10;
+static const uint8_t MQTT_INBOUND_POLL_MAX = 4;
+static const uint32_t MQTT_INBOUND_POLL_BUDGET_MS = 20;
 
 // TCP/TLS/MQTT connection establishment runs outside the Arduino loop. The
 // main task remains free to sample the keypad and scale while DNS/TCP/TLS wait.
@@ -1824,8 +1827,17 @@ static void mqttUpdateInternal() {
   mqtt_wasPrevConnected = connectedNow;
 
   if (connectedNow) {
-    // Connesso: processa messaggi in arrivo
-    mqttClient.loop();
+    // Process a small bounded burst so a queued owner heartbeat reaches the
+    // fallback decision without starving keypad and scale sampling.
+    uint32_t inboundPollStartedMs = millis();
+    mqttPollInboundBounded(
+      []() { mqttClient.loop(); },
+      [inboundPollStartedMs]() {
+        return mqttClientConnectedForMain() && mqttWifiClient.available() > 0 &&
+          (uint32_t)(millis() - inboundPollStartedMs) <
+            MQTT_INBOUND_POLL_BUDGET_MS;
+      },
+      MQTT_INBOUND_POLL_MAX);
     uint32_t now = millis();
     if (mqtt_responsePending &&
         (mqtt_responseLastPublishMs == 0 ||
@@ -2057,9 +2069,7 @@ void update() {
 #endif
 
 #if ENABLE_MQTT
-  mqttUpdateLocalFallback();
-  mqttUpdateInternal();
-  mqttUpdateLocalFallback();
+  mqttRunUpdateCycle(mqttUpdateInternal, mqttUpdateLocalFallback);
 #endif
 
 #if ENABLE_ARDUINO_CLOUD
