@@ -178,6 +178,7 @@ static bool g_remoteUndoAwaitingAck = false;
 static char g_remoteUndoConfirmId[WeighStack::RESPONSE_ID_CAP] = {0};
 static KeyCode g_deferredLocalKey = KEY_NONE;
 static bool g_detachedUndoKeyGuard = false;
+static bool g_syncIncidentNeedsTare = false;
 
 static void showStackCompareOverlay(uint32_t nowMs) {
   float stackTotal = WeighStack::total();
@@ -248,6 +249,7 @@ static bool applyDetachedUndoNow() {
   bool matchingEntry = g_remoteUndoAwaitingAck && top &&
     strcmp(top->confirmResponseId, g_remoteUndoConfirmId) == 0;
   bool restored = matchingEntry && restoreTopStackEntryAfterUndo(millis());
+  Net::mqttReportDetachedUndoApplied(restored);
   g_remoteUndoAwaitingAck = false;
   g_remoteUndoConfirmId[0] = '\0';
   g_detachedUndoKeyGuard = restored;
@@ -255,6 +257,30 @@ static bool applyDetachedUndoNow() {
     ? F("[STACK] UNDO locale applicato; sync continua in background")
     : F("[STACK] UNDO detached senza entry locale"));
   return true;
+}
+
+static void enterSyncIncidentTareGate(
+    const __FlashStringHelper* logMessage) {
+  WeighStack::clear();
+  WeighStack::clearReference();
+  g_remoteUndoAwaitingAck = false;
+  g_remoteUndoConfirmId[0] = '\0';
+  g_detachedUndoKeyGuard = false;
+  g_deferredLocalKey = KEY_NONE;
+  g_syncIncidentNeedsTare = true;
+  Net::mqttSetTareRequired(true);
+  CalWizard::cancelLongPress();
+  if (CalWizard::isActive()) CalWizard::abort();
+  g_skipShortPending = false;
+  g_skipBlockedUntilRelease = keypad_is_pressed(KEY_SKIP);
+  g_clearPressStartMs = 0;
+  g_clearLongPressFired = false;
+  g_overlayType = OVERLAY_NONE;
+  lastOledMs = 0;
+  Serial.println(logMessage);
+  buzzerError();
+  delay(120);
+  buzzerError();
 }
 #endif
 
@@ -375,6 +401,15 @@ void serial_task() {
 }
 
 void parseCommand(const char* cmd) {
+  if (g_syncIncidentNeedsTare) {
+    bool stackMutation = strcmp(cmd, "stack clear") == 0;
+    bool calMutation = strncmp(cmd, "cal ", 4) == 0 &&
+      strcmp(cmd + 4, "status") != 0;
+    if (stackMutation || calMutation) {
+      Serial.println(F("[CMD] Bloccato: verifica peso/TARA richiesta"));
+      return;
+    }
+  }
   if (g_enterUiState != ENTER_UI_IDLE) {
     bool stackMutation = strcmp(cmd, "stack clear") == 0;
     bool calMutation = strncmp(cmd, "cal ", 4) == 0 && strcmp(cmd + 4, "status") != 0;
@@ -1318,6 +1353,12 @@ void handleKeyEvent(KeyCode key) {
 #if ENABLE_MQTT
   bool pendingRemoteOnlyKey = key == KEY_SKIP || key == KEY_CLEAR;
   bool localOverrideKey = key == KEY_TARE || key == KEY_ENTER;
+  if (g_syncIncidentNeedsTare && key != KEY_TARE &&
+      (key == KEY_ENTER || pendingRemoteOnlyKey)) {
+    Serial.println(F("[KEYPAD] Bloccato: verifica peso/TARA richiesta"));
+    buzzerError();
+    return;
+  }
   if (Net::isMqttResponseOperatorLocked() && localOverrideKey) {
     if (Net::mqttDetachForLocalInput() && applyDetachedUndoNow()) {
       g_deferredLocalKey = key;
@@ -2165,6 +2206,43 @@ void loop() {
   }
 
   if (!tareCritical && g_enterUiState == ENTER_UI_IDLE) {
+    char rejectedConfirmId[WeighStack::RESPONSE_ID_CAP] = {0};
+    bool confirmRollbackSafe = false;
+    if (Net::mqttPopConfirmReject(
+          rejectedConfirmId, sizeof(rejectedConfirmId),
+          &confirmRollbackSafe)) {
+      const WeighStack::Entry* top = WeighStack::peek();
+      bool exactNewestCommit = confirmRollbackSafe && top &&
+        rejectedConfirmId[0] != '\0' &&
+        strcmp(top->confirmResponseId, rejectedConfirmId) == 0;
+      bool rolledBack = exactNewestCommit &&
+        restoreTopStackEntryAfterUndo(millis());
+      if (rolledBack) {
+        Net::mqttSetTareRequired(false);
+        Serial.println(F("[STACK] CONFIRM quarantine: exact commit rolled back"));
+        buzzerWarn();
+      } else {
+        // The Manager did not commit this weighing and local work may already
+        // have advanced. Never manufacture an ACK/undo for the missing receipt.
+        enterSyncIncidentTareGate(
+          F("[STACK] CONFIRM quarantine: history invalid, TARE required"));
+      }
+    }
+    if (Net::mqttPopDetachedUndoReject()) {
+      // The detached undo has already changed the offset and the operator may
+      // have continued locally. A late Manager quarantine cannot be safely
+      // compensated without risking newer work: invalidate history and force
+      // an explicit physical tare check.
+      enterSyncIncidentTareGate(
+        F("[STACK] UNDO quarantine after detach: history invalid, TARE required"));
+    }
+    if (Net::mqttPopUndoReject()) {
+      g_remoteUndoAwaitingAck = false;
+      g_remoteUndoConfirmId[0] = '\0';
+      g_detachedUndoKeyGuard = false;
+      Serial.println(F("[STACK] UNDO quarantined; local stack unchanged"));
+      buzzerWarn();
+    }
     (void)applyDetachedUndoNow();
   }
 
@@ -2205,7 +2283,7 @@ void loop() {
   if (!tareCritical && Net::mqttPopConfirmRequest()) {
     bool remoteBusy = g_enterUiState != ENTER_UI_IDLE ||
       isTareBehaviorLocked(now) || CalWizard::isActive() ||
-      CalWizard::isLongPressInProgress();
+      CalWizard::isLongPressInProgress() || g_syncIncidentNeedsTare;
 #if ENABLE_WIFI_OTA
     remoteBusy = remoteBusy || Net::isOtaInProgress();
 #endif
@@ -2256,7 +2334,19 @@ void loop() {
 
   // ENTER acquisition/results are self-closing and ignore every key so a
   // second press cannot create a duplicate commit or dismiss the feedback.
-  if (g_enterUiState != ENTER_UI_IDLE) {
+  if (g_syncIncidentNeedsTare) {
+    CalWizard::cancelLongPress();
+    if (CalWizard::isActive()) CalWizard::abort();
+    g_skipShortPending = false;
+    if (keypad_is_pressed(KEY_SKIP)) g_skipBlockedUntilRelease = true;
+    g_clearPressStartMs = 0;
+    g_clearLongPressFired = false;
+    if (key == KEY_ENTER || key == KEY_SKIP || key == KEY_CLEAR) {
+      Serial.println(F("[KEYPAD] Bloccato: verifica peso/TARA richiesta"));
+      buzzerError();
+      key = KEY_NONE;
+    }
+  } else if (g_enterUiState != ENTER_UI_IDLE) {
     CalWizard::cancelLongPress();
     g_skipShortPending = false;
     if (keypad_is_pressed(KEY_SKIP)) g_skipBlockedUntilRelease = true;
@@ -2756,6 +2846,13 @@ void loop() {
     gLiveEmaInit = false;
     gLiveEmaPrevStEnable = stEnable;
     g_tareKeyLockUntilMs = tareNow + TARE_OK_HOLD_MS;
+    if (g_syncIncidentNeedsTare) {
+      g_syncIncidentNeedsTare = false;
+#if ENABLE_MQTT
+      Net::mqttSetTareRequired(false);
+#endif
+      Serial.println(F("[STACK] Verifica incidente completata con TARE"));
+    }
   }
   if (tareApplied && g_captureReferenceAfterTare) {
     if (g_clearStackAfterTare) {
@@ -2863,6 +2960,11 @@ void loop() {
 
     if (g_overloadActive) {
       ui_renderOverload();
+      return;
+    }
+
+    if (g_syncIncidentNeedsTare && !ScaleState::isTareUiActive()) {
+      ui_showError("SYNC ERROR", "Verifica peso", "Premi TARA");
       return;
     }
 

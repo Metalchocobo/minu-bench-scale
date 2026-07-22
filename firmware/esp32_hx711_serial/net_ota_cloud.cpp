@@ -1,6 +1,7 @@
 #include "net_ota_cloud.h"
 #include "config/config_scale.h"
 #include "mqtt_update_cycle.h"
+#include "mqtt_transport_health.h"
 #include <esp_mac.h>
 #include <esp_system.h>
 #include <esp_task_wdt.h>
@@ -352,6 +353,8 @@ static bool     mqtt_ownerActive = false;
 static char     mqtt_ownerSessionId[65] = {0};
 static char     mqtt_ownerConnectionId[65] = {0};
 static char     mqtt_ownerLeaseId[65] = {0};
+static bool     mqtt_ownerHasExpectedCommand = false;
+static char     mqtt_ownerExpectedCommandId[65] = {0};
 static uint32_t mqtt_ownerTimestamp = 0;
 static uint32_t mqtt_ownerReceivedMs = 0;
 static uint32_t mqtt_ownerRemainingMs = 0;
@@ -359,9 +362,12 @@ static uint32_t mqtt_ownerRemainingMs = 0;
 // used to fence a stale retained owner/weigh pair after local fallback.
 static uint32_t mqtt_lastSeenOwnerTimestamp = 0;
 static char     mqtt_lastSeenOwnerConnectionId[65] = {0};
+static char     mqtt_lastSeenOwnerLeaseId[65] = {0};
 static const uint32_t MQTT_OWNER_TTL_MS = 30000;
-static const uint32_t MQTT_OWNER_OPERATOR_SILENCE_MS = 15000;
+static const uint32_t MQTT_OWNER_OPERATOR_SILENCE_MS = 25000;
 static const uint32_t MQTT_OWNER_CLOCK_SKEW_SEC = 5;
+static const uint32_t MQTT_OWNER_PROGRESSIVE_MAX_AGE_SEC = 10;
+static const uint32_t MQTT_OWNER_PROGRESSIVE_GRACE_MS = 5000;
 
 // Single-entry RAM outbox for session-aware responses.
 enum MqttResponseKind : uint8_t {
@@ -386,6 +392,7 @@ static const uint32_t MQTT_OPERATOR_LOCK_MAX_MS = 10000;
 static bool     mqtt_localFallbackActive = false;
 static uint32_t mqtt_localFallbackOwnerTimestamp = 0;
 static char     mqtt_localFallbackOwnerConnectionId[65] = {0};
+static char     mqtt_localFallbackOwnerLeaseId[65] = {0};
 static bool     mqtt_remoteUnavailableTracking = false;
 static uint32_t mqtt_remoteUnavailableSinceMs = 0;
 static bool     mqtt_detachedUndoFlag = false;
@@ -433,6 +440,61 @@ static const uint32_t MQTT_IO_TIMEOUT_MS = 500;
 static const uint8_t MQTT_TLS_HANDSHAKE_TIMEOUT_SEC = 10;
 static const uint8_t MQTT_INBOUND_POLL_MAX = 4;
 static const uint32_t MQTT_INBOUND_POLL_BUDGET_MS = 20;
+static const uint32_t MQTT_RX_REPAIR_TIMEOUT_MS = 2500;
+static const uint8_t MQTT_RX_REPAIR_MAX_RETRIES = 2;
+static const uint32_t MQTT_RX_INITIAL_SNAPSHOT_MS = 2500;
+static const uint32_t MQTT_RX_OWNER_SILENCE_MS =
+  MQTT_OWNER_OPERATOR_SILENCE_MS;
+static const uint32_t MQTT_RX_ACK_SILENCE_MS = 10000;
+static const uint32_t MQTT_STATUS_HEARTBEAT_MS = 5000;
+static const uint32_t MQTT_STATUS_DIRTY_RETRY_MS = 250;
+
+enum MqttFallbackReason : uint8_t {
+  MQTT_FALLBACK_NONE = 0,
+  MQTT_FALLBACK_OWNER,
+  MQTT_FALLBACK_RESPONSE_TIMEOUT,
+  MQTT_FALLBACK_ACK_TIMEOUT,
+  MQTT_FALLBACK_MANAGER_INCIDENT,
+  MQTT_FALLBACK_MANAGER_INCIDENT_DETACHED,
+  MQTT_FALLBACK_RX_TIMEOUT,
+  MQTT_FALLBACK_TRANSPORT,
+  MQTT_FALLBACK_PAGEHIDE,
+  MQTT_FALLBACK_LOCAL_INPUT
+};
+
+enum MqttCommandError : uint8_t {
+  MQTT_COMMAND_ERROR_NONE = 0,
+  MQTT_COMMAND_ERROR_INVALID,
+  MQTT_COMMAND_ERROR_OWNER,
+  MQTT_COMMAND_ERROR_FALLBACK,
+  MQTT_COMMAND_ERROR_RESPONSE_PENDING,
+  MQTT_COMMAND_ERROR_CONFIRM_PENDING,
+  MQTT_COMMAND_ERROR_CONFLICT,
+  MQTT_COMMAND_ERROR_RX_UNVERIFIED,
+  MQTT_COMMAND_ERROR_MANAGER_INCIDENT,
+  MQTT_COMMAND_ERROR_MANAGER_INCIDENT_DETACHED,
+  MQTT_COMMAND_ERROR_ACK_TIMEOUT
+};
+
+static uint32_t mqtt_bootId = 0;
+static uint32_t mqtt_transportId = 0;
+static uint32_t mqtt_statusSequence = 0;
+static uint32_t mqtt_statusLastPublishMs = 0;
+static uint32_t mqtt_statusLastAttemptMs = 0;
+static bool mqtt_statusDirty = true;
+static MqttFallbackReason mqtt_fallbackReason = MQTT_FALLBACK_NONE;
+static MqttCommandError mqtt_lastCommandError = MQTT_COMMAND_ERROR_NONE;
+static uint8_t mqtt_rxMask = 0;
+static bool mqtt_rxRepairing = false;
+static uint8_t mqtt_rxRepairMask = 0;
+static uint8_t mqtt_rxCompletedRetries = 0;
+static uint32_t mqtt_rxProbeSequence = 0;
+static uint32_t mqtt_rxRepairDeadlineMs = 0;
+static uint32_t mqtt_rxTransportStartedMs = 0;
+static uint32_t mqtt_rxLastOwnerMs = 0;
+static uint32_t mqtt_rxAckWaitStartedMs = 0;
+static bool mqtt_responseAckReconnectDone = false;
+static bool mqtt_tareRequired = false;
 
 // TCP/TLS/MQTT connection establishment runs outside the Arduino loop. The
 // main task remains free to sample the keypad and scale while DNS/TCP/TLS wait.
@@ -461,6 +523,12 @@ static bool     mqtt_disconnectBeep  = false;
 static bool     mqtt_commandRxBeep   = false;
 static bool     mqtt_activityFlag    = false;
 static bool     mqtt_undoAckFlag     = false;
+static bool     mqtt_undoRejectFlag  = false;
+static bool     mqtt_undoDetachedRejectFlag = false;
+static bool     mqtt_confirmRejectFlag = false;
+static bool     mqtt_confirmRejectRollbackSafe = false;
+static char     mqtt_confirmRejectResponseId[25] = {0};
+static bool     mqtt_undoWasDetachedApplied = false;
 static bool     mqtt_identityValid   = false;
 
 // Forward declaration
@@ -476,13 +544,21 @@ static void mqttResetCommand();
 static void mqttResetConfirmRequest();
 static void mqttResetOwnerSnapshot();
 static void mqttDeactivateOwnerSnapshot();
-static void mqttHandleOwner(const JsonDocument& doc);
+static bool mqttHandleOwner(const JsonDocument& doc);
 static bool mqttOwnerAuthorizes(const char* sessionId, const char* connectionId);
 static bool mqttOwnerConnectionAuthorizes(const char* connectionId);
 static void mqttResetPendingResponse();
-static void mqttEnterLocalFallback();
+static void mqttEnterLocalFallback(MqttFallbackReason reason);
 static void mqttLeaveLocalFallback();
 static void mqttUpdateLocalFallback();
+static bool mqttCommandIsActionable();
+static bool mqttInboundHealthy();
+static bool mqttSubscribeInbound();
+static bool mqttUpdateInboundHealth();
+static void mqttMarkInboundTopic(uint8_t topicBit);
+static void mqttResetInboundHealth();
+static void mqttMaybePublishStatus();
+static void mqttSetCommandError(MqttCommandError error);
 static bool mqttPublishPendingResponse();
 static bool mqttPublishCommandAck();
 static bool mqttPublishConfirmRequestAck(const char* requestId,
@@ -540,6 +616,8 @@ static void mqttResetCommand() {
   mqtt_cmdTargetWeight = 0.0f;
   mqtt_cmdProductId = 0;
   mqttResetConfirmRequest();
+  mqtt_lastCommandError = MQTT_COMMAND_ERROR_NONE;
+  mqtt_statusDirty = true;
 }
 
 static void mqttResetConfirmRequest() {
@@ -596,9 +674,12 @@ static void mqttResetOwnerSnapshot() {
   mqtt_ownerSessionId[0] = '\0';
   mqtt_ownerConnectionId[0] = '\0';
   mqtt_ownerLeaseId[0] = '\0';
+  mqtt_ownerHasExpectedCommand = false;
+  mqtt_ownerExpectedCommandId[0] = '\0';
   mqtt_ownerTimestamp = 0;
   mqtt_ownerReceivedMs = 0;
   mqtt_ownerRemainingMs = 0;
+  mqtt_statusDirty = true;
 }
 
 static void mqttDeactivateOwnerSnapshot() {
@@ -606,18 +687,17 @@ static void mqttDeactivateOwnerSnapshot() {
   mqtt_ownerActive = false;
   mqtt_ownerReceivedMs = millis();
   mqtt_ownerRemainingMs = 0;
+  mqtt_statusDirty = true;
 }
 
 static bool mqttOwnerIsFresh() {
   uint32_t elapsedMs = (uint32_t)(millis() - mqtt_ownerReceivedMs);
-  uint32_t ageAtReceiveMs = mqtt_ownerRemainingMs <= MQTT_OWNER_TTL_MS
-    ? MQTT_OWNER_TTL_MS - mqtt_ownerRemainingMs : MQTT_OWNER_TTL_MS;
-  bool operatorPresenceFresh = ageAtReceiveMs < MQTT_OWNER_OPERATOR_SILENCE_MS &&
-    elapsedMs < (MQTT_OWNER_OPERATOR_SILENCE_MS - ageAtReceiveMs);
+  // Presence uses monotonic arrival time. leaseRemainingAtArrival remains a
+  // separate wall-clock TTL fence, so a retained replay never becomes fresh.
   return mqtt_ownerKnown && mqtt_ownerActive && mqttClientConnectedForMain() &&
-    mqtt_ownerRemainingMs > 0 &&
-    elapsedMs < mqtt_ownerRemainingMs &&
-    operatorPresenceFresh;
+    mqttOwnerArrivalFresh(
+      elapsedMs, mqtt_ownerRemainingMs,
+      MQTT_OWNER_OPERATOR_SILENCE_MS);
 }
 
 static bool mqttOwnerAuthorizes(const char* sessionId, const char* connectionId) {
@@ -632,20 +712,55 @@ static bool mqttOwnerConnectionAuthorizes(const char* connectionId) {
     strcmp(mqtt_ownerConnectionId, connectionId) == 0;
 }
 
-static void mqttHandleOwner(const JsonDocument& doc) {
+static bool mqttCommandMatchesOwnerExpectation() {
+  if (!mqtt_ownerHasExpectedCommand) return true;
+  if (mqtt_ownerExpectedCommandId[0] == '\0') return !mqtt_cmdActive;
+  return mqtt_cmdActive &&
+    strcmp(mqtt_cmdCommandId, mqtt_ownerExpectedCommandId) == 0;
+}
+
+static bool mqttInboundHealthy() {
+  bool modernCommand = mqtt_cmdActive && mqtt_cmdConnectionId[0] != '\0';
+  bool commandMatchesExpectation = mqttCommandMatchesOwnerExpectation();
+  uint8_t requiredMask = 0;
+  if (mqtt_ownerActive || modernCommand) requiredMask |= MQTT_RX_OWNER;
+  if (modernCommand) requiredMask |= MQTT_RX_COMMAND;
+  if ((mqtt_rxMask & requiredMask) != requiredMask) return false;
+  if (mqtt_ownerActive && !commandMatchesExpectation) return false;
+  if (modernCommand && !mqtt_commandSnapshotReady) return false;
+  if ((mqtt_ownerActive || modernCommand) && !mqttOwnerIsFresh()) return false;
+  return !mqtt_rxRepairing ||
+    (mqtt_rxRepairMask & (MQTT_RX_OWNER | MQTT_RX_COMMAND)) == 0;
+}
+
+static bool mqttCommandIsActionable() {
+  return !mqtt_tareRequired && mqttInboundHealthy() && mqtt_cmdActive &&
+    !mqtt_localFallbackActive &&
+    (mqtt_cmdConnectionId[0] == '\0' ||
+     (mqtt_commandSnapshotReady &&
+      mqttOwnerAuthorizes(mqtt_cmdSessionId, mqtt_cmdConnectionId)));
+}
+
+static bool mqttHandleOwner(const JsonDocument& doc) {
   const char* sessionId = doc["session_id"] | "";
   const char* connectionId = doc["connection_id"] | "";
   const char* leaseId = doc["lease_id"] | "";
+  bool hasExpectedCommand = doc["expected_command_id"].is<const char*>();
+  const char* expectedCommandId = hasExpectedCommand
+    ? (doc["expected_command_id"] | "") : "";
   uint32_t timestamp = doc["timestamp"] | 0U;
   bool idsValid = sessionId[0] != '\0' && connectionId[0] != '\0' &&
     leaseId[0] != '\0' && strlen(sessionId) < sizeof(mqtt_ownerSessionId) &&
     strlen(connectionId) < sizeof(mqtt_ownerConnectionId) &&
     strlen(leaseId) < sizeof(mqtt_ownerLeaseId) &&
     mqttIsSafeCommandId(sessionId) && mqttIsSafeCommandId(connectionId) &&
-    mqttIsSafeCommandId(leaseId);
+    mqttIsSafeCommandId(leaseId) &&
+    (!hasExpectedCommand ||
+     (strlen(expectedCommandId) < sizeof(mqtt_ownerExpectedCommandId) &&
+      mqttIsSafeCommandId(expectedCommandId)));
   if (!idsValid || timestamp == 0) {
     mqttDeactivateOwnerSnapshot();
-    return;
+    return false;
   }
 
   bool released = doc["user_id"].isNull();
@@ -653,30 +768,42 @@ static void mqttHandleOwner(const JsonDocument& doc) {
     strcmp(mqtt_ownerSessionId, sessionId) == 0 &&
     strcmp(mqtt_ownerConnectionId, connectionId) == 0 &&
     strcmp(mqtt_ownerLeaseId, leaseId) == 0;
-  if (released && mqtt_ownerActive && !exactStoredLease) return;
+  if (released && mqtt_ownerActive && !exactStoredLease) return false;
 
   time_t epochNow = time(nullptr);
   if (epochNow < 1700000000 ||
       timestamp > (uint32_t)epochNow + MQTT_OWNER_CLOCK_SKEW_SEC) {
     mqttDeactivateOwnerSnapshot();
-    return;
+    return false;
   }
-  if (mqtt_ownerKnown && timestamp < mqtt_ownerTimestamp) return;
-  if (strcmp(connectionId, mqtt_lastSeenOwnerConnectionId) == 0 &&
-      timestamp < mqtt_lastSeenOwnerTimestamp) return;
+  bool exactLastSeenLease =
+    strcmp(connectionId, mqtt_lastSeenOwnerConnectionId) == 0 &&
+    strcmp(leaseId, mqtt_lastSeenOwnerLeaseId) == 0;
+  if (!mqttOwnerTimestampAllowed(
+        exactStoredLease, exactLastSeenLease, timestamp,
+        mqtt_ownerTimestamp, mqtt_lastSeenOwnerTimestamp)) return false;
 
-  uint32_t remainingMs = 0;
   uint32_t ageSec = timestamp < (uint32_t)epochNow
     ? (uint32_t)epochNow - timestamp : 0;
-  if (ageSec < MQTT_OWNER_TTL_MS / 1000UL) {
-    remainingMs = MQTT_OWNER_TTL_MS - ageSec * 1000UL;
-  }
+  // Only a strictly advancing heartbeat on the same live lease earns a small
+  // clock/jitter grace. An equal retained replay and an already expired lease
+  // keep the original timestamp deadline and can never be reopened by arrival.
+  bool progressiveSameLease = !released && exactStoredLease &&
+    timestamp > mqtt_ownerTimestamp;
+  uint32_t remainingMs = mqttOwnerLeaseRemainingMs(
+    ageSec, MQTT_OWNER_TTL_MS, progressiveSameLease,
+    MQTT_OWNER_PROGRESSIVE_MAX_AGE_SEC,
+    MQTT_OWNER_PROGRESSIVE_GRACE_MS);
 
   mqtt_ownerKnown = true;
   mqtt_ownerActive = !released && remainingMs > 0;
   strlcpy(mqtt_ownerSessionId, sessionId, sizeof(mqtt_ownerSessionId));
   strlcpy(mqtt_ownerConnectionId, connectionId, sizeof(mqtt_ownerConnectionId));
   strlcpy(mqtt_ownerLeaseId, leaseId, sizeof(mqtt_ownerLeaseId));
+  mqtt_ownerHasExpectedCommand = hasExpectedCommand;
+  strlcpy(
+    mqtt_ownerExpectedCommandId, expectedCommandId,
+    sizeof(mqtt_ownerExpectedCommandId));
   mqtt_ownerTimestamp = timestamp;
   mqtt_ownerReceivedMs = millis();
   mqtt_ownerRemainingMs = remainingMs;
@@ -684,6 +811,11 @@ static void mqttHandleOwner(const JsonDocument& doc) {
   strlcpy(
     mqtt_lastSeenOwnerConnectionId, connectionId,
     sizeof(mqtt_lastSeenOwnerConnectionId));
+  strlcpy(
+    mqtt_lastSeenOwnerLeaseId, leaseId,
+    sizeof(mqtt_lastSeenOwnerLeaseId));
+  mqtt_statusDirty = true;
+  return true;
 }
 
 static void mqttResetPendingResponse() {
@@ -693,11 +825,28 @@ static void mqttResetPendingResponse() {
   mqtt_responsePayload[0] = '\0';
   mqtt_responseLastPublishMs = 0;
   mqtt_responseStartedMs = 0;
+  mqtt_responseAckReconnectDone = false;
+  mqtt_statusDirty = true;
 }
 
-static void mqttEnterLocalFallback() {
-  if (mqtt_localFallbackActive) return;
+static void mqttSetCommandError(MqttCommandError error) {
+  if (mqtt_tareRequired &&
+      error != MQTT_COMMAND_ERROR_MANAGER_INCIDENT_DETACHED) return;
+  if (mqtt_lastCommandError == error) return;
+  mqtt_lastCommandError = error;
+  mqtt_statusDirty = true;
+}
+
+static void mqttEnterLocalFallback(MqttFallbackReason reason) {
+  if (mqtt_localFallbackActive) {
+    if (reason != MQTT_FALLBACK_NONE && mqtt_fallbackReason != reason) {
+      mqtt_fallbackReason = reason;
+      mqtt_statusDirty = true;
+    }
+    return;
+  }
   mqtt_localFallbackActive = true;
+  mqtt_fallbackReason = reason;
   mqtt_localFallbackOwnerTimestamp = mqtt_ownerTimestamp != 0
     ? mqtt_ownerTimestamp : mqtt_lastSeenOwnerTimestamp;
   const char* fallbackConnection = mqtt_ownerConnectionId[0] != '\0'
@@ -705,7 +854,13 @@ static void mqttEnterLocalFallback() {
   strlcpy(
     mqtt_localFallbackOwnerConnectionId, fallbackConnection,
     sizeof(mqtt_localFallbackOwnerConnectionId));
+  const char* fallbackLease = mqtt_ownerLeaseId[0] != '\0'
+    ? mqtt_ownerLeaseId : mqtt_lastSeenOwnerLeaseId;
+  strlcpy(
+    mqtt_localFallbackOwnerLeaseId, fallbackLease,
+    sizeof(mqtt_localFallbackOwnerLeaseId));
   mqtt_activityFlag = true;
+  mqtt_statusDirty = true;
   if (mqtt_responsePending && mqtt_responseKind == MQTT_RESPONSE_UNDO) {
     mqtt_detachedUndoFlag = true;
   }
@@ -718,13 +873,47 @@ static void mqttEnterLocalFallback() {
 }
 
 static void mqttLeaveLocalFallback() {
+  if (mqtt_tareRequired) return;
   mqtt_localFallbackActive = false;
+  mqtt_fallbackReason = MQTT_FALLBACK_NONE;
   mqtt_localFallbackOwnerTimestamp = 0;
   mqtt_localFallbackOwnerConnectionId[0] = '\0';
+  mqtt_localFallbackOwnerLeaseId[0] = '\0';
+  mqtt_statusDirty = true;
 }
 
 static void mqttUpdateLocalFallback() {
-  if (mqtt_localFallbackActive || !mqtt_setupDone || !mqtt_identityValid) return;
+  if (!mqtt_setupDone || !mqtt_identityValid) return;
+
+  if (mqtt_localFallbackActive) {
+    bool connected = mqttClientConnectedForMain();
+    bool ownerFresh = mqttOwnerIsFresh();
+    bool legacyCommand = mqtt_cmdActive && mqtt_cmdConnectionId[0] == '\0';
+    bool freshEvidence = mqttFallbackHasFreshEvidence(
+      true, legacyCommand, mqtt_ownerTimestamp,
+      mqtt_localFallbackOwnerTimestamp,
+      strcmp(mqtt_ownerConnectionId,
+             mqtt_localFallbackOwnerConnectionId) != 0,
+      strcmp(mqtt_ownerLeaseId, mqtt_localFallbackOwnerLeaseId) != 0);
+    bool idleContextReady = !mqtt_cmdActive && ownerFresh && freshEvidence;
+    bool commandContextReady = mqtt_cmdActive && mqtt_commandSnapshotReady &&
+      freshEvidence && (legacyCommand ||
+        mqttOwnerAuthorizes(mqtt_cmdSessionId, mqtt_cmdConnectionId));
+    if (!mqtt_tareRequired && connected && mqttInboundHealthy() &&
+        !mqtt_responsePending &&
+        (idleContextReady || commandContextReady)) {
+      mqttLeaveLocalFallback();
+      mqtt_remoteUnavailableTracking = false;
+      mqtt_remoteUnavailableSinceMs = 0;
+      mqttSetCommandError(MQTT_COMMAND_ERROR_NONE);
+      mqtt_activityFlag = true;
+      Serial.println(F("[MQTT] Contesto remoto ripristinato automaticamente"));
+      if (mqtt_cmdActive && mqtt_cmdCommandId[0] != '\0') {
+        (void)mqttPublishCommandAck();
+      }
+    }
+    return;
+  }
 
   uint32_t now = millis();
   bool connected = mqttClientConnectedForMain();
@@ -742,10 +931,11 @@ static void mqttUpdateLocalFallback() {
     ownerScopedContext;
   bool commandSnapshotUnknown = connected && modernCommand &&
     !mqtt_commandSnapshotReady;
+  bool inboundUnverified = connected && !mqttInboundHealthy();
   bool disconnectedRemoteState = !connected &&
     (mqtt_cmdActive || mqtt_responsePending);
   bool remoteConsumerUncertain = ownerSnapshotUnknown ||
-    commandSnapshotUnknown || disconnectedRemoteState;
+    commandSnapshotUnknown || inboundUnverified || disconnectedRemoteState;
 
   if (remoteConsumerUncertain) {
     if (!mqtt_remoteUnavailableTracking) {
@@ -760,7 +950,11 @@ static void mqttUpdateLocalFallback() {
   bool remoteUnavailableExpired = mqtt_remoteUnavailableTracking &&
     (uint32_t)(now - mqtt_remoteUnavailableSinceMs) >= MQTT_OPERATOR_LOCK_MAX_MS;
   if (ownerUnavailable || responseLockExpired || remoteUnavailableExpired) {
-    mqttEnterLocalFallback();
+    MqttFallbackReason reason = MQTT_FALLBACK_OWNER;
+    if (responseLockExpired) reason = MQTT_FALLBACK_RESPONSE_TIMEOUT;
+    else if (inboundUnverified) reason = MQTT_FALLBACK_RX_TIMEOUT;
+    else if (!connected || commandSnapshotUnknown) reason = MQTT_FALLBACK_TRANSPORT;
+    mqttEnterLocalFallback(reason);
   }
 }
 
@@ -873,14 +1067,222 @@ static void mqttRememberTerminalConfirmRequest(
     requestId, commandId, connectionId, state, reason);
 }
 
+static const char* mqttFallbackReasonText() {
+  switch (mqtt_fallbackReason) {
+    case MQTT_FALLBACK_OWNER: return "owner";
+    case MQTT_FALLBACK_RESPONSE_TIMEOUT: return "response_timeout";
+    case MQTT_FALLBACK_ACK_TIMEOUT: return "ack_timeout";
+    case MQTT_FALLBACK_MANAGER_INCIDENT: return "manager_incident";
+    case MQTT_FALLBACK_MANAGER_INCIDENT_DETACHED:
+      return "manager_incident_detached";
+    case MQTT_FALLBACK_RX_TIMEOUT: return "rx_timeout";
+    case MQTT_FALLBACK_TRANSPORT: return "transport";
+    case MQTT_FALLBACK_PAGEHIDE: return "pagehide";
+    case MQTT_FALLBACK_LOCAL_INPUT: return "local_input";
+    default: return "none";
+  }
+}
+
+static const char* mqttCommandErrorText() {
+  switch (mqtt_lastCommandError) {
+    case MQTT_COMMAND_ERROR_INVALID: return "invalid";
+    case MQTT_COMMAND_ERROR_OWNER: return "owner";
+    case MQTT_COMMAND_ERROR_FALLBACK: return "fallback";
+    case MQTT_COMMAND_ERROR_RESPONSE_PENDING: return "response_pending";
+    case MQTT_COMMAND_ERROR_CONFIRM_PENDING: return "confirm_pending";
+    case MQTT_COMMAND_ERROR_CONFLICT: return "conflict";
+    case MQTT_COMMAND_ERROR_RX_UNVERIFIED: return "rx_unverified";
+    case MQTT_COMMAND_ERROR_MANAGER_INCIDENT: return "manager_incident";
+    case MQTT_COMMAND_ERROR_MANAGER_INCIDENT_DETACHED:
+      return "manager_incident_detached";
+    case MQTT_COMMAND_ERROR_ACK_TIMEOUT: return "ack_timeout";
+    default: return "none";
+  }
+}
+
+static const char* mqttRxHealthText() {
+  if (mqtt_rxRepairing) return "repairing";
+  if (mqttInboundHealthy()) return "healthy";
+  return "verifying";
+}
+
 static bool mqttPublishStatus(const char* state) {
   if (!mqttClient.connected() || !state) return false;
-  char payload[256];
+  uint32_t nowMs = millis();
+  mqtt_statusLastAttemptMs = nowMs;
+  mqtt_statusSequence++;
+  if (mqtt_statusSequence == 0) mqtt_statusSequence = 1;
+  char bootId[9];
+  char transportId[9];
+  snprintf(bootId, sizeof(bootId), "%08lx", (unsigned long)mqtt_bootId);
+  snprintf(transportId, sizeof(transportId), "%08lx", (unsigned long)mqtt_transportId);
+  const char* operationalMode =
+    !mqtt_tareRequired && !mqtt_localFallbackActive &&
+      mqttInboundHealthy() && mqttOwnerIsFresh()
+      ? "app" : "local";
+  char payload[512];
   int written = snprintf(payload, sizeof(payload),
-    "{\"type\":\"status\",\"state\":\"%s\",\"scale_id\":\"%s\",\"name\":\"%s\",\"firmware_version\":\"%s\"}",
-    state, mqtt_scaleId, MQTT_SCALE_NAME, MQTT_FW_VERSION);
-  return written > 0 && written < (int)sizeof(payload) &&
+    "{\"type\":\"status\",\"state\":\"%s\",\"scale_id\":\"%s\",\"name\":\"%s\",\"firmware_version\":\"%s\",\"boot_id\":\"%s\",\"transport_id\":\"%s\",\"status_seq\":%lu,\"published_at\":%lu,\"uptime_ms\":%lu,\"operational_mode\":\"%s\",\"tare_required\":%s,\"fallback_reason\":\"%s\",\"last_command_error\":\"%s\",\"rx_probe_seq\":%lu,\"rx_mask\":%u,\"rx_health\":\"%s\",\"pending_response_id\":\"%s\"}",
+    state, mqtt_scaleId, MQTT_SCALE_NAME, MQTT_FW_VERSION,
+    bootId, transportId, (unsigned long)mqtt_statusSequence,
+    (unsigned long)time(nullptr), (unsigned long)nowMs, operationalMode,
+    mqtt_tareRequired ? "true" : "false",
+    mqttFallbackReasonText(), mqttCommandErrorText(),
+    (unsigned long)mqtt_rxProbeSequence, (unsigned)mqtt_rxMask,
+    mqttRxHealthText(), mqtt_responsePending ? mqtt_responseId : "");
+  bool published = written > 0 && written < (int)sizeof(payload) &&
     mqttClient.publish(mqtt_topicSts, (const uint8_t*)payload, strlen(payload), true);
+  if (published) {
+    mqtt_statusLastPublishMs = millis();
+    mqtt_statusDirty = false;
+  }
+  return published;
+}
+
+static void mqttMaybePublishStatus() {
+  if (!mqttClientConnectedForMain()) return;
+  uint32_t now = millis();
+  bool heartbeatDue = mqtt_statusLastPublishMs == 0 ||
+    (uint32_t)(now - mqtt_statusLastPublishMs) >= MQTT_STATUS_HEARTBEAT_MS;
+  bool dirtyDue = mqtt_statusDirty &&
+    (mqtt_statusLastAttemptMs == 0 ||
+     (uint32_t)(now - mqtt_statusLastAttemptMs) >= MQTT_STATUS_DIRTY_RETRY_MS);
+  if (heartbeatDue || dirtyDue) (void)mqttPublishStatus("online");
+}
+
+static void mqttMarkInboundTopic(uint8_t topicBit) {
+  uint8_t nextMask = mqtt_rxMask | topicBit;
+  if (nextMask == mqtt_rxMask) return;
+  mqtt_rxMask = nextMask;
+  mqtt_statusDirty = true;
+}
+
+static void mqttResetInboundHealth() {
+  mqtt_rxMask = 0;
+  mqtt_rxRepairing = false;
+  mqtt_rxRepairMask = 0;
+  mqtt_rxCompletedRetries = 0;
+  mqtt_rxRepairDeadlineMs = 0;
+  mqtt_rxTransportStartedMs = 0;
+  mqtt_rxLastOwnerMs = 0;
+  mqtt_rxAckWaitStartedMs = 0;
+  mqtt_statusDirty = true;
+}
+
+static bool mqttSubscribeInbound() {
+  mqtt_rxProbeSequence++;
+  if (mqtt_rxProbeSequence == 0) mqtt_rxProbeSequence = 1;
+  mqtt_statusDirty = true;
+
+  bool ownerSubscribed = mqttClient.subscribe(mqtt_topicOwner, 1);
+  bool commandSubscribed = mqttClient.subscribe(mqtt_topicCmd, 1);
+  bool ackSubscribed = mqttClient.subscribe(mqtt_topicAck, 1);
+  return ownerSubscribed && commandSubscribed && ackSubscribed;
+}
+
+static uint8_t mqttInboundFailureMask(uint32_t now) {
+  bool modernCommand = mqtt_cmdActive && mqtt_cmdConnectionId[0] != '\0';
+  bool commandMatchesExpectation = mqttCommandMatchesOwnerExpectation();
+  bool commandInputExpected = modernCommand ||
+    (mqtt_ownerActive && mqtt_ownerHasExpectedCommand &&
+     !commandMatchesExpectation);
+  uint32_t transportAgeMs = mqtt_rxTransportStartedMs == 0
+    ? 0 : (uint32_t)(now - mqtt_rxTransportStartedMs);
+  uint32_t ownerBaseline = mqtt_rxLastOwnerMs != 0
+    ? mqtt_rxLastOwnerMs : mqtt_rxTransportStartedMs;
+  uint32_t ownerSilenceMs = ownerBaseline == 0
+    ? 0 : (uint32_t)(now - ownerBaseline);
+
+  if (mqtt_responsePending && !mqtt_responseAckReconnectDone) {
+    if (mqtt_rxAckWaitStartedMs == 0) mqtt_rxAckWaitStartedMs = now;
+  } else {
+    mqtt_rxAckWaitStartedMs = 0;
+  }
+  uint32_t ackWaitMs = mqtt_rxAckWaitStartedMs == 0
+    ? 0 : (uint32_t)(now - mqtt_rxAckWaitStartedMs);
+
+  // An active browser publishes owner heartbeats continually. Silence after
+  // a previously valid active lease is evidence of a half-alive inbound path;
+  // an explicit release/empty owner is not and therefore does not reconnect.
+  return mqttPassiveRxFailureMask(
+    commandInputExpected, mqtt_ownerActive,
+    mqtt_responsePending && !mqtt_responseAckReconnectDone,
+    (mqtt_rxMask & MQTT_RX_OWNER) != 0,
+    (mqtt_rxMask & MQTT_RX_COMMAND) != 0,
+    mqtt_commandSnapshotReady && commandMatchesExpectation,
+    transportAgeMs, ownerSilenceMs, ackWaitMs,
+    MQTT_RX_INITIAL_SNAPSHOT_MS, MQTT_RX_OWNER_SILENCE_MS,
+    MQTT_RX_ACK_SILENCE_MS);
+}
+
+static bool mqttUpdateInboundHealth() {
+  uint32_t now = millis();
+  uint8_t failureMask = mqttInboundFailureMask(now);
+
+  if (!mqtt_rxRepairing) {
+    if (failureMask == 0) return true;
+    mqtt_rxRepairing = true;
+    mqtt_rxRepairMask = failureMask;
+    mqtt_rxCompletedRetries = 0;
+    mqtt_rxMask &= (uint8_t)~failureMask;
+    mqtt_rxRepairDeadlineMs = now + MQTT_RX_REPAIR_TIMEOUT_MS;
+    mqtt_statusDirty = true;
+    Serial.println(F("[MQTT] Ingresso atteso silente; risottoscrizione"));
+    (void)mqttSubscribeInbound();
+    return true;
+  }
+
+  uint8_t unresolvedMask = mqtt_rxRepairMask;
+  if ((mqtt_rxMask & MQTT_RX_OWNER) != 0) unresolvedMask &= ~MQTT_RX_OWNER;
+  if ((mqtt_rxMask & MQTT_RX_COMMAND) != 0 &&
+      (!mqtt_cmdActive ||
+       (mqtt_commandSnapshotReady && mqttCommandMatchesOwnerExpectation()))) {
+    unresolvedMask &= ~MQTT_RX_COMMAND;
+  }
+  if (!mqtt_responsePending || (mqtt_rxMask & MQTT_RX_ACK) != 0) {
+    unresolvedMask &= ~MQTT_RX_ACK;
+  }
+  if (unresolvedMask == 0) {
+    mqtt_rxRepairing = false;
+    mqtt_rxRepairMask = 0;
+    mqtt_rxCompletedRetries = 0;
+    mqtt_rxRepairDeadlineMs = 0;
+    mqtt_statusDirty = true;
+    Serial.println(F("[MQTT] Ingressi ripristinati"));
+    return true;
+  }
+
+  if (mqtt_rxRepairDeadlineMs != 0 &&
+      (int32_t)(now - mqtt_rxRepairDeadlineMs) < 0) return true;
+
+  if (mqtt_rxCompletedRetries < MQTT_RX_REPAIR_MAX_RETRIES) {
+    mqtt_rxCompletedRetries++;
+    mqtt_rxRepairMask = unresolvedMask;
+    mqtt_rxMask &= (uint8_t)~unresolvedMask;
+    mqtt_rxRepairDeadlineMs = now + MQTT_RX_REPAIR_TIMEOUT_MS;
+    mqtt_statusDirty = true;
+    Serial.println(F("[MQTT] Ingresso ancora silente; nuova subscribe"));
+    (void)mqttSubscribeInbound();
+    return true;
+  }
+
+  bool ackTimedOut = (unresolvedMask & MQTT_RX_ACK) != 0;
+  if (ackTimedOut) {
+    // One transport rebuild is enough to repair a lost ACK subscription. If
+    // the same immutable response still has no terminal ACK afterwards, keep
+    // retrying the outbox but do not reconnect-loop on a Manager/REST failure.
+    mqtt_responseAckReconnectDone = true;
+    mqttSetCommandError(MQTT_COMMAND_ERROR_ACK_TIMEOUT);
+  }
+  Serial.println(ackTimedOut
+    ? F("[MQTT] ACK non ripristinato; singolo reconnect")
+    : F("[MQTT] Ingresso non ripristinato; reconnect"));
+
+  mqttEnterLocalFallback(ackTimedOut
+    ? MQTT_FALLBACK_ACK_TIMEOUT : MQTT_FALLBACK_RX_TIMEOUT);
+  (void)mqttPublishStatus("online");
+  mqttWifiClient.stop();
+  return false;
 }
 
 // ========================= CALLBACK RICEZIONE COMANDI =========================
@@ -891,6 +1293,7 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length) {
   if (!isCommandTopic && !isAckTopic && !isOwnerTopic) return;
 
   if (isCommandTopic && length == 0) {
+    mqttMarkInboundTopic(MQTT_RX_COMMAND);
     if (!mqtt_responsePending &&
         mqtt_confirmRequestState != MQTT_CONFIRM_REQUEST_QUEUED &&
         mqtt_confirmRequestState != MQTT_CONFIRM_REQUEST_RUNNING &&
@@ -902,6 +1305,7 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length) {
   }
 
   if (isOwnerTopic && length == 0) {
+    mqttMarkInboundTopic(MQTT_RX_OWNER);
     mqttResetOwnerSnapshot();
     mqtt_ownerKnown = true;
     return;
@@ -917,13 +1321,20 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length) {
     return;
   }
 
+  const char* type = doc["type"] | "";
+  // Defensive compatibility with development builds that emitted probes.
+  // Diagnostic envelopes never enter owner/command/ack business semantics.
+  if (strcmp(type, "transport_probe") == 0) return;
+
   if (isOwnerTopic) {
-    mqttHandleOwner(doc);
+    if (mqttHandleOwner(doc)) {
+      mqttMarkInboundTopic(MQTT_RX_OWNER);
+      mqtt_rxLastOwnerMs = millis();
+    }
     return;
   }
 
-  const char* type = doc["type"];
-  if (!type) {
+  if (type[0] == '\0') {
     Serial.println(F("[MQTT] Comando senza campo 'type', ignorato"));
     return;
   }
@@ -932,12 +1343,64 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length) {
     const char* responseId = doc["response_id"];
     if (strcmp(type, "response_ack") == 0 && responseId &&
         mqtt_responsePending && strcmp(responseId, mqtt_responseId) == 0) {
+      mqttMarkInboundTopic(MQTT_RX_ACK);
       Serial.print(F("[MQTT] Response ACK: "));
       Serial.println(responseId);
-      if (mqtt_responseKind == MQTT_RESPONSE_UNDO &&
-          !mqtt_localFallbackActive) mqtt_undoAckFlag = true;
+      if (mqtt_responseKind == MQTT_RESPONSE_UNDO) {
+        if (!mqtt_localFallbackActive && !mqtt_undoWasDetachedApplied) {
+          mqtt_undoAckFlag = true;
+        } else if (mqtt_undoWasDetachedApplied) {
+          mqtt_detachedUndoFlag = false;
+        }
+        // If detach was requested but the main loop has not consumed it yet,
+        // keep the flag: a successful remote undo still needs one local
+        // restore even though its outbox is now terminal.
+      } else {
+        mqtt_detachedUndoFlag = false;
+      }
+      mqtt_undoWasDetachedApplied = false;
       mqttResetPendingResponse();
       mqttResetCommand();
+      mqttResetConfirmRequest();
+    } else if (strcmp(type, "response_reject") == 0 && responseId &&
+               strcmp(doc["reason"] | "", "manager_incident") == 0 &&
+               mqtt_responsePending &&
+               strcmp(responseId, mqtt_responseId) == 0) {
+      mqttMarkInboundTopic(MQTT_RX_ACK);
+      const bool rejectedUndo = mqtt_responseKind == MQTT_RESPONSE_UNDO;
+      const bool rejectedConfirm = mqtt_responseKind == MQTT_RESPONSE_CONFIRM;
+      const bool rejectedAfterDetachedApply =
+        rejectedUndo && mqtt_undoWasDetachedApplied;
+      Serial.print(F("[MQTT] Response quarantined: "));
+      Serial.println(responseId);
+      if (rejectedUndo) {
+        // A quarantine is terminal but is not a successful undo commit. Clear
+        // both deferred paths and let the main loop discard its staged marker
+        // without restoring the local stack.
+        mqtt_undoAckFlag = false;
+        mqtt_detachedUndoFlag = false;
+        if (rejectedAfterDetachedApply) mqtt_undoDetachedRejectFlag = true;
+        else mqtt_undoRejectFlag = true;
+      }
+      if (rejectedConfirm) {
+        mqtt_confirmRejectFlag = true;
+        mqtt_confirmRejectRollbackSafe = !mqtt_localFallbackActive;
+        strlcpy(
+          mqtt_confirmRejectResponseId, responseId,
+          sizeof(mqtt_confirmRejectResponseId));
+      }
+      mqtt_undoWasDetachedApplied = false;
+      mqttResetPendingResponse();
+      mqttResetCommand();
+      mqttResetConfirmRequest();
+      // Preserve the terminal cause in retained status until a later valid
+      // command proves that the incident has been superseded.
+      mqttSetCommandError(rejectedAfterDetachedApply
+        ? MQTT_COMMAND_ERROR_MANAGER_INCIDENT_DETACHED
+        : MQTT_COMMAND_ERROR_MANAGER_INCIDENT);
+      if (rejectedConfirm || rejectedAfterDetachedApply) {
+        mqttSetTareRequired(true);
+      }
     }
     return;
   }
@@ -962,6 +1425,14 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length) {
       mqttIsSafeCommandId(commandId);
     if (!idsValid) {
       Serial.println(F("[MQTT] confirm_request con ID non valido"));
+      return;
+    }
+    mqttMarkInboundTopic(MQTT_RX_COMMAND);
+
+    if (mqtt_tareRequired) {
+      mqttRememberTerminalConfirmRequest(
+        requestId, sessionId, connectionId, commandId, uuid, productId,
+        "rejected", "tare_required");
       return;
     }
 
@@ -1046,35 +1517,16 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length) {
         strlen(connectionId) >= sizeof(mqtt_cmdConnectionId) ||
         strlen(commandId) >= sizeof(mqtt_cmdCommandId) ||
         !mqttIsSafeCommandId(connectionId) || !mqttIsSafeCommandId(commandId)) {
+      mqttSetCommandError(MQTT_COMMAND_ERROR_INVALID);
       Serial.println(F("[MQTT] weigh con ID non valido, ignorato"));
       return;
     }
+    mqttMarkInboundTopic(MQTT_RX_COMMAND);
 
     if (connectionId[0] != '\0' &&
         !mqttOwnerAuthorizes(sessionId, connectionId)) {
+      mqttSetCommandError(MQTT_COMMAND_ERROR_OWNER);
       Serial.println(F("[MQTT] weigh ignorato: owner non valido"));
-      return;
-    }
-
-    // A retained owner/weigh pair from the detached document cannot silently
-    // reactivate local mode after reconnect. Require a newer heartbeat or a
-    // genuinely new browser connection before accepting the replay.
-    bool fallbackHasFreshEvidence = !mqtt_localFallbackActive ||
-      connectionId[0] == '\0' ||
-      mqtt_ownerTimestamp > mqtt_localFallbackOwnerTimestamp ||
-      strcmp(connectionId, mqtt_localFallbackOwnerConnectionId) != 0;
-    if (!fallbackHasFreshEvidence) {
-      Serial.println(F("[MQTT] weigh ignorato: owner non rinnovato"));
-      return;
-    }
-
-    if (mqtt_responsePending) {
-      Serial.println(F("[MQTT] CMD weigh ignorato: response ACK pending"));
-      return;
-    }
-    if (mqtt_confirmRequestState == MQTT_CONFIRM_REQUEST_QUEUED ||
-        mqtt_confirmRequestState == MQTT_CONFIRM_REQUEST_RUNNING) {
-      Serial.println(F("[MQTT] CMD weigh ignorato: confirm_request pending"));
       return;
     }
 
@@ -1090,21 +1542,58 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length) {
     bool sameCommandId = mqtt_cmdActive && commandId[0] != '\0' &&
       mqtt_cmdCommandId[0] != '\0' &&
       strcmp(mqtt_cmdCommandId, commandId) == 0;
+    bool samePayload = sameUuid && sameSession && sameProduct &&
+      sameTarget && sameName;
+
+    // A retained owner/weigh pair from the detached document cannot silently
+    // reactivate local mode after reconnect. Require a newer heartbeat or a
+    // genuinely new browser connection before accepting the replay.
+    bool fallbackHasFreshEvidence = mqttFallbackHasFreshEvidence(
+      mqtt_localFallbackActive, connectionId[0] == '\0',
+      mqtt_ownerTimestamp, mqtt_localFallbackOwnerTimestamp,
+      strcmp(connectionId, mqtt_localFallbackOwnerConnectionId) != 0,
+      strcmp(mqtt_ownerLeaseId, mqtt_localFallbackOwnerLeaseId) != 0);
+    if (!fallbackHasFreshEvidence) {
+      // Preserve proof that the broker delivered the retained raw command.
+      // A later fresh owner heartbeat can then resume this exact command
+      // without requiring a page reload or another command publication.
+      if (sameCommandId && samePayload) mqtt_commandSnapshotReady = true;
+      mqttSetCommandError(MQTT_COMMAND_ERROR_FALLBACK);
+      Serial.println(F("[MQTT] weigh ignorato: owner non rinnovato"));
+      return;
+    }
+
+    if (mqtt_responsePending) {
+      mqttSetCommandError(MQTT_COMMAND_ERROR_RESPONSE_PENDING);
+      Serial.println(F("[MQTT] CMD weigh ignorato: response ACK pending"));
+      return;
+    }
+    if (mqtt_confirmRequestState == MQTT_CONFIRM_REQUEST_QUEUED ||
+        mqtt_confirmRequestState == MQTT_CONFIRM_REQUEST_RUNNING) {
+      mqttSetCommandError(MQTT_COMMAND_ERROR_CONFIRM_PENDING);
+      Serial.println(F("[MQTT] CMD weigh ignorato: confirm_request pending"));
+      return;
+    }
 
     // command_id is an idempotency key. A replay cannot rewrite the active
     // command, even if a conflicting payload reused the same ID.
     if (sameCommandId) {
-      bool samePayload = sameUuid && sameSession && sameProduct &&
-        sameTarget && sameName;
       if (samePayload) {
         mqttLeaveLocalFallback();
         mqtt_remoteUnavailableTracking = false;
         mqtt_remoteUnavailableSinceMs = 0;
         strlcpy(mqtt_cmdConnectionId, connectionId, sizeof(mqtt_cmdConnectionId));
         mqtt_commandSnapshotReady = true;
+        if (mqtt_tareRequired) {
+          mqtt_statusDirty = true;
+          Serial.println(F("[MQTT] CMD weigh differito: TARE richiesta"));
+          return;
+        }
+        mqttSetCommandError(MQTT_COMMAND_ERROR_NONE);
         Serial.println(F("[MQTT] CMD weigh duplicato: stato invariato"));
         mqttPublishCommandAck();
       } else {
+        mqttSetCommandError(MQTT_COMMAND_ERROR_CONFLICT);
         Serial.println(F("[MQTT] CMD weigh command_id conflittuale: ignorato"));
       }
       return;
@@ -1138,6 +1627,13 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length) {
       strlcpy(mqtt_lastSessionId, sessionId, sizeof(mqtt_lastSessionId));
     }
 
+    if (mqtt_tareRequired) {
+      mqtt_statusDirty = true;
+      Serial.println(F("[MQTT] CMD weigh memorizzato; attendo TARE"));
+      return;
+    }
+    mqttSetCommandError(MQTT_COMMAND_ERROR_NONE);
+
     if (isNewWeigh) {
       mqtt_commandRxBeep = true;
     }
@@ -1160,6 +1656,7 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length) {
         strlen(commandId) >= sizeof(mqtt_cmdCommandId) ||
         !mqttIsSafeCommandId(connectionId) ||
         !mqttIsSafeCommandId(commandId)) return;
+    mqttMarkInboundTopic(MQTT_RX_COMMAND);
 
     // pagehide is an explicit, fenced detach intent. Unlike the normal clear
     // used by REST-before-ACK, it may release the physical operator while an
@@ -1176,7 +1673,7 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length) {
       mqttOwnerAuthorizes(sessionId, connectionId);
     bool lifecycleExact = lifecycleCommandExact || lifecycleOwnerExact;
     if (lifecycleExact) {
-      mqttEnterLocalFallback();
+      mqttEnterLocalFallback(MQTT_FALLBACK_PAGEHIDE);
       mqtt_commandSnapshotReady = true;
       if (mqtt_responsePending) {
         Serial.println(F("[MQTT] pagehide: response in retry, tasti locali liberi"));
@@ -1308,12 +1805,18 @@ static bool mqttAttemptConnect() {
 
   Serial.println(F("[MQTT] Connesso al broker!"));
 
-  // Owner is subscribed first so a retained command cannot become actionable
-  // before its browser lease snapshot is available.
-  bool ownerSubscribed = mqttClient.subscribe(mqtt_topicOwner, 1);
-  bool commandSubscribed = mqttClient.subscribe(mqtt_topicCmd, 1);
-  bool ackSubscribed = mqttClient.subscribe(mqtt_topicAck, 1);
-  if (!ownerSubscribed || !commandSubscribed || !ackSubscribed) {
+  mqtt_transportId = esp_random();
+  if (mqtt_transportId == 0) mqtt_transportId = 1;
+  mqtt_statusLastPublishMs = 0;
+  mqtt_statusLastAttemptMs = 0;
+  mqtt_statusDirty = true;
+  mqttResetInboundHealth();
+  mqtt_rxTransportStartedMs = millis();
+
+  // PubSubClient 2.x only confirms that SUBSCRIBE bytes left the socket; it
+  // does not expose SUBACK. Valid retained/business traffic supplies passive
+  // evidence; silence is repaired with bounded resubscribe then reconnect.
+  if (!mqttSubscribeInbound()) {
     Serial.println(F("[MQTT] Subscribe owner/command/ack fallita"));
     mqttClient.disconnect();
     return false;
@@ -1327,7 +1830,7 @@ static bool mqttAttemptConnect() {
     Serial.println(F("[MQTT] Status 'online' non pubblicato"));
   }
 
-  Serial.println(F("[MQTT] Subscribed owner + command + ack"));
+  Serial.println(F("[MQTT] Subscribed owner + command + ack; watchdog passivo"));
 
   // From this point the main loop owns normal traffic. Bound TLS reads/writes
   // well below the 8-second loop WDT; connect restores the longer timeout.
@@ -1404,12 +1907,20 @@ void mqttSetup() {
     return;
   }
   buildTopics();
+  mqtt_bootId = esp_random();
+  if (mqtt_bootId == 0) mqtt_bootId = 1;
+  mqtt_transportId = 0;
+  mqtt_statusSequence = 0;
+  mqtt_statusLastPublishMs = 0;
+  mqtt_statusLastAttemptMs = 0;
+  mqtt_statusDirty = true;
+  mqttResetInboundHealth();
 
   Serial.print(F("[MQTT] scale_id = "));
   Serial.println(mqtt_scaleId);
 
   if (!mqttClient.setBufferSize(MQTT_MAX_PACKET_SIZE)) {
-    Serial.println(F("[MQTT] Buffer 512 alloc fallita; MQTT disabilitato"));
+    Serial.println(F("[MQTT] Buffer 640 alloc fallita; MQTT disabilitato"));
     mqtt_setupDone = true;
     return;
   }
@@ -1454,6 +1965,13 @@ void mqttSetup() {
 
   mqtt_activityFlag = false;
   mqtt_undoAckFlag = false;
+  mqtt_undoRejectFlag = false;
+  mqtt_undoDetachedRejectFlag = false;
+  mqtt_confirmRejectFlag = false;
+  mqtt_confirmRejectRollbackSafe = false;
+  mqtt_confirmRejectResponseId[0] = '\0';
+  mqtt_undoWasDetachedApplied = false;
+  mqtt_tareRequired = false;
 
   Serial.println(F("[MQTT] Setup completato"));
 }
@@ -1462,7 +1980,7 @@ void mqttSuspend(const char* state) {
   if (!mqtt_setupDone) return;
   if (state && strcmp(state, "offline") == 0 &&
       (mqtt_cmdConnectionId[0] != '\0' || mqtt_responsePending)) {
-    mqttEnterLocalFallback();
+    mqttEnterLocalFallback(MQTT_FALLBACK_TRANSPORT);
   }
   MqttConnectAbortState abortState = state && strcmp(state, "sleeping") == 0
     ? MQTT_CONNECT_ABORT_SLEEPING : MQTT_CONNECT_ABORT_OFFLINE;
@@ -1485,6 +2003,7 @@ void mqttSuspend(const char* state) {
   }
   mqtt_wasPrevConnected = false;
   mqttResetOwnerSnapshot();
+  mqttResetInboundHealth();
   mqtt_commandSnapshotReady = false;
   mqtt_lastAttemptMs = 0;
   mqtt_backoffMs = MQTT_BACKOFF_INIT;
@@ -1510,10 +2029,7 @@ bool isMqttCommandActive() {
 }
 
 bool isMqttCommandActionable() {
-  return mqtt_cmdActive && !mqtt_localFallbackActive &&
-    (mqtt_cmdConnectionId[0] == '\0' ||
-     (mqtt_commandSnapshotReady &&
-      mqttOwnerAuthorizes(mqtt_cmdSessionId, mqtt_cmdConnectionId)));
+  return mqttCommandIsActionable();
 }
 
 bool isMqttResponsePending() {
@@ -1529,12 +2045,13 @@ bool isMqttLocalFallbackActive() {
 }
 
 bool isMqttManagerAttached() {
-  return !mqtt_localFallbackActive && mqttOwnerIsFresh();
+  return !mqtt_tareRequired && mqttInboundHealthy() &&
+    !mqtt_localFallbackActive && mqttOwnerIsFresh();
 }
 
 bool mqttDetachForLocalInput() {
   if (!mqtt_responsePending) return false;
-  mqttEnterLocalFallback();
+  mqttEnterLocalFallback(MQTT_FALLBACK_LOCAL_INPUT);
   return true;
 }
 
@@ -1649,6 +2166,7 @@ bool mqttConfirmActiveCommand(const char* expectedUuid, float actualWeight,
     return false;
   }
   mqtt_responseKind = MQTT_RESPONSE_CONFIRM;
+  mqtt_responseAckReconnectDone = false;
   mqtt_responsePending = true;
   mqtt_responseStartedMs = millis();
   mqtt_responseLastPublishMs = 0;
@@ -1695,6 +2213,7 @@ bool mqttSkipActiveCommand() {
     return false;
   }
   mqtt_responseKind = MQTT_RESPONSE_SKIP;
+  mqtt_responseAckReconnectDone = false;
   mqtt_responsePending = true;
   mqtt_responseStartedMs = millis();
   mqtt_responseLastPublishMs = 0;
@@ -1726,6 +2245,10 @@ bool mqttStageUndo(const char* uuid, uint32_t productId,
   }
   strlcpy(mqtt_lastSessionId, targetSession, sizeof(mqtt_lastSessionId));
   mqtt_responseKind = MQTT_RESPONSE_UNDO;
+  mqtt_undoWasDetachedApplied = false;
+  mqtt_undoRejectFlag = false;
+  mqtt_undoDetachedRejectFlag = false;
+  mqtt_responseAckReconnectDone = false;
   mqtt_responsePending = true;
   mqtt_responseStartedMs = millis();
   mqtt_responseLastPublishMs = 0;
@@ -1805,6 +2328,7 @@ static void mqttUpdateInternal() {
     if (mqtt_wasPrevConnected) {
       mqtt_wasPrevConnected = false;
       mqttResetOwnerSnapshot();
+      mqttResetInboundHealth();
       mqtt_commandSnapshotReady = false;
       Serial.println(F("[MQTT] WiFi perso, MQTT disconnesso"));
     }
@@ -1822,6 +2346,7 @@ static void mqttUpdateInternal() {
     mqtt_backoffMs = MQTT_BACKOFF_INIT;
     mqtt_lastAttemptMs = 0;
     mqttResetOwnerSnapshot();
+    mqttResetInboundHealth();
     mqtt_commandSnapshotReady = false;
   }
   mqtt_wasPrevConnected = connectedNow;
@@ -1838,6 +2363,8 @@ static void mqttUpdateInternal() {
             MQTT_INBOUND_POLL_BUDGET_MS;
       },
       MQTT_INBOUND_POLL_MAX);
+    if (!mqttUpdateInboundHealth()) return;
+    mqttMaybePublishStatus();
     uint32_t now = millis();
     if (mqtt_responsePending &&
         (mqtt_responseLastPublishMs == 0 ||
@@ -1894,6 +2421,51 @@ bool mqttPopUndoAck() {
   return true;
 }
 
+bool mqttPopUndoReject() {
+  if (!mqtt_undoRejectFlag) return false;
+  mqtt_undoRejectFlag = false;
+  return true;
+}
+
+bool mqttPopDetachedUndoReject() {
+  if (!mqtt_undoDetachedRejectFlag) return false;
+  mqtt_undoDetachedRejectFlag = false;
+  return true;
+}
+
+bool mqttPopConfirmReject(char* responseIdOut, size_t responseIdOutSize,
+                          bool* rollbackSafe) {
+  if (!mqtt_confirmRejectFlag) return false;
+  if (responseIdOut && responseIdOutSize > 0) {
+    strlcpy(
+      responseIdOut, mqtt_confirmRejectResponseId, responseIdOutSize);
+  }
+  if (rollbackSafe) *rollbackSafe = mqtt_confirmRejectRollbackSafe;
+  mqtt_confirmRejectFlag = false;
+  mqtt_confirmRejectRollbackSafe = false;
+  mqtt_confirmRejectResponseId[0] = '\0';
+  return true;
+}
+
+void mqttSetTareRequired(bool required) {
+  if (mqtt_tareRequired == required) return;
+  mqtt_tareRequired = required;
+  mqtt_statusDirty = true;
+  mqtt_activityFlag = true;
+  if (required) {
+    mqttEnterLocalFallback(
+      mqtt_lastCommandError == MQTT_COMMAND_ERROR_MANAGER_INCIDENT_DETACHED
+        ? MQTT_FALLBACK_MANAGER_INCIDENT_DETACHED
+        : MQTT_FALLBACK_MANAGER_INCIDENT);
+  }
+}
+
+void mqttReportDetachedUndoApplied(bool applied) {
+  if (mqtt_responsePending && mqtt_responseKind == MQTT_RESPONSE_UNDO) {
+    mqtt_undoWasDetachedApplied = applied;
+  }
+}
+
 bool mqttPopDetachedUndo() {
   if (!mqtt_detachedUndoFlag) return false;
   mqtt_detachedUndoFlag = false;
@@ -1925,7 +2497,7 @@ void mqttReloadCreds() {
   }
 
   if (!mqttClient.setBufferSize(MQTT_MAX_PACKET_SIZE)) {
-    Serial.println(F("[MQTT] Buffer 512 alloc fallita"));
+    Serial.println(F("[MQTT] Buffer 640 alloc fallita"));
     return;
   }
 
@@ -1954,6 +2526,7 @@ void mqttReloadCreds() {
   // Reset backoff per tentare subito
   mqtt_wasPrevConnected = false;
   mqttResetOwnerSnapshot();
+  mqttResetInboundHealth();
   mqtt_commandSnapshotReady = false;
   mqtt_lastAttemptMs = 0;
   mqtt_backoffMs = MQTT_BACKOFF_INIT;

@@ -21,8 +21,9 @@
 #endif
 
 #if ENABLE_MQTT
-  // Header-side size; mqttSetup/mqttReloadCreds also enforce 512 at runtime.
-  #define MQTT_MAX_PACKET_SIZE 512
+  // Header-side size; mqttSetup/mqttReloadCreds also enforce it at runtime.
+  // 640 covers the bounded owner envelope and the diagnostic status payload.
+  #define MQTT_MAX_PACKET_SIZE 640
   #include <WiFiClientSecure.h>
   #include <PubSubClient.h>
   #include <ArduinoJson.h>
@@ -41,7 +42,7 @@
   // e vengono salvati in NVS (persistono tra aggiornamenti firmware).
   // Comandi: mqtt set "host" "user" "pass", mqtt creds, mqtt clear, mqtt apply
   #define MQTT_PORT       8883          // MQTTS (TLS)
-  #define MQTT_FW_VERSION "1.4.4"
+  #define MQTT_FW_VERSION "1.5.0"
   #define MQTT_SCALE_NAME "Minu Bench Scale"  // Nome visibile nel browser
 #endif
 
@@ -139,6 +140,30 @@ namespace Net {
 
   // True once after the browser ACKs a durable undo REST commit.
   bool mqttPopUndoAck();
+
+  // True once when the Manager quarantines an undo after committing an
+  // incident. The staged local marker is discarded without restoring stack.
+  bool mqttPopUndoReject();
+
+  // True once when an undo was already restored locally after detach and the
+  // Manager later quarantines it. Caller must invalidate local history and
+  // require an operator weight/tare check; never apply another restore.
+  bool mqttPopDetachedUndoReject();
+
+  // True once when a committed confirm is quarantined. rollbackSafe is true
+  // only if the response was still operator-locked when rejected; the caller
+  // must additionally prove the exact response is the newest stack entry.
+  bool mqttPopConfirmReject(char* responseIdOut, size_t responseIdOutSize,
+                            bool* rollbackSafe);
+
+  // Cross-layer safety gate after a detached undo incident. While set, MQTT
+  // stays operationally local and cannot expose/ACK an actionable command.
+  // Only a successfully applied physical TARE may clear it.
+  void mqttSetTareRequired(bool required);
+
+  // Records whether consuming mqttPopDetachedUndo() actually restored/popped
+  // the local entry. Kept until the outbox reaches a terminal ACK/reject.
+  void mqttReportDetachedUndoApplied(bool applied);
 
   // True once when an undo outbox becomes detached. The main loop applies the
   // already-requested local restore immediately; a later ACK must not apply it

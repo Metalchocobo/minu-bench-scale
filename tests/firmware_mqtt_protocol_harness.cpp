@@ -5,6 +5,7 @@
 #include <utility>
 
 #include "../firmware/esp32_hx711_serial/mqtt_update_cycle.h"
+#include "../firmware/esp32_hx711_serial/mqtt_transport_health.h"
 
 namespace {
 
@@ -178,11 +179,14 @@ TopBarState evaluateTopBar(
 
 bool fallbackReattachAllowed(
     bool localFallback, const std::string& incomingConnectionId,
+    const std::string& incomingLeaseId,
     uint32_t ownerTimestamp, uint32_t fallbackOwnerTimestamp,
-    const std::string& fallbackConnectionId) {
-  return !localFallback || incomingConnectionId.empty() ||
-    ownerTimestamp > fallbackOwnerTimestamp ||
-    incomingConnectionId != fallbackConnectionId;
+    const std::string& fallbackConnectionId,
+    const std::string& fallbackLeaseId) {
+  return mqttFallbackHasFreshEvidence(
+    localFallback, incomingConnectionId.empty(), ownerTimestamp,
+    fallbackOwnerTimestamp, incomingConnectionId != fallbackConnectionId,
+    incomingLeaseId != fallbackLeaseId);
 }
 
 bool isSafeCommandId(const std::string& commandId) {
@@ -505,8 +509,16 @@ struct OwnerTimestampModel {
   bool known = false;
   bool active = false;
   uint32_t timestamp = 0;
+  uint32_t lastSeenTimestamp = 0;
+  std::string connectionId;
+  std::string leaseId;
+  std::string lastSeenConnectionId;
+  std::string lastSeenLeaseId;
 
-  bool receive(uint32_t nowEpoch, uint32_t incomingTimestamp) {
+  bool receive(
+      uint32_t nowEpoch, uint32_t incomingTimestamp,
+      const std::string& incomingConnectionId = "connection-1",
+      const std::string& incomingLeaseId = "lease-1") {
     constexpr uint32_t kClockSkewSec = 5;
     if (incomingTimestamp == 0 ||
         incomingTimestamp > nowEpoch + kClockSkewSec) {
@@ -514,11 +526,242 @@ struct OwnerTimestampModel {
       active = false;
       return false;
     }
-    if (known && incomingTimestamp < timestamp) return false;
+    const bool exactStoredLease = known &&
+      incomingConnectionId == connectionId && incomingLeaseId == leaseId;
+    const bool exactLastSeenLease =
+      incomingConnectionId == lastSeenConnectionId &&
+      incomingLeaseId == lastSeenLeaseId;
+    if (!mqttOwnerTimestampAllowed(
+          exactStoredLease, exactLastSeenLease, incomingTimestamp,
+          timestamp, lastSeenTimestamp)) return false;
     known = true;
     active = true;
     timestamp = incomingTimestamp;
+    lastSeenTimestamp = incomingTimestamp;
+    connectionId = incomingConnectionId;
+    leaseId = incomingLeaseId;
+    lastSeenConnectionId = incomingConnectionId;
+    lastSeenLeaseId = incomingLeaseId;
     return true;
+  }
+};
+
+struct PassiveRepairModel {
+  uint8_t repairMask = 0;
+  uint8_t observedMask = 0;
+  uint8_t completedRetries = 0;
+  bool repairing = false;
+  bool reconnect = false;
+  std::string outbox = "immutable-response";
+
+  void detect(uint8_t failureMask) {
+    assert(!repairing && failureMask != 0);
+    repairing = true;
+    repairMask = failureMask;
+    observedMask &= (uint8_t)~failureMask;
+  }
+
+  void observe(uint8_t mask) {
+    observedMask |= mask;
+    repairMask &= (uint8_t)~mask;
+    if (repairMask == 0) repairing = false;
+  }
+
+  void deadline(uint8_t maxRetries) {
+    assert(repairing);
+    if (completedRetries < maxRetries) {
+      completedRetries++;
+      observedMask &= (uint8_t)~repairMask;
+      return;
+    }
+    reconnect = true;
+  }
+};
+
+enum class TerminalResponseKind {
+  Confirm,
+  Skip,
+  Undo,
+};
+
+struct ResponseRejectModel {
+  bool pending = false;
+  TerminalResponseKind kind = TerminalResponseKind::Confirm;
+  std::string responseId;
+  bool detachedApplied = false;
+  bool undoReject = false;
+  bool detachedUndoReject = false;
+  bool stackValid = true;
+  bool localFallback = false;
+  bool confirmCommitApplied = false;
+  bool confirmReceiptAvailable = false;
+  bool tareRequired = false;
+  bool managerAdvanced = false;
+  unsigned confirmRollbacks = 0;
+  unsigned commandAcks = 0;
+  unsigned restoreCount = 0;
+
+  void stage(TerminalResponseKind responseKind, const std::string& id) {
+    pending = true;
+    kind = responseKind;
+    responseId = id;
+    detachedApplied = false;
+    undoReject = false;
+    detachedUndoReject = false;
+    stackValid = true;
+    localFallback = false;
+    confirmCommitApplied = false;
+    confirmReceiptAvailable = false;
+    tareRequired = false;
+    managerAdvanced = false;
+    confirmRollbacks = 0;
+    commandAcks = 0;
+    restoreCount = 0;
+  }
+
+  void applyConfirmCommit() {
+    assert(pending && kind == TerminalResponseKind::Confirm);
+    confirmCommitApplied = true;
+    confirmReceiptAvailable = true;
+  }
+
+  void detach() {
+    localFallback = true;
+  }
+
+  void applyDetachedUndo() {
+    assert(pending && kind == TerminalResponseKind::Undo);
+    detachedApplied = true;
+    ++restoreCount;
+  }
+
+  bool reject(const std::string& id, const std::string& reason) {
+    if (!pending || id != responseId || reason != "manager_incident") {
+      return false;
+    }
+    if (kind == TerminalResponseKind::Undo) {
+      if (detachedApplied) {
+        detachedUndoReject = true;
+        stackValid = false;
+      } else {
+        undoReject = true;
+      }
+    } else if (kind == TerminalResponseKind::Confirm &&
+               confirmCommitApplied) {
+      if (!localFallback && confirmReceiptAvailable) {
+        confirmCommitApplied = false;
+        confirmReceiptAvailable = false;
+        ++confirmRollbacks;
+      } else {
+        stackValid = false;
+        confirmReceiptAvailable = false;
+        tareRequired = true;
+      }
+    }
+    pending = false;
+    responseId.clear();
+    detachedApplied = false;
+    return true;
+  }
+
+  bool canUndoRejectedConfirm() const {
+    return confirmReceiptAvailable && stackValid && !tareRequired;
+  }
+};
+
+struct UndoIncidentGateModel {
+  bool needsTare = true;
+  bool wizardActive = false;
+  bool longPressTracking = false;
+  bool netTareRequired = true;
+  bool fallbackActive = true;
+  bool appMode = false;
+  bool rawCommand = false;
+  bool commandSnapshotReady = false;
+  bool ownerFresh = true;
+  bool inboundHealthy = true;
+  bool responsePending = false;
+  unsigned commandAcks = 0;
+  unsigned stackMutations = 0;
+  unsigned enterCommits = 0;
+  unsigned calibrationMutations = 0;
+
+  void update(bool skipHeld, bool clearPressed, bool enterPressed) {
+    if (needsTare) {
+      longPressTracking = false;
+      wizardActive = false;
+      return;
+    }
+    if (skipHeld) {
+      longPressTracking = true;
+      wizardActive = true;
+    }
+    if (clearPressed) ++stackMutations;
+    if (enterPressed) ++enterCommits;
+  }
+
+  void serialCalibrationMutation() {
+    if (!needsTare) ++calibrationMutations;
+  }
+
+  void receiveRawCommand() {
+    rawCommand = true;
+    commandSnapshotReady = true;
+    updateTransport();
+  }
+
+  void updateTransport() {
+    if (!fallbackActive) {
+      appMode = !netTareRequired && ownerFresh && inboundHealthy;
+      return;
+    }
+    const bool commandContextReady = rawCommand && commandSnapshotReady &&
+      ownerFresh;
+    if (!netTareRequired && ownerFresh && inboundHealthy &&
+        !responsePending && commandContextReady) {
+      fallbackActive = false;
+      appMode = true;
+      ++commandAcks;
+    }
+  }
+
+  void tareResult(bool applied) {
+    if (!applied) return;
+    needsTare = false;
+    netTareRequired = false;
+    updateTransport();
+  }
+};
+
+struct FallbackRecoveryModel {
+  bool fallbackActive = true;
+  bool connected = true;
+  bool inboundHealthy = true;
+  bool ownerFresh = true;
+  bool freshEvidence = true;
+  bool responsePending = false;
+  bool tareRequired = false;
+  bool commandActive = false;
+  bool commandSnapshotReady = false;
+  bool commandOwnerAuthorized = false;
+  bool commandHasId = false;
+  bool appMode = false;
+  unsigned commandAcks = 0;
+
+  void update() {
+    if (!fallbackActive) {
+      appMode = !tareRequired && connected && inboundHealthy && ownerFresh;
+      return;
+    }
+    const bool idleContextReady = !commandActive && ownerFresh && freshEvidence;
+    const bool commandContextReady = commandActive && commandSnapshotReady &&
+      freshEvidence && commandOwnerAuthorized;
+    if (!tareRequired && connected && inboundHealthy && !responsePending &&
+        (idleContextReady || commandContextReady)) {
+      fallbackActive = false;
+      appMode = true;
+      if (commandActive && commandHasId) ++commandAcks;
+    }
   }
 };
 
@@ -865,13 +1108,19 @@ void testInboundHeartbeatIsProcessedBeforeBoundedFallbackDecision() {
 
 void testDetachedModeRejectsStaleRetainedReactivation() {
   assert(!fallbackReattachAllowed(
-    true, "connection-1", 100, 100, "connection-1"));
+    true, "connection-1", "lease-1", 100, 100,
+    "connection-1", "lease-1"));
   assert(fallbackReattachAllowed(
-    true, "connection-1", 101, 100, "connection-1"));
+    true, "connection-1", "lease-1", 101, 100,
+    "connection-1", "lease-1"));
   assert(fallbackReattachAllowed(
-    true, "connection-2", 100, 100, "connection-1"));
+    true, "connection-2", "lease-1", 100, 100,
+    "connection-1", "lease-1"));
   assert(fallbackReattachAllowed(
-    true, "", 100, 100, "connection-1"));
+    true, "", "", 100, 100, "connection-1", "lease-1"));
+  assert(fallbackReattachAllowed(
+    true, "connection-1", "lease-2", 100, 100,
+    "connection-1", "lease-1"));
 
   // A transport reset clears current freshness, not the last-seen evidence
   // captured as the fallback baseline.
@@ -884,7 +1133,8 @@ void testDetachedModeRejectsStaleRetainedReactivation() {
   const std::string fallbackConnection = !currentSnapshotConnection.empty()
     ? currentSnapshotConnection : lastSeenConnection;
   assert(!fallbackReattachAllowed(
-    true, "connection-1", 100, fallbackTimestamp, fallbackConnection));
+    true, "connection-1", "lease-1", 100, fallbackTimestamp,
+    fallbackConnection, "lease-1"));
 }
 
 void testDetachedCommandDoesNotBlockSleep() {
@@ -944,6 +1194,41 @@ void testFutureOwnerTimestampCannotPoisonSnapshot() {
   assert(model.active && model.timestamp == nowEpoch + 1);
   assert(!model.receive(nowEpoch, nowEpoch - 1));
   assert(model.active && model.timestamp == nowEpoch + 1);
+
+  // Monotonicity is scoped to the exact lease. A new lease/connection may
+  // legitimately carry a lower second-resolution timestamp and must recover.
+  assert(model.receive(
+    nowEpoch + 2, nowEpoch, "connection-1", "lease-2"));
+  assert(model.active && model.timestamp == nowEpoch);
+  assert(model.receive(
+    nowEpoch + 3, nowEpoch - 1, "connection-2", "lease-3"));
+  assert(model.active && model.timestamp == nowEpoch - 1);
+
+  // Operational presence is based on the arrival of a valid heartbeat, not
+  // on its wall-clock age. One missed 10 s heartbeat plus 5 s clock skew stays
+  // inside the 25 s presence window, while the original 30 s lease deadline
+  // still prevents a retained replay from becoming fresh again.
+  constexpr uint32_t presenceLimitMs = 25000;
+  assert(mqttOwnerArrivalFresh(20000, 25000, presenceLimitMs));
+  assert(!mqttOwnerArrivalFresh(25000, 30000, presenceLimitMs));
+  assert(!mqttOwnerArrivalFresh(2000, 1000, presenceLimitMs));
+
+  // A tablet 10 s behind gets bounded grace only after proving forward
+  // progress on the same lease. Equal retained replay receives no extension,
+  // and even progressive input cannot reopen an already expired lease.
+  constexpr uint32_t ownerTtlMs = 30000;
+  const uint32_t progressiveRemaining = mqttOwnerLeaseRemainingMs(
+    10, ownerTtlMs, true, 10, 5000);
+  const uint32_t replayRemaining = mqttOwnerLeaseRemainingMs(
+    10, ownerTtlMs, false, 10, 5000);
+  assert(progressiveRemaining == 25000);
+  assert(replayRemaining == 20000);
+  assert(mqttOwnerArrivalFresh(
+    20000, progressiveRemaining, presenceLimitMs));
+  assert(!mqttOwnerArrivalFresh(
+    20000, replayRemaining, presenceLimitMs));
+  assert(mqttOwnerLeaseRemainingMs(
+    30, ownerTtlMs, true, 10, 5000) == 0);
 }
 
 void testDuplicateIsIdempotentAndReacked() {
@@ -1197,6 +1482,196 @@ void testRemoteConfirmRejectsStaleOrInvalidFence() {
   assert(model.confirmExecutions == 0);
 }
 
+void testPassiveInboundWatchdogIsBoundedAndPreservesOutbox() {
+  constexpr uint32_t initialSnapshotMs = 2500;
+  constexpr uint32_t ownerSilenceMs = 25000;
+  constexpr uint32_t ackSilenceMs = 10000;
+
+  // Idle transports have no expected inbound traffic and must not reconnect
+  // merely because no Manager/retained command exists.
+  assert(mqttPassiveRxFailureMask(
+    false, false, false, false, false, false,
+    60000, 60000, 60000, initialSnapshotMs,
+    ownerSilenceMs, ackSilenceMs) == 0);
+
+  // A healthy active context remains healthy while valid owner and command
+  // evidence are present and the heartbeat is inside its window.
+  assert(mqttPassiveRxFailureMask(
+    true, true, false, true, true, true,
+    60000, 5000, 0, initialSnapshotMs,
+    ownerSilenceMs, ackSilenceMs) == 0);
+
+  uint8_t ownerSilent = mqttPassiveRxFailureMask(
+    true, true, false, true, true, true,
+    60000, ownerSilenceMs, 0, initialSnapshotMs,
+    ownerSilenceMs, ackSilenceMs);
+  assert((ownerSilent & MQTT_RX_OWNER) != 0);
+
+  // expected_command_id changed but the retained command never arrived even
+  // though owner heartbeats still prove the owner subscription is alive.
+  uint8_t commandSilent = mqttPassiveRxFailureMask(
+    true, true, false, true, false, false,
+    60000, 1000, 0, initialSnapshotMs,
+    ownerSilenceMs, ackSilenceMs);
+  assert(commandSilent == MQTT_RX_COMMAND);
+
+  // C1: the owner now declares expected_command_id="" but the previously
+  // active command is still present because its retained clear was lost. Even
+  // old command evidence cannot satisfy the new empty expectation.
+  const bool activeCommandMatchesExpectedEmpty = false;
+  uint8_t clearSilent = mqttPassiveRxFailureMask(
+    true, true, false, true, true,
+    activeCommandMatchesExpectedEmpty,
+    60000, 1000, 0, initialSnapshotMs,
+    ownerSilenceMs, ackSilenceMs);
+  assert(clearSilent == MQTT_RX_COMMAND);
+
+  uint8_t ackSilent = mqttPassiveRxFailureMask(
+    false, false, true, false, false, false,
+    60000, 0, ackSilenceMs, initialSnapshotMs,
+    ownerSilenceMs, ackSilenceMs);
+  assert(ackSilent == MQTT_RX_ACK);
+
+  PassiveRepairModel repair;
+  repair.observedMask = MQTT_RX_ALL;
+  repair.detect((uint8_t)(MQTT_RX_COMMAND | MQTT_RX_ACK));
+  const std::string frozenOutbox = repair.outbox;
+  for (unsigned deadline = 0; deadline < 3; ++deadline) {
+    repair.deadline(2);
+    assert(repair.outbox == frozenOutbox);
+  }
+  assert(repair.reconnect);
+  assert(repair.outbox == "immutable-response");
+
+  PassiveRepairModel recovered;
+  recovered.detect(MQTT_RX_COMMAND);
+  recovered.observe(MQTT_RX_COMMAND);
+  assert(!recovered.repairing && !recovered.reconnect);
+
+  // Firmware performs only one ACK-driven transport rebuild per immutable
+  // response; afterwards retries continue without a tight reconnect loop.
+  const bool ackReconnectAlreadyDone = true;
+  assert(mqttPassiveRxFailureMask(
+    false, false, !ackReconnectAlreadyDone, false, false, false,
+    60000, 0, 60000, initialSnapshotMs,
+    ownerSilenceMs, ackSilenceMs) == 0);
+}
+
+void testResponseRejectIsTerminalAndUndoSafe() {
+  ResponseRejectModel model;
+  model.stage(TerminalResponseKind::Confirm, "response-confirm");
+  model.applyConfirmCommit();
+  assert(model.reject("response-confirm", "manager_incident"));
+  assert(!model.pending && model.restoreCount == 0 && model.stackValid);
+  assert(model.confirmRollbacks == 1 && !model.confirmCommitApplied);
+  assert(!model.confirmReceiptAvailable && !model.canUndoRejectedConfirm());
+  assert(!model.managerAdvanced && model.commandAcks == 0);
+  assert(!model.reject("response-confirm", "manager_incident"));
+  assert(model.confirmRollbacks == 1);
+
+  // Once local fallback has released the operator, newer local work may have
+  // happened. The same reject must invalidate history and require TARE rather
+  // than performing a destructive late rollback.
+  model.stage(TerminalResponseKind::Confirm, "response-confirm-detached");
+  model.applyConfirmCommit();
+  model.detach();
+  assert(model.reject("response-confirm-detached", "manager_incident"));
+  assert(!model.stackValid && model.tareRequired);
+  assert(model.confirmRollbacks == 0 && !model.confirmReceiptAvailable);
+  assert(!model.canUndoRejectedConfirm());
+  assert(!model.managerAdvanced && model.commandAcks == 0);
+
+  model.stage(TerminalResponseKind::Skip, "response-skip");
+  assert(!model.reject("response-skip", "wrong_reason"));
+  assert(model.pending);
+  assert(model.reject("response-skip", "manager_incident"));
+  assert(!model.pending && model.restoreCount == 0 && model.stackValid);
+
+  model.stage(TerminalResponseKind::Undo, "response-undo-pre");
+  assert(model.reject("response-undo-pre", "manager_incident"));
+  assert(model.undoReject && !model.detachedUndoReject);
+  assert(model.restoreCount == 0 && model.stackValid);
+
+  model.stage(TerminalResponseKind::Undo, "response-undo-post");
+  model.applyDetachedUndo();
+  assert(model.restoreCount == 1);
+  assert(model.reject("response-undo-post", "manager_incident"));
+  assert(!model.undoReject && model.detachedUndoReject);
+  assert(model.restoreCount == 1);
+  assert(!model.stackValid);
+  assert(!model.reject("response-undo-post", "manager_incident"));
+  assert(model.restoreCount == 1);
+
+  // If a successful ACK wins the race after detach was requested but before
+  // the main loop applied it, the pending local restore must remain queued.
+  bool detachedUndoFlag = true;
+  bool detachedUndoApplied = false;
+  bool responsePending = true;
+  unsigned ackRaceRestoreCount = 0;
+  responsePending = false;
+  if (detachedUndoApplied) detachedUndoFlag = false;
+  if (detachedUndoFlag) {
+    detachedUndoFlag = false;
+    ++ackRaceRestoreCount;
+  }
+  assert(!responsePending && ackRaceRestoreCount == 1);
+}
+
+void testFallbackRecoveryAndUndoIncidentTareGate() {
+  // The update cycle processes transport/inbound work before fallback state.
+  // A fresh idle owner can therefore return to APP without another command.
+  FallbackRecoveryModel idle;
+  idle.update();
+  assert(!idle.fallbackActive && idle.appMode);
+  assert(idle.commandAcks == 0);
+
+  // A retained command needs both its snapshot and exact owner evidence. The
+  // recovery emits one fresh command ACK when it becomes actionable again.
+  FallbackRecoveryModel command;
+  command.commandActive = true;
+  command.commandSnapshotReady = true;
+  command.commandOwnerAuthorized = true;
+  command.commandHasId = true;
+  command.update();
+  assert(!command.fallbackActive && command.appMode);
+  assert(command.commandAcks == 1);
+  command.update();
+  assert(command.commandAcks == 1);
+
+  // A detached-undo incident keeps both the UI and MQTT layers fenced. A raw
+  // command may be retained for recovery, but cannot be ACKed or actionable.
+  UndoIncidentGateModel incident;
+  incident.wizardActive = true;
+  incident.longPressTracking = true;
+  incident.receiveRawCommand();
+  assert(incident.rawCommand && incident.commandSnapshotReady);
+  assert(incident.fallbackActive && !incident.appMode);
+  assert(incident.commandAcks == 0);
+
+  // Holding SKIP well beyond the wizard threshold, plus CLEAR/ENTER events,
+  // cannot mutate calibration, stack or weight history while fenced.
+  for (unsigned tick = 0; tick < 60; ++tick) {
+    incident.update(true, true, true);
+  }
+  incident.serialCalibrationMutation();
+  assert(!incident.longPressTracking && !incident.wizardActive);
+  assert(incident.stackMutations == 0 && incident.enterCommits == 0);
+  assert(incident.calibrationMutations == 0);
+
+  // A failed tare leaves every gate unchanged. Only a successfully applied
+  // physical tare clears both layers and resumes the same raw command once.
+  incident.tareResult(false);
+  incident.updateTransport();
+  assert(incident.needsTare && incident.netTareRequired);
+  assert(incident.fallbackActive && incident.commandAcks == 0);
+  incident.tareResult(true);
+  assert(!incident.needsTare && !incident.netTareRequired);
+  assert(!incident.fallbackActive && incident.appMode);
+  assert(incident.commandAcks == 1);
+  incident.updateTransport();
+  assert(incident.commandAcks == 1);
+}
+
 void testMaximumPayloadsFitBuffers() {
   const std::string commandId(64, 'c');
   const std::string sessionId(64, 's');
@@ -1207,6 +1682,8 @@ void testMaximumPayloadsFitBuffers() {
   const std::string topic = "minu/scale/123456789abc/response";
   const std::string commandTopic = "minu/scale/123456789abc/command";
   const std::string ownerTopic = "minu/scale/123456789abc/owner";
+  const std::string ackTopic = "minu/scale/123456789abc/ack";
+  const std::string statusTopic = "minu/scale/123456789abc/status";
 
   const std::string commandAck =
     "{\"type\":\"command_ack\",\"command_id\":\"" + commandId +
@@ -1229,22 +1706,42 @@ void testMaximumPayloadsFitBuffers() {
     connectionId +
     "\",\"state\":\"rejected\",\"reason\":\"context_changed\"}";
   const std::string owner =
-    // 48 UTF-16 characters can occupy up to 144 UTF-8 bytes for valid BMP
-    // names after the Manager strips control characters.
-    "{\"user_id\":4294967295,\"user_name\":\"" + std::string(144, 'u') +
+    // Manager 1.5 bounds user_name to 48 UTF-8 bytes before publication.
+    "{\"user_id\":4294967295,\"user_name\":\"" + std::string(48, 'u') +
     "\",\"session_id\":\"" + sessionId + "\",\"connection_id\":\"" +
     connectionId + "\",\"lease_id\":\"" + std::string(64, 'l') +
+    "\",\"expected_command_id\":\"" + commandId +
     "\",\"timestamp\":4294967295}";
+  const std::string responseReject =
+    "{\"type\":\"response_reject\",\"response_id\":\"" + responseId +
+    "\",\"reason\":\"manager_incident\"}";
+  const std::string status =
+    "{\"type\":\"status\",\"state\":\"sleeping\","
+    "\"scale_id\":\"123456789abc\",\"name\":\"Minu Bench Scale\","
+    "\"firmware_version\":\"1.5.0\",\"boot_id\":\"ffffffff\","
+    "\"transport_id\":\"ffffffff\",\"status_seq\":4294967295,"
+    "\"published_at\":4294967295,\"uptime_ms\":4294967295,"
+    "\"operational_mode\":\"local\","
+    "\"tare_required\":true,"
+    "\"fallback_reason\":\"manager_incident_detached\","
+    "\"last_command_error\":\"manager_incident_detached\","
+    "\"rx_probe_seq\":4294967295,\"rx_mask\":7,"
+    "\"rx_health\":\"repairing\",\"pending_response_id\":\"" +
+    responseId + "\"}";
 
   assert(commandAck.size() < 384);
   assert(confirm.size() < 384);
   assert(confirmRequestAck.size() < 384);
+  constexpr size_t mqttPacketBufferSize = 640;
+  assert(status.size() < 512);
   // MQTT_MAX_PACKET_SIZE also includes topic and packet framing.
-  assert(topic.size() + commandAck.size() + 8 < 512);
-  assert(topic.size() + confirm.size() + 8 < 512);
-  assert(topic.size() + confirmRequestAck.size() + 8 < 512);
-  assert(commandTopic.size() + confirmRequest.size() + 8 < 512);
-  assert(ownerTopic.size() + owner.size() + 8 < 512);
+  assert(topic.size() + commandAck.size() + 8 < mqttPacketBufferSize);
+  assert(topic.size() + confirm.size() + 8 < mqttPacketBufferSize);
+  assert(topic.size() + confirmRequestAck.size() + 8 < mqttPacketBufferSize);
+  assert(commandTopic.size() + confirmRequest.size() + 8 < mqttPacketBufferSize);
+  assert(ackTopic.size() + responseReject.size() + 8 < mqttPacketBufferSize);
+  assert(statusTopic.size() + status.size() + 8 < mqttPacketBufferSize);
+  assert(ownerTopic.size() + owner.size() + 8 < mqttPacketBufferSize);
 }
 
 } // namespace
@@ -1280,6 +1777,9 @@ int main() {
   testRemoteConfirmTerminalRejectSurvivesFenceChange();
   testRemoteConfirmTerminalCacheEvictsOnlyTheOldestRequest();
   testRemoteConfirmRejectsStaleOrInvalidFence();
+  testPassiveInboundWatchdogIsBoundedAndPreservesOutbox();
+  testResponseRejectIsTerminalAndUndoSafe();
+  testFallbackRecoveryAndUndoIncidentTareGate();
   testMaximumPayloadsFitBuffers();
   std::cout << "firmware MQTT protocol harness: OK\n";
   return 0;
