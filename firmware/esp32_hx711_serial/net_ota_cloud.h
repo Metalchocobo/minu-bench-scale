@@ -42,7 +42,7 @@
   // e vengono salvati in NVS (persistono tra aggiornamenti firmware).
   // Comandi: mqtt set "host" "user" "pass", mqtt creds, mqtt clear, mqtt apply
   #define MQTT_PORT       8883          // MQTTS (TLS)
-  #define MQTT_FW_VERSION "1.5.0"
+  #define MQTT_FW_VERSION "1.5.1"
   #define MQTT_SCALE_NAME "Minu Bench Scale"  // Nome visibile nel browser
 #endif
 

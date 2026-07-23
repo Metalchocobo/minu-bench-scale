@@ -67,18 +67,85 @@ inline bool mqttFallbackHasFreshEvidence(
     ownerTimestamp > fallbackTimestamp || connectionChanged || leaseChanged;
 }
 
+inline bool mqttExpectedClearIsAuthoritative(
+    bool ownerActive, bool hasExpectedCommand, bool expectedCommandEmpty,
+    bool responsePending, bool confirmPending) {
+  return ownerActive && hasExpectedCommand && expectedCommandEmpty &&
+    !responsePending && !confirmPending;
+}
+
+inline bool mqttCommandEvidenceCarriesToNewExpectation(
+    bool expectationMatches, bool commandSnapshotReady,
+    bool commandObservedOnTransport) {
+  return expectationMatches && commandSnapshotReady &&
+    commandObservedOnTransport;
+}
+
+inline bool mqttShouldAwaitOwnerForModernCommand(
+    bool commandStructurallyValid, bool modernCommand,
+    bool ownerAuthorized) {
+  return commandStructurallyValid && modernCommand && !ownerAuthorized;
+}
+
+inline bool mqttOwnerExpectationGenerationChanged(
+    bool generationTracked, bool sameCommandId,
+    bool sameConnectionId) {
+  return !generationTracked || !sameCommandId || !sameConnectionId;
+}
+
+inline bool mqttOwnerExpectationFingerprintMatches(
+    bool generationTracked, bool sameCommandId,
+    bool sameConnectionId) {
+  return generationTracked && sameCommandId && sameConnectionId;
+}
+
+inline bool mqttOwnerExpectationKeepsDeadline(
+    bool expectationPending, bool evidenceSatisfied) {
+  return expectationPending && !evidenceSatisfied;
+}
+
+inline bool mqttOwnerExpectationMayReconnect(
+    bool generationScopedRepair, bool reconnectAlreadyDone) {
+  return !generationScopedRepair || !reconnectAlreadyDone;
+}
+
+inline bool mqttOwnerExpectationEvidenceAfterTransportReset(
+    bool generationTracked, bool previousEvidence) {
+  return generationTracked ? false : previousEvidence;
+}
+
+inline bool mqttOwnerRepairEvidenceRecovered(
+    bool generationScopedRepair, bool generationEvidence,
+    bool currentTopicEvidence) {
+  return generationScopedRepair
+    ? generationEvidence : currentTopicEvidence;
+}
+
+inline bool mqttCommandAckAllowed(
+    bool commandActive, bool commandIdPresent, bool transportConnected,
+    bool expectationMatches, bool ownerFenceSatisfied,
+    bool commandActionable) {
+  return commandActive && commandIdPresent && transportConnected &&
+    expectationMatches && ownerFenceSatisfied && commandActionable;
+}
+
 inline uint8_t mqttPassiveRxFailureMask(
-    bool modernCommand, bool ownerActive, bool responsePending,
-    bool ownerEvidence, bool commandEvidence, bool commandSnapshotReady,
-    uint32_t transportAgeMs, uint32_t ownerSilenceMs,
+    bool ownerInputExpected, bool commandInputExpected,
+    bool ownerActive, bool responsePending,
+    bool ownerEvidence, bool commandEvidence,
+    uint32_t ownerEvidenceAgeMs, uint32_t commandEvidenceAgeMs,
+    uint32_t ownerSilenceMs,
     uint32_t ackWaitMs, uint32_t initialSnapshotMs,
     uint32_t ownerSilenceLimitMs, uint32_t ackSilenceLimitMs) {
   uint8_t failureMask = 0;
-  if (modernCommand && transportAgeMs >= initialSnapshotMs) {
-    if (!ownerEvidence) failureMask |= MQTT_RX_OWNER;
-    if (!commandEvidence || !commandSnapshotReady) {
-      failureMask |= MQTT_RX_COMMAND;
-    }
+  if (ownerInputExpected && ownerEvidenceAgeMs >= initialSnapshotMs &&
+      !ownerEvidence) {
+    failureMask |= MQTT_RX_OWNER;
+  }
+  if (commandInputExpected &&
+      commandEvidenceAgeMs >= initialSnapshotMs &&
+      !commandEvidence) {
+    failureMask |= MQTT_RX_COMMAND;
   }
   if (ownerActive && ownerSilenceMs >= ownerSilenceLimitMs) {
     failureMask |= MQTT_RX_OWNER;

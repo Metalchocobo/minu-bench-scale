@@ -1491,44 +1491,164 @@ void testPassiveInboundWatchdogIsBoundedAndPreservesOutbox() {
   // merely because no Manager/retained command exists.
   assert(mqttPassiveRxFailureMask(
     false, false, false, false, false, false,
-    60000, 60000, 60000, initialSnapshotMs,
+    60000, 60000, 60000, 60000, initialSnapshotMs,
     ownerSilenceMs, ackSilenceMs) == 0);
 
   // A healthy active context remains healthy while valid owner and command
   // evidence are present and the heartbeat is inside its window.
   assert(mqttPassiveRxFailureMask(
-    true, true, false, true, true, true,
-    60000, 5000, 0, initialSnapshotMs,
+    true, true, true, false, true, true,
+    60000, 60000, 5000, 0, initialSnapshotMs,
     ownerSilenceMs, ackSilenceMs) == 0);
 
   uint8_t ownerSilent = mqttPassiveRxFailureMask(
-    true, true, false, true, true, true,
-    60000, ownerSilenceMs, 0, initialSnapshotMs,
+    true, true, true, false, true, true,
+    60000, 60000, ownerSilenceMs, 0, initialSnapshotMs,
     ownerSilenceMs, ackSilenceMs);
   assert((ownerSilent & MQTT_RX_OWNER) != 0);
 
   // expected_command_id changed but the retained command never arrived even
   // though owner heartbeats still prove the owner subscription is alive.
   uint8_t commandSilent = mqttPassiveRxFailureMask(
-    true, true, false, true, false, false,
-    60000, 1000, 0, initialSnapshotMs,
+    true, true, true, false, true, false,
+    60000, initialSnapshotMs, 1000, 0, initialSnapshotMs,
     ownerSilenceMs, ackSilenceMs);
   assert(commandSilent == MQTT_RX_COMMAND);
 
-  // C1: the owner now declares expected_command_id="" but the previously
-  // active command is still present because its retained clear was lost. Even
-  // old command evidence cannot satisfy the new empty expectation.
-  const bool activeCommandMatchesExpectedEmpty = false;
-  uint8_t clearSilent = mqttPassiveRxFailureMask(
-    true, true, false, true, true,
-    activeCommandMatchesExpectedEmpty,
-    60000, 1000, 0, initialSnapshotMs,
+  // A different retained command still proves that the subscription works.
+  // Business convergence must remain local without rebuilding the socket.
+  uint8_t commandMismatchWithEvidence = mqttPassiveRxFailureMask(
+    true, true, true, false, true, true,
+    60000, initialSnapshotMs, 1000, 0, initialSnapshotMs,
     ownerSilenceMs, ackSilenceMs);
-  assert(clearSilent == MQTT_RX_COMMAND);
+  assert(commandMismatchWithEvidence == 0);
+
+  // The absence grace is scoped to the current expectation, not to the age of
+  // a long-lived transport, and equal owner heartbeats do not restart it.
+  assert(mqttPassiveRxFailureMask(
+    true, true, true, false, true, false,
+    60000, initialSnapshotMs - 1, 1000, 0, initialSnapshotMs,
+    ownerSilenceMs, ackSilenceMs) == 0);
+  assert(mqttPassiveRxFailureMask(
+    true, true, true, false, true, false,
+    60000, initialSnapshotMs, 1000, 0, initialSnapshotMs,
+    ownerSilenceMs, ackSilenceMs) == MQTT_RX_COMMAND);
+
+  // expected_command_id="" is an authoritative clear even if the broker has
+  // no retained command to replay. Outbox/confirm locks remain immutable.
+  assert(mqttExpectedClearIsAuthoritative(
+    true, true, true, false, false));
+  assert(!mqttExpectedClearIsAuthoritative(
+    true, true, true, true, false));
+  assert(!mqttExpectedClearIsAuthoritative(
+    true, true, true, false, true));
+  assert(!mqttExpectedClearIsAuthoritative(
+    true, false, true, false, false));
+
+  // Evidence from an older expectation cannot mask a lost command for the new
+  // generation. Command-before-owner is preserved only when its snapshot
+  // already matches the newly announced expected ID.
+  assert(!mqttCommandEvidenceCarriesToNewExpectation(
+    false, true, true));
+  assert(!mqttCommandEvidenceCarriesToNewExpectation(
+    true, false, true));
+  assert(mqttCommandEvidenceCarriesToNewExpectation(
+    true, true, true));
+
+  // Only a structurally valid, connection-aware weigh whose sole remaining
+  // failure is the owner fence may open an owner-evidence generation. This
+  // includes command-before-owner during takeover, even while the previous
+  // owner snapshot is still fresh.
+  assert(mqttShouldAwaitOwnerForModernCommand(
+    true, true, false));
+  assert(!mqttShouldAwaitOwnerForModernCommand(
+    false, true, false));
+  assert(!mqttShouldAwaitOwnerForModernCommand(
+    true, false, false));
+  assert(!mqttShouldAwaitOwnerForModernCommand(
+    true, true, true));
+
+  // Retries for the same command/connection cannot extend the monotonic grace.
+  assert(mqttOwnerExpectationGenerationChanged(
+    false, false, false));
+  assert(!mqttOwnerExpectationGenerationChanged(
+    true, true, true));
+  assert(mqttOwnerExpectationGenerationChanged(
+    true, false, true));
+  assert(mqttOwnerExpectationGenerationChanged(
+    true, true, false));
+  assert(mqttOwnerExpectationFingerprintMatches(
+    true, true, true));
+  assert(!mqttOwnerExpectationFingerprintMatches(
+    false, true, true));
+  assert(!mqttOwnerExpectationFingerprintMatches(
+    true, false, true));
+  assert(!mqttOwnerExpectationFingerprintMatches(
+    true, true, false));
+  assert(mqttOwnerExpectationKeepsDeadline(
+    true, false));
+  assert(!mqttOwnerExpectationKeepsDeadline(
+    false, false));
+  assert(!mqttOwnerExpectationKeepsDeadline(
+    true, true));
+
+  // A generation may rebuild the transport once. Its fence survives that
+  // rebuild; a second exhausted repair stays local until fresh evidence or a
+  // different fingerprint arrives.
+  assert(mqttOwnerExpectationMayReconnect(
+    true, false));
+  assert(!mqttOwnerExpectationMayReconnect(
+    true, true));
+  assert(mqttOwnerExpectationMayReconnect(
+    false, true));
+  assert(!mqttOwnerExpectationEvidenceAfterTransportReset(
+    true, true));
+  assert(!mqttOwnerExpectationEvidenceAfterTransportReset(
+    true, false));
+  assert(mqttOwnerExpectationEvidenceAfterTransportReset(
+    false, true));
+
+  // Historical/global owner traffic cannot resolve a generation-scoped
+  // repair. Only an owner PUBLISH observed after the generation opened can.
+  assert(!mqttOwnerRepairEvidenceRecovered(
+    true, false, true));
+  assert(mqttOwnerRepairEvidenceRecovered(
+    true, true, false));
+  assert(mqttOwnerRepairEvidenceRecovered(
+    false, false, true));
+  assert(!mqttOwnerRepairEvidenceRecovered(
+    false, true, false));
+
+  // True owner silence after that generation starts triggers bounded repair.
+  // Any subsequent owner PUBLISH proves the topic even when its business
+  // envelope is foreign or malformed.
+  assert(mqttPassiveRxFailureMask(
+    true, false, false, false, false, false,
+    initialSnapshotMs - 1, 60000, 0, 0, initialSnapshotMs,
+    ownerSilenceMs, ackSilenceMs) == 0);
+  assert(mqttPassiveRxFailureMask(
+    true, false, false, false, false, false,
+    initialSnapshotMs, 60000, 0, 0, initialSnapshotMs,
+    ownerSilenceMs, ackSilenceMs) == MQTT_RX_OWNER);
+  assert(mqttPassiveRxFailureMask(
+    true, false, false, false, true, false,
+    initialSnapshotMs, 60000, 0, 0, initialSnapshotMs,
+    ownerSilenceMs, ackSilenceMs) == 0);
+
+  // state=active is legal only after all business fences converge and the
+  // command is actually actionable. LOC fallback and tare keep it silent.
+  assert(mqttCommandAckAllowed(
+    true, true, true, true, true, true));
+  assert(!mqttCommandAckAllowed(
+    true, true, true, true, true, false));
+  assert(!mqttCommandAckAllowed(
+    true, true, true, true, false, true));
+  assert(!mqttCommandAckAllowed(
+    true, true, true, false, true, true));
 
   uint8_t ackSilent = mqttPassiveRxFailureMask(
-    false, false, true, false, false, false,
-    60000, 0, ackSilenceMs, initialSnapshotMs,
+    false, false, false, true, false, false,
+    60000, 60000, 0, ackSilenceMs, initialSnapshotMs,
     ownerSilenceMs, ackSilenceMs);
   assert(ackSilent == MQTT_RX_ACK);
 
@@ -1552,8 +1672,8 @@ void testPassiveInboundWatchdogIsBoundedAndPreservesOutbox() {
   // response; afterwards retries continue without a tight reconnect loop.
   const bool ackReconnectAlreadyDone = true;
   assert(mqttPassiveRxFailureMask(
-    false, false, !ackReconnectAlreadyDone, false, false, false,
-    60000, 0, 60000, initialSnapshotMs,
+    false, false, false, !ackReconnectAlreadyDone, false, false,
+    60000, 60000, 0, 60000, initialSnapshotMs,
     ownerSilenceMs, ackSilenceMs) == 0);
 }
 
