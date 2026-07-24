@@ -358,6 +358,12 @@ static char     mqtt_ownerExpectedCommandId[65] = {0};
 static uint32_t mqtt_ownerTimestamp = 0;
 static uint32_t mqtt_ownerReceivedMs = 0;
 static uint32_t mqtt_ownerRemainingMs = 0;
+// A takeover from an already-established local fallback may prove freshness
+// relative to the fallback generation even when the ESP32 wall clock has
+// drifted from the tablet. Subsequent strictly advancing heartbeats on that
+// exact lease keep using monotonic arrival time; equal retained replays never
+// extend its deadline.
+static bool     mqtt_ownerUsesMonotonicClock = false;
 // Transport resets invalidate freshness but must not erase the last evidence
 // used to fence a stale retained owner/weigh pair after local fallback.
 static uint32_t mqtt_lastSeenOwnerTimestamp = 0;
@@ -808,18 +814,44 @@ static bool mqttHandleOwner(const JsonDocument& doc) {
     strcmp(mqtt_ownerLeaseId, leaseId) == 0;
   if (released && mqtt_ownerActive && !exactStoredLease) return false;
 
-  time_t epochNow = time(nullptr);
-  if (epochNow < 1700000000 ||
-      timestamp > (uint32_t)epochNow + MQTT_OWNER_CLOCK_SKEW_SEC) {
-    mqttDeactivateOwnerSnapshot();
-    return false;
-  }
   bool exactLastSeenLease =
     strcmp(connectionId, mqtt_lastSeenOwnerConnectionId) == 0 &&
     strcmp(leaseId, mqtt_lastSeenOwnerLeaseId) == 0;
   if (!mqttOwnerTimestampAllowed(
         exactStoredLease, exactLastSeenLease, timestamp,
         mqtt_ownerTimestamp, mqtt_lastSeenOwnerTimestamp)) return false;
+
+  bool fallbackBaselineKnown = mqtt_localFallbackOwnerTimestamp != 0 &&
+    (mqtt_localFallbackOwnerConnectionId[0] != '\0' ||
+     mqtt_localFallbackOwnerLeaseId[0] != '\0');
+  bool fallbackGenerationChanged =
+    strcmp(connectionId, mqtt_localFallbackOwnerConnectionId) != 0 ||
+    strcmp(leaseId, mqtt_localFallbackOwnerLeaseId) != 0;
+  bool fallbackTakeoverCandidate = mqttOwnerFallbackTakeoverCandidate(
+    mqtt_localFallbackActive, released, fallbackBaselineKnown,
+    fallbackGenerationChanged, timestamp,
+    mqtt_localFallbackOwnerTimestamp);
+  bool monotonicProgress = mqttOwnerMonotonicProgress(
+    released, mqtt_ownerUsesMonotonicClock, exactLastSeenLease,
+    timestamp, mqtt_lastSeenOwnerTimestamp);
+  bool monotonicEqualReplay = !released && mqtt_ownerUsesMonotonicClock &&
+    exactStoredLease && mqtt_ownerActive &&
+    timestamp == mqtt_ownerTimestamp;
+  bool monotonicRetainedSnapshot = !released &&
+    mqtt_ownerUsesMonotonicClock && exactLastSeenLease &&
+    !exactStoredLease && timestamp == mqtt_lastSeenOwnerTimestamp;
+  bool clockIndependentProof = monotonicProgress;
+
+  time_t epochNow = time(nullptr);
+  bool epochValid = epochNow >= 1700000000;
+  bool timestampTooFarAhead = epochValid &&
+    timestamp > (uint32_t)epochNow + MQTT_OWNER_CLOCK_SKEW_SEC;
+  if ((!epochValid || timestampTooFarAhead) &&
+      !clockIndependentProof && !monotonicEqualReplay &&
+      !fallbackTakeoverCandidate) {
+    mqttDeactivateOwnerSnapshot();
+    return false;
+  }
 
   uint32_t ageSec = timestamp < (uint32_t)epochNow
     ? (uint32_t)epochNow - timestamp : 0;
@@ -828,10 +860,24 @@ static bool mqttHandleOwner(const JsonDocument& doc) {
   // keep the original timestamp deadline and can never be reopened by arrival.
   bool progressiveSameLease = !released && exactStoredLease &&
     timestamp > mqtt_ownerTimestamp;
-  uint32_t remainingMs = mqttOwnerLeaseRemainingMs(
-    ageSec, MQTT_OWNER_TTL_MS, progressiveSameLease,
-    MQTT_OWNER_PROGRESSIVE_MAX_AGE_SEC,
-    MQTT_OWNER_PROGRESSIVE_GRACE_MS);
+  uint32_t remainingMs;
+  if (clockIndependentProof) {
+    remainingMs = MQTT_OWNER_OPERATOR_SILENCE_MS;
+  } else if (fallbackTakeoverCandidate) {
+    // Every new fallback generation starts inactive. A second, strictly
+    // advancing heartbeat on the exact lease proves a live publisher without
+    // trusting a lone retained record or either endpoint's wall clock.
+    remainingMs = 0;
+  } else if (monotonicEqualReplay) {
+    uint32_t elapsedMs = (uint32_t)(millis() - mqtt_ownerReceivedMs);
+    remainingMs = elapsedMs < mqtt_ownerRemainingMs
+      ? mqtt_ownerRemainingMs - elapsedMs : 0;
+  } else {
+    remainingMs = mqttOwnerLeaseRemainingMs(
+      ageSec, MQTT_OWNER_TTL_MS, progressiveSameLease,
+      MQTT_OWNER_PROGRESSIVE_MAX_AGE_SEC,
+      MQTT_OWNER_PROGRESSIVE_GRACE_MS);
+  }
 
   mqtt_ownerKnown = true;
   mqtt_ownerActive = !released && remainingMs > 0;
@@ -845,6 +891,9 @@ static bool mqttHandleOwner(const JsonDocument& doc) {
   mqtt_ownerTimestamp = timestamp;
   mqtt_ownerReceivedMs = millis();
   mqtt_ownerRemainingMs = remainingMs;
+  mqtt_ownerUsesMonotonicClock = !released &&
+    (clockIndependentProof || monotonicEqualReplay ||
+     monotonicRetainedSnapshot || fallbackTakeoverCandidate);
   mqtt_lastSeenOwnerTimestamp = timestamp;
   strlcpy(
     mqtt_lastSeenOwnerConnectionId, connectionId,

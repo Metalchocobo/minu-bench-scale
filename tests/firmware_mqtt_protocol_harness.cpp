@@ -1229,6 +1229,34 @@ void testFutureOwnerTimestampCannotPoisonSnapshot() {
     20000, replayRemaining, presenceLimitMs));
   assert(mqttOwnerLeaseRemainingMs(
     30, ownerTtlMs, true, 10, 5000) == 0);
+
+  // Once the firmware is already in LOC with a known owner baseline, a new
+  // connection/lease generation may become an inactive takeover candidate.
+  // A later strictly advancing heartbeat on that exact generation proves the
+  // live publisher without depending on the ESP32 wall clock. Same-generation
+  // and older retained owners cannot start this handshake.
+  assert(mqttOwnerFallbackTakeoverCandidate(
+    true, false, true, true, nowEpoch, nowEpoch));
+  assert(mqttOwnerFallbackTakeoverCandidate(
+    true, false, true, true, nowEpoch + 301, nowEpoch));
+  assert(!mqttOwnerFallbackTakeoverCandidate(
+    false, false, true, true, nowEpoch, nowEpoch));
+  assert(!mqttOwnerFallbackTakeoverCandidate(
+    true, true, true, true, nowEpoch, nowEpoch));
+  assert(!mqttOwnerFallbackTakeoverCandidate(
+    true, false, false, true, nowEpoch, nowEpoch));
+  assert(!mqttOwnerFallbackTakeoverCandidate(
+    true, false, true, false, nowEpoch, nowEpoch));
+  assert(!mqttOwnerFallbackTakeoverCandidate(
+    true, false, true, true, nowEpoch - 1, nowEpoch));
+  assert(mqttOwnerMonotonicProgress(
+    false, true, true, nowEpoch + 1, nowEpoch));
+  assert(!mqttOwnerMonotonicProgress(
+    false, true, true, nowEpoch, nowEpoch));
+  assert(!mqttOwnerMonotonicProgress(
+    false, true, false, nowEpoch + 1, nowEpoch));
+  assert(!mqttOwnerMonotonicProgress(
+    true, true, true, nowEpoch + 1, nowEpoch));
 }
 
 void testDuplicateIsIdempotentAndReacked() {

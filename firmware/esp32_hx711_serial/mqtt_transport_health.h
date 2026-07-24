@@ -67,6 +67,21 @@ inline bool mqttFallbackHasFreshEvidence(
     ownerTimestamp > fallbackTimestamp || connectionChanged || leaseChanged;
 }
 
+inline bool mqttOwnerFallbackTakeoverCandidate(
+    bool fallbackActive, bool released, bool fallbackBaselineKnown,
+    bool generationChanged, uint32_t incomingTimestamp,
+    uint32_t fallbackTimestamp) {
+  return fallbackActive && !released && fallbackBaselineKnown &&
+    generationChanged && incomingTimestamp >= fallbackTimestamp;
+}
+
+inline bool mqttOwnerMonotonicProgress(
+    bool released, bool monotonicCandidate, bool exactLastSeenLease,
+    uint32_t incomingTimestamp, uint32_t lastSeenTimestamp) {
+  return !released && monotonicCandidate && exactLastSeenLease &&
+    incomingTimestamp > lastSeenTimestamp;
+}
+
 inline bool mqttExpectedClearIsAuthoritative(
     bool ownerActive, bool hasExpectedCommand, bool expectedCommandEmpty,
     bool responsePending, bool confirmPending) {
