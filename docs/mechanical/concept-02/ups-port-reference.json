@@ -1,0 +1,28 @@
+{
+  "source": "sources/waveshare-ups-hat-d/UPS-HAT_D.stp",
+  "supplier": "Waveshare official STEP",
+  "units": "mm",
+  "method": "CadQuery imported solid, planar front face at maximum original Y; solid indices are zero-based",
+  "transform_to_concept": {"rotation_degrees_about_Z": 90, "translation": [112.732, 97.5, 49.1]},
+  "USB_C_input": {
+    "solid_index": 91,
+    "face_index": 46,
+    "original_housing_bounds": [[-54.350, 48.614, -0.910], [-44.770, 56.144, 3.250]],
+    "original_mouth_face_center": [-49.5602, 56.1444, 1.6707],
+    "original_mouth_face_bounds": [[-54.030, 56.1444, 0.090], [-45.090, 56.1444, 3.250]],
+    "concept_mouth_face_center": [56.5876, 47.9398, 50.7707],
+    "concept_outward_normal": [-1, 0, 0],
+    "concept_plug_insertion_direction": [1, 0, 0]
+  },
+  "USB_A_output": {
+    "solid_index": 248,
+    "face_index": 26,
+    "original_housing_bounds": [[-39.274, 45.516, -2.600], [-26.274, 55.516, 6.610]],
+    "original_mouth_face_center": [-32.7735, 55.5161, 3.6516],
+    "original_mouth_face_bounds": [[-39.2735, 55.5161, 0.700], [-26.2735, 55.5161, 6.600]],
+    "concept_mouth_face_center": [57.2159, 64.7265, 52.7516],
+    "concept_outward_normal": [-1, 0, 0],
+    "concept_plug_insertion_direction": [1, 0, 0]
+  },
+  "limitation": "Front face is the external shell lip, not a measured electrical mating datum. Actual cable plug envelopes and full insertion stroke still require supplier drawing or sample verification. Values apply only to the stated UPS transform."
+}

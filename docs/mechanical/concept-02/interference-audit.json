@@ -1,0 +1,101 @@
+{
+  "scope": "All project solids against each other and official UPS solids; vendor-internal pairs excluded.",
+  "aabb_candidate_pairs": 1004,
+  "overlaps": [
+    {
+      "a": "load_cell_l6d",
+      "b": "load_cell_4wire_cable",
+      "intersection_mm3": 9.10668,
+      "allowed": true,
+      "reason": "Cell cable exits its purchased enclosure."
+    },
+    {
+      "a": "usb_a_output_plug_body",
+      "b": "usb_a_5v_output_cable",
+      "intersection_mm3": 20.941892,
+      "allowed": true,
+      "reason": "Cable enters its moulded connector envelope."
+    },
+    {
+      "a": "usb_a_5v_output_cable",
+      "b": "5v_terminal_reference",
+      "intersection_mm3": 45.098957,
+      "allowed": true,
+      "reason": "Cable termination envelope."
+    },
+    {
+      "a": "load_cell_4wire_cable",
+      "b": "load_cell_wire_end_3",
+      "intersection_mm3": 0.123871,
+      "allowed": true,
+      "reason": "Individual wire exits its sheath envelope."
+    },
+    {
+      "a": "load_cell_4wire_cable",
+      "b": "load_cell_wire_end_4",
+      "intersection_mm3": 0.371614,
+      "allowed": true,
+      "reason": "Individual wire exits its sheath envelope."
+    },
+    {
+      "a": "keypad_adapter_header_pin_1_3",
+      "b": "keypad_adapter_branch_1",
+      "intersection_mm3": 0.002603,
+      "allowed": true,
+      "reason": "Harness joins its header/termination envelope."
+    },
+    {
+      "a": "keypad_adapter_branch_1",
+      "b": "keypad_matrix_6p_termination",
+      "intersection_mm3": 2.771441,
+      "allowed": true,
+      "reason": "Harness joins its header/termination envelope."
+    },
+    {
+      "a": "keypad_adapter_header_pin_2_2",
+      "b": "keypad_adapter_branch_2",
+      "intersection_mm3": 0.281615,
+      "allowed": true,
+      "reason": "Harness joins its header/termination envelope."
+    },
+    {
+      "a": "keypad_adapter_header_pin_2_3",
+      "b": "keypad_adapter_branch_2",
+      "intersection_mm3": 0.50676,
+      "allowed": true,
+      "reason": "Harness joins its header/termination envelope."
+    },
+    {
+      "a": "keypad_adapter_branch_2",
+      "b": "keypad_matrix_6p_termination",
+      "intersection_mm3": 2.288228,
+      "allowed": true,
+      "reason": "Harness joins its header/termination envelope."
+    },
+    {
+      "a": "usb_c_panel_body",
+      "b": "usb_c_passive_cable",
+      "intersection_mm3": 63.447782,
+      "allowed": true,
+      "reason": "Cable enters its panel connector envelope."
+    },
+    {
+      "a": "usb_c_internal_plug_body",
+      "b": "usb_c_passive_cable",
+      "intersection_mm3": 24.632896,
+      "allowed": true,
+      "reason": "Cable enters its moulded connector envelope."
+    }
+  ],
+  "unexpected_overlap_count": 0,
+  "verification_mode": "Complete baseline plus focused recheck after USB-C reroute.",
+  "baseline_file": "interference-audit-full-before-usb-reroute.json",
+  "baseline_sha256": "f222d3d8d26942131586a1f38878ae24f7c679a5a494a77a4f534ba405072bf2",
+  "recomputed_parts": [
+    "cable_clamp_lower_1",
+    "cable_clamp_upper_1",
+    "usb_c_passive_cable"
+  ],
+  "recomputed_candidate_pairs": 337,
+  "unchanged_geometry_reused": "All other parts and placements are unchanged from the complete baseline. Clamp channels follow the cable and are included in the focused recheck."
+}

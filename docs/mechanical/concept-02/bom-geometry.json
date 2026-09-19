@@ -1,0 +1,1018 @@
+[
+  {
+    "item": "CNC_BASE_300x320x6",
+    "label": "Fondo portante piano alluminio 6 mm",
+    "quantity": 1,
+    "category": "custom",
+    "material": "aluminium plate",
+    "notes": "Upper face smooth. Tapped holes shown at nominal major diameter; drawing must specify taps.",
+    "source": "",
+    "cad_names": [
+      "base_aluminium"
+    ]
+  },
+  {
+    "item": "PRINT_OUTER_SHELL",
+    "label": "Scocca superiore rimovibile",
+    "quantity": 1,
+    "category": "printed",
+    "material": "PA12 proposed",
+    "notes": "Non-load-bearing shell; 3 mm walls, captive M3 nuts. Validate printed fit.",
+    "source": "",
+    "cad_names": [
+      "outer_shell"
+    ]
+  },
+  {
+    "item": "CNC_CELL_FIXED_SPACER",
+    "label": "Distanziale fisso cella 25 x30 x6",
+    "quantity": 1,
+    "category": "custom",
+    "material": "aluminium plate",
+    "notes": "",
+    "source": "",
+    "cad_names": [
+      "cell_fixed_spacer"
+    ]
+  },
+  {
+    "item": "CNC_CELL_MOVING_SPACER",
+    "label": "Distanziale mobile cella 25 x30 x22",
+    "quantity": 1,
+    "category": "custom",
+    "material": "aluminium bar",
+    "notes": "",
+    "source": "",
+    "cad_names": [
+      "cell_moving_spacer"
+    ]
+  },
+  {
+    "item": "ZEMIC_L6D_C3_30KG_0_4B",
+    "label": "Zemic L6D-C3-30kg - involucro meccanico",
+    "quantity": 1,
+    "category": "loadcell",
+    "material": "aluminium purchased",
+    "notes": "Drawing envelope 130x30x22, holes M6 through 106x15. Internal strain geometry omitted. Platform axis acceptance and torque require supplier confirmation.",
+    "source": "https://www.zemiceurope.com/media/Documentation/L6D_Datasheet.pdf",
+    "cad_names": [
+      "load_cell_l6d"
+    ]
+  },
+  {
+    "item": "CNC_CARRIER_276x196x8",
+    "label": "Portapiatto piano alluminio 8 mm",
+    "quantity": 1,
+    "category": "custom",
+    "material": "aluminium plate",
+    "notes": "Two M6 countersinks; six tapped M3. No plastic load-bearing ribs.",
+    "source": "",
+    "cad_names": [
+      "plate_carrier_aluminium"
+    ]
+  },
+  {
+    "item": "PRINT_PAN_280x200x4",
+    "label": "Piatto plastico liscio 280 x200 x4",
+    "quantity": 1,
+    "category": "printed",
+    "material": "PA12 proposed",
+    "notes": "Supported over almost all its underside by the metal carrier; no food-contact certification.",
+    "source": "",
+    "cad_names": [
+      "plastic_pan"
+    ]
+  },
+  {
+    "item": "WASHER_M6_ISO7089",
+    "label": "Rondella M6 ISO7089",
+    "quantity": 2,
+    "category": "fastener",
+    "material": "steel 200HV",
+    "notes": "",
+    "source": "",
+    "cad_names": [
+      "cell_fixed_washer_1",
+      "cell_fixed_washer_2"
+    ]
+  },
+  {
+    "item": "SCREW_M6x25_ISO4762",
+    "label": "Vite M6 x 25 testa cilindrica",
+    "quantity": 2,
+    "category": "fastener",
+    "material": "steel",
+    "notes": "Simplified thread; nominal shank diameter.",
+    "source": "",
+    "cad_names": [
+      "cell_fixed_screw_1",
+      "cell_fixed_screw_2"
+    ]
+  },
+  {
+    "item": "SCREW_M6x45_DIN7991",
+    "label": "Vite svasata M6 x 45",
+    "quantity": 2,
+    "category": "fastener",
+    "material": "steel",
+    "notes": "M6 head D12 x 3.3; nominal simplified threads.",
+    "source": "",
+    "cad_names": [
+      "cell_moving_screw_1",
+      "cell_moving_screw_2"
+    ]
+  },
+  {
+    "item": "SCREW_M3x10_DIN7991",
+    "label": "Vite svasata M3 x 10",
+    "quantity": 10,
+    "category": "fastener",
+    "material": "steel",
+    "notes": "M6 head D12 x 3.3; nominal simplified threads.",
+    "source": "",
+    "cad_names": [
+      "pan_screw_1",
+      "pan_screw_2",
+      "pan_screw_3",
+      "pan_screw_4",
+      "pan_screw_5",
+      "pan_screw_6",
+      "display_bezel_screw_1",
+      "display_bezel_screw_2",
+      "display_bezel_screw_3",
+      "display_bezel_screw_4"
+    ]
+  },
+  {
+    "item": "SCREW_M3x16_ISO4762",
+    "label": "Vite M3 x 16 testa cilindrica",
+    "quantity": 12,
+    "category": "fastener",
+    "material": "steel",
+    "notes": "Simplified thread; nominal shank diameter.",
+    "source": "",
+    "cad_names": [
+      "shell_screw_1",
+      "shell_screw_2",
+      "shell_screw_3",
+      "shell_screw_4",
+      "shell_screw_5",
+      "shell_screw_6",
+      "shell_screw_7",
+      "shell_screw_8",
+      "cable_clamp_screw_1_1",
+      "cable_clamp_screw_1_2",
+      "cable_clamp_screw_2_1",
+      "cable_clamp_screw_2_2"
+    ]
+  },
+  {
+    "item": "NUT_M3_DIN934",
+    "label": "Dado M3",
+    "quantity": 16,
+    "category": "fastener",
+    "material": "steel",
+    "notes": "Nominal thread; no helical geometry.",
+    "source": "",
+    "cad_names": [
+      "shell_nut_1",
+      "shell_nut_2",
+      "shell_nut_3",
+      "shell_nut_4",
+      "shell_nut_5",
+      "shell_nut_6",
+      "shell_nut_7",
+      "shell_nut_8",
+      "display_bar_nut_1_1",
+      "display_bar_nut_1_2",
+      "display_bar_nut_2_1",
+      "display_bar_nut_2_2",
+      "display_bezel_nut_1",
+      "display_bezel_nut_2",
+      "display_bezel_nut_3",
+      "display_bezel_nut_4"
+    ]
+  },
+  {
+    "item": "INCLUDED_FOOT_SBR",
+    "label": "Pattino antiscivolo piede Elesa",
+    "quantity": 4,
+    "category": "feet",
+    "material": "SBR supplied",
+    "notes": "",
+    "source": "",
+    "cad_names": [
+      "foot_pad_1",
+      "foot_pad_2",
+      "foot_pad_3",
+      "foot_pad_4"
+    ]
+  },
+  {
+    "item": "ELESA_531051",
+    "label": "Piede Elesa LX.30-SW17-AS-M6x22",
+    "quantity": 4,
+    "category": "feet",
+    "material": "purchased foot simplified",
+    "notes": "Envelope D30, overall36 incl SBR. Profile simplified; stud measured nominal23 in EN drawing.",
+    "source": "https://www.elesa.com/siteassets/PDF/PDF_EN/LX.pdf",
+    "cad_names": [
+      "adjustable_foot_1",
+      "adjustable_foot_2",
+      "adjustable_foot_3",
+      "adjustable_foot_4"
+    ]
+  },
+  {
+    "item": "NUT_M6_DIN934",
+    "label": "Dado M6",
+    "quantity": 8,
+    "category": "fastener",
+    "material": "steel",
+    "notes": "Nominal thread; no helical geometry.",
+    "source": "",
+    "cad_names": [
+      "foot_locknut_1",
+      "foot_locknut_2",
+      "foot_locknut_3",
+      "foot_locknut_4",
+      "overload_locknut_1",
+      "overload_locknut_2",
+      "overload_locknut_3",
+      "overload_locknut_4"
+    ]
+  },
+  {
+    "item": "SETSCREW_M6x60_DIN913_FLAT_END",
+    "label": "Grano M6 x60 arresto regolabile",
+    "quantity": 4,
+    "category": "fastener",
+    "material": "steel",
+    "notes": "Tip Z67.5; carrier Z69 => provisional1.5mm gap. Full6mm base engagement, locknut. Never preload the measuring plate.",
+    "source": "https://www.rwproducts.nl/din-913-stelschroef-binnenzeskant-met-afschuining-elvz-m6x60",
+    "cad_names": [
+      "overload_stop_1",
+      "overload_stop_2",
+      "overload_stop_3",
+      "overload_stop_4"
+    ]
+  },
+  {
+    "item": "PRINT_POWER_TRAY",
+    "label": "Vassoio potenza rimovibile",
+    "quantity": 1,
+    "category": "printed",
+    "material": "PA12 proposed",
+    "notes": "Generic edge-guided tray; no invented UPS PCB mounting pattern.",
+    "source": "",
+    "cad_names": [
+      "power_tray"
+    ]
+  },
+  {
+    "item": "PRINT_POWER_RETAINING_STRAP",
+    "label": "Staffa rimovibile ritegno verticale UPS",
+    "quantity": 2,
+    "category": "printed",
+    "material": "PA12 proposed",
+    "notes": "Clamps official lower acrylic sheet at Z22.5. Bridge top24.5 leaves nominal0.9mm below battery envelope. Verify printed fit; no PCB/pogo contact.",
+    "source": "",
+    "cad_names": [
+      "power_retaining_strap_1",
+      "power_retaining_strap_2"
+    ]
+  },
+  {
+    "item": "SCREW_M3x10_ISO4762",
+    "label": "Vite M3 x 10 testa cilindrica",
+    "quantity": 8,
+    "category": "fastener",
+    "material": "steel",
+    "notes": "Simplified thread; nominal shank diameter.",
+    "source": "",
+    "cad_names": [
+      "power_tray_screw_1",
+      "power_tray_screw_2",
+      "power_tray_screw_3",
+      "power_tray_screw_4",
+      "display_bar_screw_1_1",
+      "display_bar_screw_1_2",
+      "display_bar_screw_2_1",
+      "display_bar_screw_2_2"
+    ]
+  },
+  {
+    "item": "PRINT_ELECTRONICS_TRAY",
+    "label": "Piastra elettronica universale rimovibile - faccia piana",
+    "quantity": 1,
+    "category": "printed",
+    "material": "PA12 proposed",
+    "notes": "Flat 145x62 area for existing boards; no assumed module holes. Use removable insulating mounts after measuring boards.",
+    "source": "",
+    "cad_names": [
+      "electronics_tray"
+    ]
+  },
+  {
+    "item": "SCREW_M3x8_ISO4762",
+    "label": "Vite M3 x 8 testa cilindrica",
+    "quantity": 4,
+    "category": "fastener",
+    "material": "steel",
+    "notes": "Simplified thread; nominal shank diameter.",
+    "source": "",
+    "cad_names": [
+      "electronics_tray_screw_1",
+      "electronics_tray_screw_2",
+      "electronics_tray_screw_3",
+      "electronics_tray_screw_4"
+    ]
+  },
+  {
+    "item": "INCLUDED_UPS_VENDOR_GEOMETRY",
+    "label": "PCB UPS HAT(D) 001",
+    "quantity": 297,
+    "category": "electronics_detail",
+    "material": "vendor STEP geometry",
+    "notes": "One of 297 named solids from the official supplied assembly. Included in one CN kit SKU25507, not a separate purchase.",
+    "source": "https://www.waveshare.net/shop/UPS-HAT-D.htm",
+    "cad_names": [
+      "ups_vendor_001",
+      "ups_vendor_002",
+      "ups_vendor_003",
+      "ups_vendor_004",
+      "ups_vendor_005",
+      "ups_vendor_006",
+      "ups_vendor_007",
+      "ups_vendor_008",
+      "ups_vendor_009",
+      "ups_vendor_010",
+      "ups_vendor_011",
+      "ups_vendor_012",
+      "ups_vendor_013",
+      "ups_vendor_014",
+      "ups_vendor_015",
+      "ups_vendor_016",
+      "ups_vendor_017",
+      "ups_vendor_018",
+      "ups_vendor_019",
+      "ups_vendor_020",
+      "ups_vendor_021",
+      "ups_vendor_022",
+      "ups_vendor_023",
+      "ups_vendor_024",
+      "ups_vendor_025",
+      "ups_vendor_026",
+      "ups_vendor_027",
+      "ups_vendor_028",
+      "ups_vendor_029",
+      "ups_vendor_030",
+      "ups_vendor_031",
+      "ups_vendor_032",
+      "ups_vendor_033",
+      "ups_vendor_034",
+      "ups_vendor_035",
+      "ups_vendor_036",
+      "ups_vendor_037",
+      "ups_vendor_038",
+      "ups_vendor_039",
+      "ups_vendor_040",
+      "ups_vendor_041",
+      "ups_vendor_042",
+      "ups_vendor_043",
+      "ups_vendor_044",
+      "ups_vendor_045",
+      "ups_vendor_046",
+      "ups_vendor_047",
+      "ups_vendor_048",
+      "ups_vendor_049",
+      "ups_vendor_050",
+      "ups_vendor_051",
+      "ups_vendor_052",
+      "ups_vendor_053",
+      "ups_vendor_054",
+      "ups_vendor_055",
+      "ups_vendor_056",
+      "ups_vendor_057",
+      "ups_vendor_058",
+      "ups_vendor_059",
+      "ups_vendor_060",
+      "ups_vendor_061",
+      "ups_vendor_062",
+      "ups_vendor_063",
+      "ups_vendor_064",
+      "ups_vendor_065",
+      "ups_vendor_066",
+      "ups_vendor_067",
+      "ups_vendor_068",
+      "ups_vendor_069",
+      "ups_vendor_070",
+      "ups_vendor_071",
+      "ups_vendor_072",
+      "ups_vendor_073",
+      "ups_vendor_074",
+      "ups_vendor_075",
+      "ups_vendor_076",
+      "ups_vendor_077",
+      "ups_vendor_078",
+      "ups_vendor_079",
+      "ups_vendor_080",
+      "ups_vendor_081",
+      "ups_vendor_082",
+      "ups_vendor_083",
+      "ups_vendor_084",
+      "ups_vendor_085",
+      "ups_vendor_086",
+      "ups_vendor_087",
+      "ups_vendor_088",
+      "ups_vendor_089",
+      "ups_vendor_090",
+      "ups_vendor_091",
+      "ups_vendor_092",
+      "ups_vendor_093",
+      "ups_vendor_094",
+      "ups_vendor_095",
+      "ups_vendor_096",
+      "ups_vendor_097",
+      "ups_vendor_098",
+      "ups_vendor_099",
+      "ups_vendor_100",
+      "ups_vendor_101",
+      "ups_vendor_102",
+      "ups_vendor_103",
+      "ups_vendor_104",
+      "ups_vendor_105",
+      "ups_vendor_106",
+      "ups_vendor_107",
+      "ups_vendor_108",
+      "ups_vendor_109",
+      "ups_vendor_110",
+      "ups_vendor_111",
+      "ups_vendor_112",
+      "ups_vendor_113",
+      "ups_vendor_114",
+      "ups_vendor_115",
+      "ups_vendor_116",
+      "ups_vendor_117",
+      "ups_vendor_118",
+      "ups_vendor_119",
+      "ups_vendor_120",
+      "ups_vendor_121",
+      "ups_vendor_122",
+      "ups_vendor_123",
+      "ups_vendor_124",
+      "ups_vendor_125",
+      "ups_vendor_126",
+      "ups_vendor_127",
+      "ups_vendor_128",
+      "ups_vendor_129",
+      "ups_vendor_130",
+      "ups_vendor_131",
+      "ups_vendor_132",
+      "ups_vendor_133",
+      "ups_vendor_134",
+      "ups_vendor_135",
+      "ups_vendor_136",
+      "ups_vendor_137",
+      "ups_vendor_138",
+      "ups_vendor_139",
+      "ups_vendor_140",
+      "ups_vendor_141",
+      "ups_vendor_142",
+      "ups_vendor_143",
+      "ups_vendor_144",
+      "ups_vendor_145",
+      "ups_vendor_146",
+      "ups_vendor_147",
+      "ups_vendor_148",
+      "ups_vendor_149",
+      "ups_vendor_150",
+      "ups_vendor_151",
+      "ups_vendor_152",
+      "ups_vendor_153",
+      "ups_vendor_154",
+      "ups_vendor_155",
+      "ups_vendor_156",
+      "ups_vendor_157",
+      "ups_vendor_158",
+      "ups_vendor_159",
+      "ups_vendor_160",
+      "ups_vendor_161",
+      "ups_vendor_162",
+      "ups_vendor_163",
+      "ups_vendor_164",
+      "ups_vendor_165",
+      "ups_vendor_166",
+      "ups_vendor_167",
+      "ups_vendor_168",
+      "ups_vendor_169",
+      "ups_vendor_170",
+      "ups_vendor_171",
+      "ups_vendor_172",
+      "ups_vendor_173",
+      "ups_vendor_174",
+      "ups_vendor_175",
+      "ups_vendor_176",
+      "ups_vendor_177",
+      "ups_vendor_178",
+      "ups_vendor_179",
+      "ups_vendor_180",
+      "ups_vendor_181",
+      "ups_vendor_182",
+      "ups_vendor_183",
+      "ups_vendor_184",
+      "ups_vendor_185",
+      "ups_vendor_186",
+      "ups_vendor_187",
+      "ups_vendor_188",
+      "ups_vendor_189",
+      "ups_vendor_190",
+      "ups_vendor_191",
+      "ups_vendor_192",
+      "ups_vendor_193",
+      "ups_vendor_194",
+      "ups_vendor_195",
+      "ups_vendor_196",
+      "ups_vendor_197",
+      "ups_vendor_198",
+      "ups_vendor_199",
+      "ups_vendor_200",
+      "ups_vendor_201",
+      "ups_vendor_202",
+      "ups_vendor_203",
+      "ups_vendor_204",
+      "ups_vendor_205",
+      "ups_vendor_206",
+      "ups_vendor_207",
+      "ups_vendor_208",
+      "ups_vendor_209",
+      "ups_vendor_210",
+      "ups_vendor_211",
+      "ups_vendor_212",
+      "ups_vendor_213",
+      "ups_vendor_214",
+      "ups_vendor_215",
+      "ups_vendor_216",
+      "ups_vendor_217",
+      "ups_vendor_218",
+      "ups_vendor_219",
+      "ups_vendor_220",
+      "ups_vendor_221",
+      "ups_vendor_222",
+      "ups_vendor_223",
+      "ups_vendor_224",
+      "ups_vendor_225",
+      "ups_vendor_226",
+      "ups_vendor_227",
+      "ups_vendor_228",
+      "ups_vendor_229",
+      "ups_vendor_230",
+      "ups_vendor_231",
+      "ups_vendor_232",
+      "ups_vendor_233",
+      "ups_vendor_234",
+      "ups_vendor_235",
+      "ups_vendor_236",
+      "ups_vendor_237",
+      "ups_vendor_238",
+      "ups_vendor_239",
+      "ups_vendor_240",
+      "ups_vendor_241",
+      "ups_vendor_242",
+      "ups_vendor_243",
+      "ups_vendor_244",
+      "ups_vendor_245",
+      "ups_vendor_246",
+      "ups_vendor_247",
+      "ups_vendor_248",
+      "ups_vendor_249",
+      "ups_vendor_250",
+      "ups_vendor_251",
+      "ups_vendor_252",
+      "ups_vendor_253",
+      "ups_vendor_254",
+      "ups_vendor_255",
+      "ups_vendor_256",
+      "ups_vendor_257",
+      "ups_vendor_258",
+      "ups_vendor_259",
+      "ups_vendor_260",
+      "ups_vendor_261",
+      "ups_vendor_262",
+      "ups_vendor_263",
+      "ups_vendor_264",
+      "ups_vendor_265",
+      "ups_vendor_266",
+      "ups_vendor_267",
+      "ups_vendor_268",
+      "ups_vendor_269",
+      "ups_vendor_270",
+      "ups_vendor_271",
+      "ups_vendor_272",
+      "ups_vendor_273",
+      "ups_vendor_274",
+      "ups_vendor_275",
+      "ups_vendor_276",
+      "ups_vendor_277",
+      "ups_vendor_278",
+      "ups_vendor_279",
+      "ups_vendor_280",
+      "ups_vendor_281",
+      "ups_vendor_282",
+      "ups_vendor_283",
+      "ups_vendor_284",
+      "ups_vendor_285",
+      "ups_vendor_286",
+      "ups_vendor_287",
+      "ups_vendor_288",
+      "ups_vendor_289",
+      "ups_vendor_290",
+      "ups_vendor_291",
+      "ups_vendor_292",
+      "ups_vendor_293",
+      "ups_vendor_294",
+      "ups_vendor_295",
+      "ups_vendor_296",
+      "ups_vendor_297"
+    ]
+  },
+  {
+    "item": "PRINT_DISPLAY_BEZEL",
+    "label": "Cornice OLED sostituibile con sede universale",
+    "quantity": 1,
+    "category": "printed",
+    "material": "PA12 proposed",
+    "notes": "Pocket 101.5 x 34.5 x 11.3; owned SSD1322 module must be measured.",
+    "source": "",
+    "cad_names": [
+      "display_bezel"
+    ]
+  },
+  {
+    "item": "CUT_DISPLAY_WINDOW",
+    "label": "Vetrino piano OLED 82 x 24 x 1.5",
+    "quantity": 1,
+    "category": "custom",
+    "material": "clear acrylic",
+    "notes": "Fit with thin perimeter adhesive; no food-contact claim.",
+    "source": "",
+    "cad_names": [
+      "display_window"
+    ]
+  },
+  {
+    "item": "REUSE_OLED_SSD1322",
+    "label": "OLED SSD1322 - inviluppo da confermare",
+    "quantity": 1,
+    "category": "electronics",
+    "material": "reference envelope",
+    "notes": "Unverified owned module envelope; no invented board hole pattern.",
+    "source": "",
+    "cad_names": [
+      "oled_reference"
+    ]
+  },
+  {
+    "item": "PRINT_DISPLAY_REAR_BAR",
+    "label": "Traversino fermo OLED",
+    "quantity": 2,
+    "category": "printed",
+    "material": "PA12 proposed",
+    "notes": "",
+    "source": "",
+    "cad_names": [
+      "display_rear_bar_1",
+      "display_rear_bar_2"
+    ]
+  },
+  {
+    "item": "KEYPAD_1x4_BERRYBASE_B_SM4T",
+    "label": "Tastiera adesiva 1x4 - striscia 1",
+    "quantity": 2,
+    "category": "controls",
+    "material": "membrane purchased",
+    "notes": "70x20x1 mm blank membrane; final function overlay is a custom print. Tail exit must be checked on purchased sample.",
+    "source": "https://www.berrybase.de/en/membrane-keypad-4-keys-without-labelling-with-adhesive-layer",
+    "cad_names": [
+      "keypad_strip_1",
+      "keypad_strip_2"
+    ]
+  },
+  {
+    "item": "USB_C_PANEL_6069",
+    "label": "USB-C pannello PCM-0726 / Adafruit 6069",
+    "quantity": 1,
+    "category": "controls",
+    "material": "purchased connector",
+    "notes": "M12x1 x15; flange D18x6; rear D11x10. Internal flange; external nut.",
+    "source": "https://www.adafruit.com/product/6069",
+    "cad_names": [
+      "usb_c_panel_body"
+    ]
+  },
+  {
+    "item": "INCLUDED_USB_NUT",
+    "label": "Dado plastico USB-C - ingombro provvisorio",
+    "quantity": 1,
+    "category": "fastener",
+    "material": "ABS supplied",
+    "notes": "Outer D20 x4 assumed; maker does not dimension nut.",
+    "source": "",
+    "cad_names": [
+      "usb_c_panel_nut"
+    ]
+  },
+  {
+    "item": "INCLUDED_USB_ORING",
+    "label": "O-ring USB-C incluso",
+    "quantity": 1,
+    "category": "fastener",
+    "material": "elastomer supplied",
+    "notes": "Ring simplified as rectangular section; actual 11 ID x1.5 circular cross-section.",
+    "source": "",
+    "cad_names": [
+      "usb_c_panel_seal"
+    ]
+  },
+  {
+    "item": "INCLUDED_USB_CAP",
+    "label": "Tappo USB-C parcheggiato - ingombro",
+    "quantity": 1,
+    "category": "controls",
+    "material": "elastomer supplied",
+    "notes": "D18x4 assumed. Parked display position only; flexible tether is not dimensioned.",
+    "source": "",
+    "cad_names": [
+      "usb_c_protective_cap_parked"
+    ]
+  },
+  {
+    "item": "INCLUDED_USB_C_PLUG_BODY",
+    "label": "Spina USB-C interna - inviluppo",
+    "quantity": 1,
+    "category": "controls",
+    "material": "purchased connector envelope",
+    "notes": "Plug envelope assumed; board socket mouth comes from official STEP.",
+    "source": "",
+    "cad_names": [
+      "usb_c_internal_plug_body"
+    ]
+  },
+  {
+    "item": "INCLUDED_USB_C_PLUG_METAL",
+    "label": "Innesto USB-C nella UPS",
+    "quantity": 1,
+    "category": "controls",
+    "material": "metal connector envelope",
+    "notes": "Nominal envelope, electrical contact details omitted.",
+    "source": "",
+    "cad_names": [
+      "usb_c_internal_plug_metal"
+    ]
+  },
+  {
+    "item": "USB_A_OUTPUT_HARNESS_2697",
+    "label": "Spina USB-A uscita 5 V - inviluppo",
+    "quantity": 1,
+    "category": "controls",
+    "material": "purchased connector envelope",
+    "notes": "Adafruit2697 22AWG harness cut to200mm; custom terminal end, no barrel connector remains.",
+    "source": "https://www.adafruit.com/product/2697",
+    "cad_names": [
+      "usb_a_output_plug_body"
+    ]
+  },
+  {
+    "item": "INCLUDED_USB_A_PLUG_METAL",
+    "label": "Innesto USB-A nella UPS",
+    "quantity": 1,
+    "category": "controls",
+    "material": "metal connector envelope",
+    "notes": "Nominal envelope, electrical contact details omitted.",
+    "source": "",
+    "cad_names": [
+      "usb_a_output_plug_metal"
+    ]
+  },
+  {
+    "item": "INCLUDED_USB_C_CABLE_300MM",
+    "label": "Cavo USB-C pannello 300 mm - percorso",
+    "quantity": 1,
+    "category": "cable",
+    "material": "routed cable envelope",
+    "notes": "Illustrative routed centreline 303.7 mm; supplied/cut cable nominal 300 mm. Connector bodies and service slack require sample fitting.",
+    "source": "",
+    "cad_names": [
+      "usb_c_passive_cable"
+    ]
+  },
+  {
+    "item": "CUSTOM_USB_A_5V_HARNESS_200MM",
+    "label": "Cablaggio uscita 5 V 200 mm - percorso",
+    "quantity": 1,
+    "category": "cable",
+    "material": "routed cable envelope",
+    "notes": "Illustrative routed centreline 188.9 mm; supplied/cut cable nominal 200 mm. Connector bodies and service slack require sample fitting.",
+    "source": "",
+    "cad_names": [
+      "usb_a_5v_output_cable"
+    ]
+  },
+  {
+    "item": "PRINT_CABLE_CLAMP_LOWER",
+    "label": "Fermacavo apribile - base",
+    "quantity": 2,
+    "category": "printed",
+    "material": "PA12 proposed",
+    "notes": "D5.4 cable channel; removable split clamp.",
+    "source": "",
+    "cad_names": [
+      "cable_clamp_lower_1",
+      "cable_clamp_lower_2"
+    ]
+  },
+  {
+    "item": "PRINT_CABLE_CLAMP_UPPER",
+    "label": "Fermacavo apribile - coperchio",
+    "quantity": 2,
+    "category": "printed",
+    "material": "PA12 proposed",
+    "notes": "",
+    "source": "",
+    "cad_names": [
+      "cable_clamp_upper_1",
+      "cable_clamp_upper_2"
+    ]
+  },
+  {
+    "item": "CUSTOM_5V_TERMINATION",
+    "label": "Terminazione 5 V sul vano elettronica - riferimento",
+    "quantity": 1,
+    "category": "electronics",
+    "material": "terminal envelope",
+    "notes": "Interface location only. Actual existing5V rail connector and polarity must be verified before wiring.",
+    "source": "",
+    "cad_names": [
+      "5v_terminal_reference"
+    ]
+  },
+  {
+    "item": "INCLUDED_L6D_4WIRE_CABLE_400MM",
+    "label": "Cavo cella verso HX711 - percorso",
+    "quantity": 1,
+    "category": "cable",
+    "material": "routed cable envelope",
+    "notes": "Illustrative routed centreline 386.1 mm; supplied/cut cable nominal 400 mm. Connector bodies and service slack require sample fitting.",
+    "source": "",
+    "cad_names": [
+      "load_cell_4wire_cable"
+    ]
+  },
+  {
+    "item": "INCLUDED_L6D_WIRE_END",
+    "label": "Conduttore cella verso HX711",
+    "quantity": 4,
+    "category": "cable",
+    "material": "wire end envelope",
+    "notes": "Four free ends for E+/E-/A+/A-. Actual module solder/terminal location is not assumed.",
+    "source": "",
+    "cad_names": [
+      "load_cell_wire_end_1",
+      "load_cell_wire_end_2",
+      "load_cell_wire_end_3",
+      "load_cell_wire_end_4"
+    ]
+  },
+  {
+    "item": "PRINT_KEYPAD_CABLE_HOOD",
+    "label": "Ponte copricoda tastiera adesivo",
+    "quantity": 2,
+    "category": "printed",
+    "material": "PA12 proposed",
+    "notes": "24x11x2.4 cover; adhesive feet outside 70x20 membrane. No claim of liquid sealing; fit bend on sample.",
+    "source": "",
+    "cad_names": [
+      "keypad_cable_hood_1",
+      "keypad_cable_hood_2"
+    ]
+  },
+  {
+    "item": "CUT_3M468MP_KEYPAD_HOOD_PAD",
+    "label": "Adesivo copricoda 0.13 mm",
+    "quantity": 6,
+    "category": "custom",
+    "material": "3M468MP proposed",
+    "notes": "Manufacturer tape thickness0.13; adhesion to finished PA12 must be tested. Cut piece, not a full roll.",
+    "source": "https://www.3m.com/3M/en_US/p/dc/v100808810/",
+    "cad_names": [
+      "keypad_hood_adhesive_1_1",
+      "keypad_hood_adhesive_1_2",
+      "keypad_hood_adhesive_1_3",
+      "keypad_hood_adhesive_2_1",
+      "keypad_hood_adhesive_2_2",
+      "keypad_hood_adhesive_2_3"
+    ]
+  },
+  {
+    "item": "INCLUDED_KEYPAD_TAIL",
+    "label": "Coda tastiera curva - inviluppo 88 mm con connettore",
+    "quantity": 2,
+    "category": "cable",
+    "material": "flex envelope",
+    "notes": "76mm routed flex +12mm provisional connector =88mm. Width14.28 and thickness0.3 assumed; BerryBase only publishes total length. Bend radii2/4mm require sample validation.",
+    "source": "",
+    "cad_names": [
+      "keypad_tail_1",
+      "keypad_tail_2"
+    ]
+  },
+  {
+    "item": "INCLUDED_KEYPAD_5P_FEMALE",
+    "label": "Connettore femmina 5 pin incluso nella membrana",
+    "quantity": 2,
+    "category": "controls",
+    "material": "purchased connector envelope",
+    "notes": "Pitch2.54 documented; 14.28x12x4 body and cavity details are provisional, measure selected BerryBase sample.",
+    "source": "",
+    "cad_names": [
+      "keypad_female_connector_1",
+      "keypad_female_connector_2"
+    ]
+  },
+  {
+    "item": "HEADER_1x5_2p54",
+    "label": "Pettine maschio 1x5 adattatore tastiera",
+    "quantity": 2,
+    "category": "controls",
+    "material": "header body envelope",
+    "notes": "Nominal1x5 cut header; assembled adapter, verify pin assignment by continuity.",
+    "source": "",
+    "cad_names": [
+      "keypad_adapter_header_body_1",
+      "keypad_adapter_header_body_2"
+    ]
+  },
+  {
+    "item": "INCLUDED_HEADER_CONTACT",
+    "label": "Contatto pettine tastiera",
+    "quantity": 10,
+    "category": "fastener",
+    "material": "header contact",
+    "notes": "Nominal square0.64mm contact, included with1x5 header.",
+    "source": "",
+    "cad_names": [
+      "keypad_adapter_header_pin_1_1",
+      "keypad_adapter_header_pin_1_2",
+      "keypad_adapter_header_pin_1_3",
+      "keypad_adapter_header_pin_1_4",
+      "keypad_adapter_header_pin_1_5",
+      "keypad_adapter_header_pin_2_1",
+      "keypad_adapter_header_pin_2_2",
+      "keypad_adapter_header_pin_2_3",
+      "keypad_adapter_header_pin_2_4",
+      "keypad_adapter_header_pin_2_5"
+    ]
+  },
+  {
+    "item": "CUSTOM_KEYPAD_MATRIX_BRANCH",
+    "label": "Cablaggio su misura matrice tastiera - ramo",
+    "quantity": 2,
+    "category": "cable",
+    "material": "routed cable envelope",
+    "notes": "Illustrative routed centreline 152.3 mm; supplied/cut cable nominal 200 mm. Connector bodies and service slack require sample fitting.",
+    "source": "",
+    "cad_names": [
+      "keypad_adapter_branch_1",
+      "keypad_adapter_branch_2"
+    ]
+  },
+  {
+    "item": "HOUSING_1x6_2p54",
+    "label": "Terminazione adattatore tastiera 6 fili",
+    "quantity": 1,
+    "category": "controls",
+    "material": "connector envelope",
+    "notes": "Generic6-way termination positioned above electronics tray. Pitch2.54; body depth/height provisional. Not a verified mating socket on owned ESP32; wire lengths and pin order require assembly.",
+    "source": "https://www.berrybase.de/en/dupont-housing-1x6-pin",
+    "cad_names": [
+      "keypad_matrix_6p_termination"
+    ]
+  },
+  {
+    "item": "CRIMP_CONTACT_2p54",
+    "label": "Contatto terminazione tastiera 6 fili",
+    "quantity": 6,
+    "category": "fastener",
+    "material": "connector contact envelope",
+    "notes": "Generic compatible crimp contact envelope; order contact and housing from one matched family.",
+    "source": "",
+    "cad_names": [
+      "keypad_matrix_terminal_contact_1",
+      "keypad_matrix_terminal_contact_2",
+      "keypad_matrix_terminal_contact_3",
+      "keypad_matrix_terminal_contact_4",
+      "keypad_matrix_terminal_contact_5",
+      "keypad_matrix_terminal_contact_6"
+    ]
+  }
+]

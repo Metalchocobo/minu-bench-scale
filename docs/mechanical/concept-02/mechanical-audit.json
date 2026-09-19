@@ -1,0 +1,71 @@
+{
+  "status": "INDEPENDENT_PARAMETER_AND_SOLID_REVIEW_NOT_PHYSICAL_VALIDATION",
+  "audited_scope": "Four CNC parts and their selected interfaces; regenerate after changes to this scope.",
+  "builder_sha256": "23e37e44498dbc9844325e9eb75b532b92785c63f8117553729ebd1511d2b724",
+  "parts": {
+    "base_aluminium": {
+      "volume_mm3": 571643.309444167,
+      "centroid_mm": [
+        0.03656457658990804,
+        -0.06629489325626409,
+        16.0
+      ]
+    },
+    "plate_carrier_aluminium": {
+      "volume_mm3": 429918.46680298867,
+      "centroid_mm": [
+        4.524007619874323e-15,
+        49.999999999999986,
+        72.99830979491024
+      ]
+    },
+    "cell_fixed_spacer": {
+      "volume_mm3": 4108.8106506484255,
+      "centroid_mm": [
+        -105.45302303536276,
+        49.99999999999999,
+        21.999999999999996
+      ]
+    },
+    "cell_moving_spacer": {
+      "volume_mm3": 15065.639052377557,
+      "centroid_mm": [
+        -0.5469769646372236,
+        49.99999999999999,
+        58.000000000000014
+      ]
+    }
+  },
+  "intersections_mm3": {
+    "plate_carrier_aluminium_vs_shell": 0.0,
+    "cell_moving_spacer_vs_shell": 0.0,
+    "stop_1_max_envelope_vs_shell": 0.0,
+    "stop_2_max_envelope_vs_shell": 0.0,
+    "stop_3_max_envelope_vs_shell": 0.0,
+    "stop_4_max_envelope_vs_shell": 0.0
+  },
+  "frozen_base_update": {
+    "scope": "Two right cable-clamp holes translated from Y=-10 to Y=-28; all other CNC geometry frozen and unchanged.",
+    "verified_holes_total": 30,
+    "cable_clip_holes_xy_mm": [
+      [
+        126.0,
+        -28.0
+      ],
+      [
+        138.0,
+        -28.0
+      ],
+      [
+        16.0,
+        18.0
+      ],
+      [
+        28.0,
+        18.0
+      ]
+    ],
+    "volume_change_mm3": 0.0,
+    "retained_interface_audit_builder_sha256": "b2307f75762877b489e701cc59112eec87188d97653597d3c2271fab7cc54a7b"
+  }
+}

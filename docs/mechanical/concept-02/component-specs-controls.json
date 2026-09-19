@@ -1,0 +1,136 @@
+{
+  "schema_version": 1,
+  "checked_on": "2026-09-07",
+  "units": "mm",
+  "stage": "prototype_component_research_not_production_release",
+  "confidence_classes": {
+    "documented": "Published by selected manufacturer or brand",
+    "design": "Project dimension selected for clearance or arrangement",
+    "provisional": "Requires measurement or confirmation before functional print",
+    "alternative": "Different SKU; interchangeability not established"
+  },
+  "keypad": {
+    "quantity": 2,
+    "total_keys": 8,
+    "purchase_brand": "BerryBase",
+    "purchase_sku": "B-SM4T",
+    "purchase_url": "https://www.berrybase.de/en/membrane-keypad-4-keys-without-labelling-with-adhesive-layer",
+    "purchase_origin": "China",
+    "type": "passive_1x4_adhesive_membrane",
+    "documented_dimensions": {"width": 70, "height": 20, "thickness": 1, "tail_and_connector_length": 88, "connector_pitch": 2.54, "connector_pins": 5},
+    "provisional_dimensions": {"tail_and_connector_width": 14.28},
+    "design_dimensions": {"seat_width": 71.0, "seat_height": 21.0, "connector_slot_width": 16.0, "connector_slot_height": 6.0},
+    "cad_cabling": {"helper": "controls_cable_details.py", "hood_quantity": 2, "hood_dimensions": [24,11,2.4], "adhesive_thickness": 0.13, "flex_centerline_each": 76, "female_connector_length_assumed": 12, "flex_plus_connector_target": 88, "header_1x5_quantity": 2, "terminal_1x6_quantity": 1, "terminal_contacts_quantity": 6, "ribbon_width_assumed": 14.28, "ribbon_thickness_assumed": 0.3, "bend_radii_assumed": [2,4], "classification": "nominal_routes_not_sample_verified"},
+    "unverified": ["Selected BerryBase pin order", "Exact tail exit coordinates and bend allowance", "Selected BerryBase connector outer width and depth", "Adhesive bond on selected print material", "Any IP rating of completed assembly"],
+    "mounting": "Self adhesive onto a flat continuous support; no screws",
+    "observed_tail_exit": "BerryBase and Adafruit official photos: centered on upper long edge between middle two keys; exact attachment and slot coordinates require sample measurement",
+    "pin_order": null,
+    "pin_order_note": "BerryBase pin order is unpublished: continuity test required; do not transfer reference pin numbers automatically",
+    "matrix_adaptation": {
+      "common_A": "C1_GPIO19",
+      "common_B": "C2_GPIO21",
+      "key1_both": "R1_GPIO17",
+      "key2_both": "R2_GPIO5",
+      "key3_both": "R3_GPIO13",
+      "key4_both": "R4_GPIO14",
+      "labels_A": ["SKIP", "WIFI", "SLEEP", "CLEAR"],
+      "labels_B": ["ENTER", "TOTAL", "MODE", "TARE"],
+      "classification": "design_requires_continuity_and_function_test"
+    },
+    "sources": [
+      {"url": "https://www.berrybase.de/en/membrane-keypad-4-keys-without-labelling-with-adhesive-layer", "role": "selected_brand_dimensions_and_purchase", "price": {"value": 1.60, "currency": "EUR", "VAT": "included_as_displayed_shipping_extra"}, "availability_note": "8 pieces displayed at research time; recheck before ordering"},
+      {"url": "https://www.adafruit.com/product/1332", "role": "alternative_reference_dimensions_and_purchase", "price": {"value": 2.95, "currency": "USD"}, "availability_note": "Direct page out of stock; indexed alternate page showed conflicting stock, no availability guarantee"},
+      {"url": "https://learn.adafruit.com/matrix-keypad?view=all", "role": "adafruit_reference_pinout_only"},
+      {"url": "https://xuanyao.en.made-in-china.com/product/ywxmLVDcCpWX/China-Membrane-1X4-Keypad-Extras-Wholesale.html", "role": "china_vendor_quotation", "brand": "ODSEVEN", "MOQ": 10, "interchangeability": "provisional_same_external_dimensions_only"}
+    ],
+    "alternative_reference": {
+      "brand": "Adafruit",
+      "sku": "1332",
+      "quantity": 2,
+      "dimensions": {"width": 69.14, "height": 20.07, "tail_and_connector_length": 87.31, "tail_and_connector_width": 14.28, "connector_pitch": 2.54, "connector_pins": 5},
+      "labels": "blue_keys_numbered1to4",
+      "price": {"value": 2.95, "currency": "USD"},
+      "availability_note": "Direct page out of stock",
+      "pin_order": ["common", "key2", "key1", "key4", "key3"],
+      "url": "https://www.adafruit.com/product/1332"
+    }
+  },
+  "usb_c_panel_mount": {
+    "quantity": 1,
+    "manufacturer": "Premier Cable",
+    "part_number": "PCM-0726",
+    "retail_reference": "Adafruit6069",
+    "function": "passive_usb_c_female_to_usb_c_male_extension_not_a_charger",
+    "electrical_target": {"input_voltage_V": 5, "input_current_A": 3, "continuous_current_rating_A": null, "classification": "provisional_supplier_rating_required", "note": "24AWG power conductors are documented but do not establish the complete assembly current rating"},
+    "documented_dimensions": {"thread": "M12x1", "thread_length": 15, "across_flats": 11.4, "flange_diameter": 18, "flange_thickness": 6, "rear_diameter": 11, "rear_length": 10, "total_body_length": 31, "cable_diameter": 4.8, "cable_length": 300, "cable_length_tolerance_plus_minus": 15, "o_ring_id": 11, "o_ring_section": 1.5, "o_ring_od": 14, "manufacturer_nominal_cutout": 12, "max_panel_thickness_adafruit": 13},
+    "design_dimensions": {"panel_hole_diameter": 12.4, "panel_thickness": 3, "additional_internal_cable_routing_space": 25},
+    "provisional_dimensions": {"nut_envelope_diameter": 20, "nut_envelope_thickness": 4, "cap_envelope_diameter": 18, "cap_envelope_thickness": 4},
+    "included_parts": ["connector_with_cable", "ABS_nut", "o_ring", "dust_cap_with_tether"],
+    "mounting_direction": "Insert from inside, flange inside, threaded section through panel, nut and cap outside",
+    "unverified": ["Nut outside envelope", "Cap outside envelope and tether coordinates", "Simplified O-ring seat groove not dimensioned by manufacturer", "Minimum cable bend radius", "Continuous 3A current rating of cable and contacts", "Charging circuit and assembled electrical compatibility"],
+    "sources": [
+      {"url": "https://www.adafruit.com/product/6069", "role": "primary_retail_purchase", "price": {"value": 4.50, "currency": "USD"}},
+      {"url": "https://www.premier-cable.store/products/panel-mount-usb-3-1-type-c-waterproof-cable", "role": "china_manufacturer_direct_purchase_same_drawing_number", "MOQ": 1, "price": {"value": 16.00, "currency": "USD", "VAT": "excluded"}},
+      {"url": "https://cdn-shop.adafruit.com/product-files/6069/P6069+PCM-0726_TYPE_C___________F-M_L300MM.pdf", "role": "manufacturer_drawing", "local_copy": "sources/adafruit-6069-drawing.pdf"},
+      {"url": "https://cdn-shop.adafruit.com/product-files/6069/P6069_____________20240514182020______________%281%29.jpg", "role": "body_dimensions", "local_copy": "sources/adafruit-6069-dimensions.jpg"}
+    ]
+  },
+  "additional_purchases": [
+    {
+      "bom": "HEADER_1x5_2p54", "cad_quantity": 2, "purchase_quantity": 1,
+      "purchase_unit": "strip20_cut_to_two_1x5", "preferred_sku": "BerryBase PINH-1X20P",
+      "url": "https://www.berrybase.de/en/male-connector-1x-20-pin-rm-2.54-straight",
+      "price_EUR": 0.20, "availability_note": "100+ pieces displayed; recheck before order",
+      "documented_dimensions": {"pitch": 2.54, "positions": 20},
+      "cad_provisional_dimensions": {"pin_square": 0.64, "pin_length": 10, "body": [12.7,2.54,2.54]},
+      "china_alternative": {"brand": "ZHOURI", "sku": "2.54-1*40", "distributor_id": "C2977586", "url": "https://www.lcsc.com/product-detail/C2977586.html", "MOQ": 5, "price_USD_each_at_MOQ": 0.1636, "required_strips": 1, "positions": 40, "post_length": 6, "terminal_length": 3, "body_height": 2.54},
+      "other_reference": {"sku": "BerryBase PINH-1X40P", "url": "https://www.berrybase.de/en/male-connector-1x-40-pin-rm-2.54-straight", "availability_note": "Out of stock at research"},
+      "classification": "generic_header_envelope_measure_actual_mating_depth"
+    },
+    {
+      "bom": "HOUSING_1x6_2p54", "cad_quantity": 1, "purchase_quantity": 1,
+      "sku": "BerryBase DUPH-1X06", "url": "https://www.berrybase.de/en/dupont-housing-1x6-pin",
+      "price_EUR": 0.10, "availability_note": "100+ displayed",
+      "documented_dimensions": {"pitch": 2.54, "contact_span": 12.70, "width": 15.24},
+      "cad_provisional_dimensions": {"depth": 6, "height": 4},
+      "classification": "same_vendor_generic_Dupont_family_not_manufacturer_certified_pair"
+    },
+    {
+      "bom": "CRIMP_CONTACT_2p54", "cad_quantity": 6, "purchase_quantity": 6,
+      "sku": "BerryBase DUPCP-F", "url": "https://www.berrybase.de/en/dupont-crimp-contact-for-cable-awg-22-28-female",
+      "price_EUR_each": 0.05, "availability_note": "Single contacts100+ displayed;100pack out of stock",
+      "documented": {"gender": "female", "wire_AWG_range": [22,28], "material": "tin_plated_brass", "origin": "China"},
+      "housing": "DUPH-1X06", "classification": "same_vendor_generic_Dupont_family_verify_contact_retention_and_wire_insulation_crimp",
+      "cad_note": "Six simplified contact envelopes; actual spring and retention lance not replicated. Four row junctions must be soldered/spliced upstream, not forced as two wires into one unspecified crimp."
+    },
+    {
+      "bom": "CUSTOM_KEYPAD_MATRIX_BRANCH", "cad_quantity": 2, "purchase_quantity": 1,
+      "purchase_unit": "1m_10way_ribbon_to_make_one_custom_two_branch_adapter",
+      "label": "Cablaggio su misura matrice tastiera, due rami cinque fili verso sei segnali",
+      "wire_sku": "Adafruit6182", "url": "https://www.adafruit.com/product/6182",
+      "price_USD": 2.50, "availability_note": "65 displayed",
+      "documented": {"conductors": 10, "length_mm": 1000, "wire_AWG": 26, "individual_wire_outer_diameter": 1.3, "insulation": "silicone", "separable": true},
+      "design": {"branch_cut_length_each": 200, "five_wire_bundle_envelope_diameter": 4.2, "assembly_quantity": 1, "route_centerlines": [152.339,139.017], "terminal_center": [-40.5,-48,25]},
+      "assembly_note": "Separate a200mm length into ten conductors, bundle as two five-wire branches; allow extra wire from supplied metre for four upstream row splices and six-way termination. Individually insulate each splice. Nominal routes, lengths adjusted on assembly. Header pins, housing and six contacts are separate BOM entries."
+    },
+    {
+      "bom": "CUT_3M468MP_KEYPAD_HOOD_PAD", "cad_quantity": 6,
+      "purchase_unit": "small_sheet_or_converted_strip_to_cut_two24x2_and_four2x6_pads",
+      "sku": "3M468MP", "url": "https://www.3m.com/3M/en_US/p/dc/v100808810/",
+      "documented_thickness": 0.13, "classification": "material_selected_adhesion_to_finished_print_unverified",
+      "note": "Supplier page is material reference and distributor sourcing route; pack size and price depend on converter."
+    }
+  ],
+  "existing_display": {
+    "quantity": 1,
+    "purchase": false,
+    "ownership": "already_owned_by_user",
+    "confirmed_from_repository": {"controller": "SSD1322", "resolution": [256, 64], "diagonal_inches": 3.12, "interface": "SPI"},
+    "exact_brand_and_sku": null,
+    "reference_only": {"manufacturer": "KS Display", "sku": "KSE25664-31M", "dimensions": [100.5, 33.5, 11.3], "active_area": [76.78, 19.18], "pins": 7, "url": "https://ksdisplay.com/mono-oled-display/3.12-inch-oled-display-module-256x64-ssd1322-kse25664-31m/"},
+    "design_dimensions": {"carrier_pocket": [101.5, 34.5], "optical_window": [80, 22], "transparent_window": [82,24,1.5]},
+    "carrier_to_enclosure_hardware": {"screws": "4xM3x10 countersunk", "nuts_or_inserts": "4xM3 nuts", "rear_bar_screws": "4xM3x10 socket head", "rear_bar_nuts": "4xM3"},
+    "unverified": ["Actual PCB outline", "Hole size and spacing", "Active-area position", "Rear component keepouts", "Connector height and exit direction", "PCB safe clamping edges", "Actual module fasteners"],
+    "classification": "provisional_owned_component_envelope_only_not_verified_mount"
+  }
+}

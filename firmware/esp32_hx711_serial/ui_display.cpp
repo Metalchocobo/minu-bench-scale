@@ -492,6 +492,40 @@ void ui_renderAudioStatus(bool enabled, bool ready, bool logSaved) {
   oled.sendBuffer();
 }
 
+void ui_renderBatteryStatus() {
+  oled.clearBuffer();
+  oled.setFont(u8g2_font_6x12_tr);
+  drawCenteredText("BATTERIA", 10);
+
+  const BatteryStatus st = battery_get_status();
+  const char* error = nullptr;
+  if (!battery_is_available()) {
+    error = "INA219 ASSENTE";
+  } else if (!st.valid || st.lastValidMs == 0) {
+    error = "LETTURA NON VALIDA";
+  } else if (!battery_has_fresh_sample(millis())) {
+    error = "LETTURA SCADUTA";
+  }
+
+  if (error) {
+    oled.setFont(u8g2_font_logisoso16_tf);
+    drawCenteredText(error, 36);
+  } else {
+    char line[24];
+    snprintf(line, sizeof(line), "%.2f V", st.voltage_V);
+    oled.setFont(u8g2_font_logisoso24_tf);
+    drawCenteredText(line, 37);
+
+    snprintf(line, sizeof(line), "Carico: %.0f mA", st.current_mA);
+    oled.setFont(u8g2_font_6x12_tr);
+    drawCenteredText(line, 50);
+  }
+
+  oled.setFont(u8g2_font_5x8_tr);
+  drawCenteredText("Rilascia i tasti", 63);
+  oled.sendBuffer();
+}
+
 // -----------------------------------------------------------------------------
 // LAYOUT PRINCIPALE PESO
 // -----------------------------------------------------------------------------

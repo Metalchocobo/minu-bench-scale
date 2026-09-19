@@ -123,7 +123,8 @@ enum OverlayType : uint8_t {
   OVERLAY_NONE = 0,
   OVERLAY_STACK_COMPARE,
   OVERLAY_CLEAR_FEEDBACK,
-  OVERLAY_AUDIO_STATUS
+  OVERLAY_AUDIO_STATUS,
+  OVERLAY_BATTERY
 };
 static OverlayType g_overlayType      = OVERLAY_NONE;
 static uint32_t    g_overlayStartMs   = 0;
@@ -1497,6 +1498,14 @@ void handleKeyEvent(KeyCode key) {
 #endif
       break;
 
+    case KEY_BATTERY:
+      if (!CalWizard::isActive() && !CalWizard::isLongPressInProgress()) {
+        g_overlayType = OVERLAY_BATTERY;
+        g_overlayStartMs = keyNow;
+        lastOledMs = 0;
+      }
+      break;
+
     case KEY_TOTAL:
       Serial.println(F("[KEYPAD] TOTAL pressed"));
       buzzerKeyClick();
@@ -2587,8 +2596,17 @@ void loop() {
     }
   }
 
-  // Overlay timeout: auto-dismiss after 10 seconds.
-  if (g_overlayType != OVERLAY_NONE) {
+  // Battery diagnostics last only while the chord is held. Sampling and
+  // low-voltage protection keep running normally below.
+  if (g_overlayType == OVERLAY_BATTERY) {
+    if (!keypad_is_pressed(KEY_BATTERY)) {
+      g_overlayType = OVERLAY_NONE;
+      lastOledMs = 0;
+    } else {
+      g_lastKeyPressMs = now;
+    }
+  // Other overlays auto-dismiss after 10 seconds.
+  } else if (g_overlayType != OVERLAY_NONE) {
     if ((int32_t)(now - g_overlayStartMs) >= (int32_t)OVERLAY_TIMEOUT_MS) {
       g_overlayType = OVERLAY_NONE;
       lastOledMs = 0;  // force redraw of normal screen
@@ -3039,6 +3057,9 @@ void loop() {
               Audio::isReady(),
               Audio::hasSavedDiagnostic()
             );
+            break;
+          case OVERLAY_BATTERY:
+            if (!drewTare) ui_renderBatteryStatus();
             break;
           default:
             break;

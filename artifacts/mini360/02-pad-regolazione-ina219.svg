@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1450" viewBox="0 0 1800 1450"><title>2 / 3 · Pad del Mini360, regolazione e INA219</title><rect width="1800" height="1450" fill="#f4f7fa"/>
+<text x="55" y="53" fill="#087d69" font-family="Arial,Helvetica,sans-serif" font-size="18" font-weight="700" text-anchor="start">MINÙ / CABLAGGIO ALIMENTAZIONE</text>
+<text x="55" y="107" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="36" font-weight="700" text-anchor="start">2 / 3 · Pad del Mini360, regolazione e INA219</text>
+<text x="55" y="146" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" text-anchor="start">DAOKAI B0B82GL5XN · MP1482DS identificato in foto; vista del retro da istruzioni del venditore.</text>
+<rect x="55" y="185" width="1690" height="550" rx="14" fill="white" stroke="#cbd6df" stroke-width="2"/>
+<text x="85" y="225" fill="#087d69" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" text-anchor="start">A · GUARDA IL RETRO: SCRITTA MINI-360 DRITTA E FRECCIA VERSO SINISTRA</text>
+<rect x="695" y="310" width="410" height="270" rx="14" fill="#136641" stroke="#0e4f33" stroke-width="2"/>
+<rect x="710" y="326" width="30" height="38" rx="5" fill="#d5c783" stroke="#e9dea5" stroke-width="2"/>
+<rect x="710" y="526" width="30" height="38" rx="5" fill="#d5c783" stroke="#e9dea5" stroke-width="2"/>
+<rect x="1060" y="326" width="30" height="38" rx="5" fill="#d5c783" stroke="#e9dea5" stroke-width="2"/>
+<rect x="1060" y="526" width="30" height="38" rx="5" fill="#d5c783" stroke="#e9dea5" stroke-width="2"/>
+<text x="900.0" y="388" fill="#f0f5df" font-family="Arial,Helvetica,sans-serif" font-size="62" font-weight="700" text-anchor="middle">←</text>
+<text x="900.0" y="458" fill="#f0f5df" font-family="Arial,Helvetica,sans-serif" font-size="32" font-weight="700" text-anchor="middle">MINI-360</text>
+<text x="900.0" y="498" fill="#d5e5ca" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" text-anchor="middle">HW-187</text>
+<text x="755" y="352" fill="white" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" text-anchor="start">OUT−</text>
+<text x="755" y="552" fill="white" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" text-anchor="start">OUT+</text>
+<text x="1040" y="352" fill="white" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" text-anchor="end">IN−</text>
+<text x="1040" y="552" fill="white" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" text-anchor="end">IN+</text>
+<text x="1180" y="324" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" text-anchor="start">INGRESSO DALLA BATTERIA</text>
+<text x="1180" y="364" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="400" text-anchor="start">IN− → negativo / GND</text>
+<text x="1180" y="560" fill="#c63d36" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" text-anchor="start">IN+ → positivo dopo S1</text>
+<polyline points="1075,345 1150,345" fill="none" stroke="#f4f7fa" stroke-width="12" stroke-linejoin="round"/>
+<polyline points="1075,345 1150,345" fill="none" stroke="#26333d" stroke-width="5" stroke-linejoin="round"/>
+<polyline points="1075,545 1150,545" fill="none" stroke="#f4f7fa" stroke-width="12" stroke-linejoin="round"/>
+<polyline points="1075,545 1150,545" fill="none" stroke="#c63d36" stroke-width="5" stroke-linejoin="round"/>
+<text x="80" y="324" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" text-anchor="start">USCITA VERSO LA BILANCIA</text>
+<text x="80" y="364" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="400" text-anchor="start">OUT− → GND comune</text>
+<text x="80" y="560" fill="#c63d36" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" text-anchor="start">OUT+ → linea +5 V</text>
+<polyline points="470,345 725,345" fill="none" stroke="#f4f7fa" stroke-width="12" stroke-linejoin="round"/>
+<polyline points="470,345 725,345" fill="none" stroke="#26333d" stroke-width="5" stroke-linejoin="round"/>
+<polyline points="470,545 725,545" fill="none" stroke="#f4f7fa" stroke-width="12" stroke-linejoin="round"/>
+<polyline points="470,545 725,545" fill="none" stroke="#c63d36" stroke-width="5" stroke-linejoin="round"/>
+<text x="900" y="623" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="700" text-anchor="middle">Saldare sui quattro pad dorati. Non scambiare IN con OUT.</text>
+<text x="900" y="661" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="400" text-anchor="middle">Sul fronte la posizione appare specchiata: questa tavola mostra soltanto il RETRO.</text>
+<text x="900" y="698" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" text-anchor="middle">Schema ingrandito · scheda circa 17 × 12 mm · seguire anche la serigrafia dell’esemplare.</text>
+<rect x="55" y="765" width="790" height="540" rx="14" fill="white" stroke="#cbd6df" stroke-width="2"/>
+<text x="85" y="810" fill="#087d69" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" text-anchor="start">B · PRIMA REGOLA, POI COLLEGA IL CARICO</text>
+<text x="85" y="855" fill="#087d69" font-family="Arial,Helvetica,sans-serif" font-size="25" font-weight="700" text-anchor="start">1</text>
+<text x="125" y="855" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="400" text-anchor="start">PC scollegato; filo OUT+ verso i carichi staccato.</text>
+<text x="85" y="899" fill="#087d69" font-family="Arial,Helvetica,sans-serif" font-size="25" font-weight="700" text-anchor="start">2</text>
+<text x="125" y="899" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="400" text-anchor="start">Collega IN+/IN−; porta S1 su ON.</text>
+<text x="85" y="943" fill="#087d69" font-family="Arial,Helvetica,sans-serif" font-size="25" font-weight="700" text-anchor="start">3</text>
+<text x="125" y="943" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="400" text-anchor="start">Tester in volt DC: rosso OUT+, nero OUT−.</text>
+<text x="85" y="987" fill="#087d69" font-family="Arial,Helvetica,sans-serif" font-size="25" font-weight="700" text-anchor="start">4</text>
+<text x="125" y="987" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="400" text-anchor="start">Riferimento 5,00 V; montaggio regolato a 5,11 V.</text>
+<text x="85" y="1031" fill="#087d69" font-family="Arial,Helvetica,sans-serif" font-size="25" font-weight="700" text-anchor="start">5</text>
+<text x="125" y="1031" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="400" text-anchor="start">OFF e batteria scollegata: completa il filo OUT+.</text>
+<text x="85" y="1075" fill="#087d69" font-family="Arial,Helvetica,sans-serif" font-size="25" font-weight="700" text-anchor="start">6</text>
+<text x="125" y="1075" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="400" text-anchor="start">Ricollega la batteria; ON e verifica sotto carico.</text>
+<rect x="90" y="1110" width="255" height="120" rx="14" fill="#283845" stroke="#283845" stroke-width="2"/>
+<rect x="113" y="1131" width="210" height="63" rx="4" fill="#d6e7c0" stroke="#d6e7c0" stroke-width="2"/>
+<text x="218" y="1178" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="36" font-weight="700" text-anchor="middle">5.11 V</text>
+<text x="385" y="1146" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="400" text-anchor="start">Valore riferito sul montaggio.</text>
+<text x="385" y="1182" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" text-anchor="start">Il trimmer è sul lato componenti.</text>
+<text x="85" y="1265" fill="#a66713" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="700" text-anchor="start">Buck soltanto: vicino a 5 V in ingresso può perdere la regolazione.</text>
+<rect x="885" y="765" width="860" height="540" rx="14" fill="white" stroke="#cbd6df" stroke-width="2"/>
+<text x="915" y="810" fill="#087d69" font-family="Arial,Helvetica,sans-serif" font-size="25" font-weight="700" text-anchor="start">C · INA219 → ESP32</text>
+<text x="915" y="851" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="400" text-anchor="start">È lo stesso INA219 della tavola 1.</text>
+<rect x="925" y="881" width="210" height="290" rx="14" fill="#e6f4ef" stroke="#83b6a0" stroke-width="2"/>
+<rect x="1430" y="881" width="270" height="290" rx="14" fill="#edf3fa" stroke="#a0b8d3" stroke-width="2"/>
+<text x="1030" y="917" fill="#087d69" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" text-anchor="middle">INA219</text>
+<text x="1565" y="917" fill="#236bb5" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" text-anchor="middle">ESP32</text>
+<text x="950" y="965" fill="#a66713" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" text-anchor="start">VCC</text>
+<polyline points="1135,957 1430,957" fill="none" stroke="#f4f7fa" stroke-width="11" stroke-linejoin="round"/>
+<polyline points="1135,957 1430,957" fill="none" stroke="#a66713" stroke-width="4" stroke-linejoin="round"/>
+<text x="1460" y="965" fill="#a66713" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" text-anchor="start">3V3</text>
+<text x="950" y="1022" fill="#087d69" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" text-anchor="start">SDA</text>
+<polyline points="1135,1014 1430,1014" fill="none" stroke="#f4f7fa" stroke-width="11" stroke-linejoin="round"/>
+<polyline points="1135,1014 1430,1014" fill="none" stroke="#087d69" stroke-width="4" stroke-linejoin="round"/>
+<text x="1460" y="1022" fill="#087d69" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" text-anchor="start">GPIO32</text>
+<text x="950" y="1079" fill="#236bb5" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" text-anchor="start">SCL</text>
+<polyline points="1135,1071 1430,1071" fill="none" stroke="#f4f7fa" stroke-width="11" stroke-linejoin="round"/>
+<polyline points="1135,1071 1430,1071" fill="none" stroke="#236bb5" stroke-width="4" stroke-linejoin="round"/>
+<text x="1460" y="1079" fill="#236bb5" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" text-anchor="start">GPIO33</text>
+<text x="950" y="1136" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" text-anchor="start">GND</text>
+<polyline points="1135,1128 1430,1128" fill="none" stroke="#f4f7fa" stroke-width="11" stroke-linejoin="round"/>
+<polyline points="1135,1128 1430,1128" fill="none" stroke="#26333d" stroke-width="4" stroke-linejoin="round"/>
+<text x="1460" y="1136" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" text-anchor="start">GND</text>
+<text x="915" y="1215" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" text-anchor="start">La corrente di potenza passa da VIN+ a VIN−.</text>
+<text x="915" y="1254" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="400" text-anchor="start">SDA/SCL e VCC non portano la corrente della bilancia.</text>
+<text x="55" y="1385" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="400" text-anchor="start">Rosso = positivo DC   •   Nero = negativo / GND   •   Pallino pieno = collegamento</text>
+<text x="55" y="1421" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="18" font-weight="400" text-anchor="start">Fonte pad: DAOKAI 71XIQphK08L · primo funzionamento positivo riferito da Andrea; nessuna misura dei transitori.</text>
+<circle cx="1075" cy="345" r="6" fill="white" stroke="#26333d" stroke-width="3"/>
+<circle cx="1075" cy="545" r="6" fill="white" stroke="#c63d36" stroke-width="3"/>
+<circle cx="725" cy="345" r="6" fill="white" stroke="#26333d" stroke-width="3"/>
+<circle cx="725" cy="545" r="6" fill="white" stroke="#c63d36" stroke-width="3"/>
+<circle cx="1135" cy="957" r="6" fill="white" stroke="#a66713" stroke-width="3"/>
+<circle cx="1430" cy="957" r="6" fill="white" stroke="#a66713" stroke-width="3"/>
+<circle cx="1135" cy="1014" r="6" fill="white" stroke="#087d69" stroke-width="3"/>
+<circle cx="1430" cy="1014" r="6" fill="white" stroke="#087d69" stroke-width="3"/>
+<circle cx="1135" cy="1071" r="6" fill="white" stroke="#236bb5" stroke-width="3"/>
+<circle cx="1430" cy="1071" r="6" fill="white" stroke="#236bb5" stroke-width="3"/>
+<circle cx="1135" cy="1128" r="6" fill="white" stroke="#26333d" stroke-width="3"/>
+<circle cx="1430" cy="1128" r="6" fill="white" stroke="#26333d" stroke-width="3"/>
+</svg>

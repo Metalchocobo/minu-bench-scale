@@ -1,0 +1,169 @@
+{
+  "status": "CONCEPT VOLUMETRICO - prototipo di forma; montaggio e portata non validati",
+  "units": "mm",
+  "parameters": {
+    "width": 280.0,
+    "depth": 300.0,
+    "height": 110.0,
+    "corner_radius": 20.0,
+    "wall": 3.2,
+    "base_width": 272.0,
+    "base_depth": 292.0,
+    "base_floor_z": 8.0,
+    "base_floor_thickness": 6.0,
+    "shell_bottom": 16.8,
+    "shell_front_roof": 46.0,
+    "shell_rear_roof": 71.0,
+    "slope_end_y": -50.0,
+    "plate_depth": 200.0,
+    "plate_center_y": 50.0,
+    "plate_skin": 6.0,
+    "plate_rib_height": 30.0,
+    "plate_rib_thickness": 6.0,
+    "base_rib_thickness": 4.0,
+    "base_rib_height": 25.0
+  },
+  "parts": {
+    "base": {
+      "brep_valid": true,
+      "solid_count": 1,
+      "volume_mm3": 672063.044,
+      "bounds_mm": [
+        [
+          -136.0,
+          -146.0,
+          8.0
+        ],
+        [
+          136.0,
+          146.0,
+          44.0
+        ]
+      ],
+      "size_mm": [
+        272.0,
+        292.0,
+        36.0
+      ],
+      "stl_watertight": true,
+      "stl_winding_consistent": true,
+      "stl_components": 1,
+      "stl_triangles": 1212
+    },
+    "guscio": {
+      "brep_valid": true,
+      "solid_count": 1,
+      "volume_mm3": 286192.682,
+      "bounds_mm": [
+        [
+          -140.0,
+          -150.0,
+          16.8
+        ],
+        [
+          140.0,
+          150.0,
+          71.0
+        ]
+      ],
+      "size_mm": [
+        280.0,
+        300.0,
+        54.2
+      ],
+      "stl_watertight": true,
+      "stl_winding_consistent": true,
+      "stl_components": 1,
+      "stl_triangles": 1372
+    },
+    "piatto": {
+      "brep_valid": true,
+      "solid_count": 1,
+      "volume_mm3": 840799.078,
+      "bounds_mm": [
+        [
+          -140.0,
+          -50.0,
+          70.0
+        ],
+        [
+          140.0,
+          150.0,
+          110.0
+        ]
+      ],
+      "size_mm": [
+        280.0,
+        200.0,
+        40.0
+      ],
+      "stl_watertight": true,
+      "stl_winding_consistent": true,
+      "stl_components": 1,
+      "stl_triangles": 2608
+    }
+  },
+  "target_load_kg": 20,
+  "load_capacity_verified": false,
+  "cell_reference_is_selected_hardware": false,
+  "assembly_ready": false,
+  "fastener_and_cell_interfaces_defined": false,
+  "minimum_nominal_plate_rib_to_shell_roof_gap_mm": 3,
+  "notes": [
+    "I tre STL sono solidi di forma separati, non un insieme montabile definitivo.",
+    "20 kg e un obiettivo di progetto, non una portata dimostrata dal CAD.",
+    "Gli ingombri cella e piedi sono riferimenti esclusi dagli STL.",
+    "Nessuna selezione materiale, tolleranza, fissaggio o finecorsa di sovraccarico e validata.",
+    "Le quote sono assolute nell'assetto assemblato; gli STL non codificano unita, usare millimetri."
+  ],
+  "cell_reserved_volume_mm": {
+    "brep_valid": true,
+    "solid_count": 1,
+    "volume_mm3": 83600.0,
+    "bounds_mm": [
+      [
+        -19.0,
+        -40.0,
+        45.0
+      ],
+      [
+        19.0,
+        60.0,
+        67.0
+      ]
+    ],
+    "size_mm": [
+      38.0,
+      100.0,
+      22.0
+    ]
+  },
+  "plastic_part_intersections_mm3": {
+    "base/guscio": 0.0,
+    "base/piatto": 0.0,
+    "guscio/piatto": 0.0
+  },
+  "reserved_cell_intersections_mm3": {
+    "base": 0.0,
+    "guscio": 0.0,
+    "piatto": 0.0
+  },
+  "step_roundtrip": {
+    "base.step": {
+      "brep_valid": true,
+      "solid_count": 1
+    },
+    "guscio.step": {
+      "brep_valid": true,
+      "solid_count": 1
+    },
+    "MINU_concept_01_assembly_WITH_REFERENCES.step": {
+      "brep_valid": true,
+      "solid_count": 8
+    },
+    "piatto.step": {
+      "brep_valid": true,
+      "solid_count": 1
+    }
+  }
+}

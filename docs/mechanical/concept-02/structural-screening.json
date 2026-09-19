@@ -1,0 +1,222 @@
+{
+  "status": "ANALYTICAL_SCREENING_NOT_FEA_NOT_CAPACITY_CERTIFICATION",
+  "material_assumptions": {
+    "E_MPa": 68300.0,
+    "density_kg_per_mm3": 2.7e-06,
+    "yield_typical_MPa": 276
+  },
+  "gravity_m_per_s2": 9.80665,
+  "structural_force_N": 215.7463,
+  "equivalent_structure_load_kg": 22,
+  "carrier_ideal_fixed_strip": {
+    "X_full_width": {
+      "width_mm": 196,
+      "thickness_mm": 8,
+      "length_mm": 128,
+      "force_N": 215.7463,
+      "root_moment_Nm": 27.6155264,
+      "root_stress_MPa": 13.208957142857143,
+      "tip_deflection_mm": 0.26405021208952106,
+      "probe_x_mm": 100,
+      "probe_deflection_mm": 0.17879071291309348
+    },
+    "X_contact_width": {
+      "width_mm": 30,
+      "thickness_mm": 8,
+      "length_mm": 128,
+      "force_N": 215.7463,
+      "root_moment_Nm": 27.6155264,
+      "root_stress_MPa": 86.29852,
+      "tip_deflection_mm": 1.725128052318204,
+      "probe_x_mm": 100,
+      "probe_deflection_mm": 1.168099324365544
+    },
+    "Y_full_width": {
+      "width_mm": 276,
+      "thickness_mm": 8,
+      "length_mm": 85,
+      "force_N": 215.7463,
+      "root_moment_Nm": 18.3384355,
+      "root_stress_MPa": 6.229088145380435,
+      "tip_deflection_mm": 0.054911129636863884,
+      "probe_x_mm": 55,
+      "probe_deflection_mm": 0.0270476152495849
+    },
+    "Y_contact_width": {
+      "width_mm": 25,
+      "thickness_mm": 8,
+      "length_mm": 85,
+      "force_N": 215.7463,
+      "root_moment_Nm": 18.3384355,
+      "root_stress_MPa": 68.769133125,
+      "tip_deflection_mm": 0.6062188711909772,
+      "probe_x_mm": 55,
+      "probe_deflection_mm": 0.29860567235541724
+    }
+  },
+  "base_full_width_line_supported_beam": {
+    "X_load_platform_center": {
+      "span_mm": 264,
+      "attachment_a_mm": 26,
+      "full_beam_width_mm": 320,
+      "thickness_mm": 6,
+      "force_N": 215.7463,
+      "applied_couple_Nm": 22.8691078,
+      "left_reaction_N": 107.87315,
+      "right_reaction_N": 107.87315,
+      "max_moment_Nm": 25.6738097,
+      "max_stress_MPa": 13.371775885416666,
+      "max_absolute_deflection_mm": 0.3114588838632109,
+      "deflection_location_relative_to_left_support_mm": 113.52,
+      "note": "Continuous support lines, not four point feet. Negative reaction omits stabilizing dead weight."
+    },
+    "X_load_right_edge": {
+      "span_mm": 264,
+      "attachment_a_mm": 26,
+      "full_beam_width_mm": 320,
+      "thickness_mm": 6,
+      "force_N": 215.7463,
+      "applied_couple_Nm": 53.07358979999999,
+      "left_reaction_N": -6.537766666666641,
+      "right_reaction_N": 222.28406666666663,
+      "max_moment_Nm": 52.90360786666666,
+      "max_stress_MPa": 27.55396243055555,
+      "max_absolute_deflection_mm": 0.6398526660572403,
+      "deflection_location_relative_to_left_support_mm": 113.6784,
+      "note": "Continuous support lines, not four point feet. Negative reaction omits stabilizing dead weight."
+    },
+    "Y_load_rear_edge": {
+      "span_mm": 284,
+      "attachment_a_mm": 192,
+      "full_beam_width_mm": 300,
+      "thickness_mm": 6,
+      "force_N": 215.7463,
+      "applied_couple_Nm": 21.57463,
+      "left_reaction_N": -6.077360563380267,
+      "right_reaction_N": 221.82366056338026,
+      "max_moment_Nm": 20.407776771830985,
+      "max_stress_MPa": 11.337653762128324,
+      "max_absolute_deflection_mm": 0.09742023888901179,
+      "deflection_location_relative_to_left_support_mm": 205.3888,
+      "note": "Continuous support lines, not four point feet. Negative reaction omits stabilizing dead weight."
+    }
+  },
+  "cell_elastic_translation_linear_assumption_mm_at_22kg": [
+    0.44,
+    0.5866666666666667
+  ],
+  "fastener_engagement_mm": {
+    "fixed_M6x25": 11.4,
+    "moving_M6x45": 15,
+    "stop_M6x60": 6
+  },
+  "stability": {
+    "foot_centers": [
+      [
+        -132,
+        -142
+      ],
+      [
+        -132,
+        142
+      ],
+      [
+        132,
+        -142
+      ],
+      [
+        132,
+        142
+      ]
+    ],
+    "assumed_contact_radius_mm": 15,
+    "actual_rounded_pan_margin_mm": 7.0,
+    "bounding_rectangle_corner_margin_mm": 3.686291501015239,
+    "conditions": "Coplanar feet, complete circular pad contact, vertical static loads, no push/impact.",
+    "cad_metal_mass_only": [
+      {
+        "name": "base_aluminium",
+        "mass_kg": 1.5434369354992508,
+        "centroid_xy_mm": [
+          0.03656457658990804,
+          -0.06629489325626409
+        ]
+      },
+      {
+        "name": "plate_carrier_aluminium",
+        "mass_kg": 1.1607798603680695,
+        "centroid_xy_mm": [
+          4.524007619874323e-15,
+          49.999999999999986
+        ]
+      },
+      {
+        "name": "cell_fixed_spacer",
+        "mass_kg": 0.011093788756750749,
+        "centroid_xy_mm": [
+          -105.45302303536276,
+          49.99999999999999
+        ]
+      },
+      {
+        "name": "cell_moving_spacer",
+        "mass_kg": 0.040677225441419405,
+        "centroid_xy_mm": [
+          -0.5469769646372236,
+          49.99999999999999
+        ]
+      }
+    ],
+    "cad_metal_mass_total_kg": 2.7559878100654904,
+    "metal_centroid_xy_mm": [
+      -0.4120801784497548,
+      21.96135321077019
+    ],
+    "centroid_source": "CAD center of mass from mechanical-audit snapshot",
+    "audited_builder_sha256": "23e37e44498dbc9844325e9eb75b532b92785c63f8117553729ebd1511d2b724",
+    "twenty_kg_plus_metal_only": [
+      {
+        "label": "right_edge",
+        "payload_xy_mm": [
+          140,
+          50
+        ],
+        "resultant_xy_mm": [
+          122.99463048637342,
+          46.60422701019073
+        ],
+        "margin_to_point_foot_rectangle_x_mm": 9.005369513626576,
+        "margin_to_point_foot_rectangle_y_mm": 95.39577298980927
+      },
+      {
+        "label": "rear_edge",
+        "payload_xy_mm": [
+          0,
+          150
+        ],
+        "resultant_xy_mm": [
+          -0.04990721378725628,
+          134.4931825103055
+        ],
+        "margin_to_point_foot_rectangle_x_mm": 131.95009278621274,
+        "margin_to_point_foot_rectangle_y_mm": 7.506817489694498
+      },
+      {
+        "label": "bounding_box_corner",
+        "payload_xy_mm": [
+          140,
+          150
+        ],
+        "resultant_xy_mm": [
+          122.99463048637342,
+          134.4931825103055
+        ],
+        "margin_to_point_foot_rectangle_x_mm": 9.005369513626576,
+        "margin_to_point_foot_rectangle_y_mm": 7.506817489694498
+      }
+    ],
+    "point_foot_model_rear_restoring_to_payload_overturning_moment_ratio": 2.0676565455492146,
+    "point_foot_model_right_restoring_to_payload_overturning_moment_ratio": 2.2807879929826367,
+    "mass_note": "Only four custom aluminium parts; assumed density. Not a complete measured mass/CG."
+  }
+}

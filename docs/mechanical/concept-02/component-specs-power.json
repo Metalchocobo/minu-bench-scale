@@ -1,0 +1,57 @@
+{
+  "checked_on": "2026-09-07",
+  "units": "mm",
+  "variant": "new_1S2P_21700_USB_C_supply",
+  "user_battery_choice": "pending_optional_question_design_assumption_only",
+  "firmware_changed": false,
+  "ups": {
+    "brand": "Waveshare",
+    "model": "UPS HAT (D)",
+    "selected_sku": "25507",
+    "selected_quantity": 1,
+    "selected_kit": ["UPS board", "2x21700 battery", "acrylic protection", "screw pack"],
+    "purchase_url": "https://www.waveshare.net/shop/UPS-HAT-D.htm",
+    "alternative_sku": "25567",
+    "alternative_batteries_included": false,
+    "alternative_url": "https://www.waveshare.com/product/ups-hat-d.htm",
+    "pcb_dimensions": [85,56],
+    "official_step_dimensions": [85,62.464,38.6],
+    "official_step_bounds": [[-85,0,-28.1],[0,62.464,10.5]],
+    "official_step_solids": 297,
+    "mounting_hole_diameter": 3,
+    "battery_nominal_dimensions": [21,70],
+    "battery_count": 2,
+    "input_voltage_V": 5,
+    "output_voltage_V": 5,
+    "selection_guide_max_output_A": 2.5,
+    "ina219_address": "0x43",
+    "mcu_address": "0x2D",
+    "official_step": "sources/waveshare-ups-hat-d/UPS-HAT_D.stp",
+    "manual_url": "https://www.waveshare.com/wiki/UPS_HAT_%28D%29"
+  },
+  "output_harness": {
+    "purchase_sku": "Adafruit2697",
+    "purchase_url": "https://www.adafruit.com/product/2697",
+    "quantity": 1,
+    "wire_AWG": 22,
+    "stock_length": 1000,
+    "design_cut_length": 200,
+    "assembly": "Retain USB-A plug, remove barrel plug, terminate to existing 5V distribution",
+    "connector_envelope": "provisional_sample_measurement",
+    "electrical_tested": false
+  },
+  "external_supply": {
+    "model": "Raspberry Pi USB-C 15W EU",
+    "voltage_V": 5.1,
+    "current_A": 3,
+    "quantity": 1,
+    "url": "https://www.raspberrypi.com/products/power-supply/",
+    "inside_cad": false
+  },
+  "limitations": [
+    "Whole charging and power path has not been electrically tested",
+    "USB-C extension continuous 3A rating unpublished",
+    "SLA firmware thresholds must be changed in a separate implementation before operation",
+    "Final board mounting and wiring require assembly verification"
+  ]
+}

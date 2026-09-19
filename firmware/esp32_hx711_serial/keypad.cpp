@@ -26,10 +26,10 @@ static KeyCode keyMap[4][2] = {
 // Stato interno tastiera.
 // Obiettivo:
 // - Debounce per eliminare rimbalzi (contatto meccanico)
-// - Evento "one-shot" solo su pressione (transizione stabile NONE -> KEY)
+// - One-shot press events; WIFI/TOTAL are deferred until release for the chord.
 // Side effects:
 // - Tenere premuto non genera eventi ripetuti
-// - Il rilascio non genera evento
+// - A consumed chord never emits its component keys on release.
 static KeyCode rawKeyLast   = KEY_NONE;
 static uint32_t rawChangeMs = 0;
 static KeyCode stableKey    = KEY_NONE;
@@ -44,6 +44,15 @@ static KeyCode pendingEvent = KEY_NONE;
 static const uint32_t DEBOUNCE_MS = 40;
 static const uint32_t STUCK_KEY_MS = 15000;
 
+static bool isBatteryChordKey(KeyCode key) {
+  return key == KEY_WIFI || key == KEY_TOTAL;
+}
+
+static bool isSuppressed(KeyCode key) {
+  return key == suppressedKey ||
+    (suppressedKey == KEY_BATTERY && isBatteryChordKey(key));
+}
+
 static bool keypad_raw_is_pressed(KeyCode target) {
   if (target == KEY_NONE) return false;
 
@@ -55,7 +64,9 @@ static bool keypad_raw_is_pressed(KeyCode target) {
     delayMicroseconds(200);
 
     for (int c = 0; c < 2; c++) {
-      if (keyMap[r][c] == target && digitalRead(colPins[c]) == LOW) {
+      const KeyCode key = keyMap[r][c];
+      if ((key == target || (target == KEY_BATTERY && isBatteryChordKey(key))) &&
+          digitalRead(colPins[c]) == LOW) {
         return true;
       }
     }
@@ -74,11 +85,20 @@ static KeyCode keypad_scan_once() {
 
     delayMicroseconds(200); // assestamento
 
+    const bool pressed[2] = {
+      digitalRead(colPins[0]) == LOW,
+      digitalRead(colPins[1]) == LOW
+    };
+    // Both keys share one row, so no cross-row combination is needed.
+    if (r == 1 && pressed[0] && pressed[1] &&
+        !isSuppressed(KEY_WIFI) && !isSuppressed(KEY_TOTAL)) {
+      return KEY_BATTERY;
+    }
+
     for (int c = 0; c < 2; c++) {
-      int val = digitalRead(colPins[c]);
-      if (val == LOW) {
+      if (pressed[c]) {
         KeyCode key = keyMap[r][c];
-        if (key == suppressedKey) {
+        if (isSuppressed(key)) {
           continue;
         }
         return key;
@@ -112,6 +132,7 @@ void keypad_init() {
 
 void keypad_suppress_wake_key() {
   suppressedKey = keypad_scan_once();
+  if (isBatteryChordKey(suppressedKey)) suppressedKey = KEY_BATTERY;
   suppressedReleaseSinceMs = 0;
   rawKeyLast = KEY_NONE;
   rawChangeMs = millis();
@@ -147,8 +168,22 @@ void keypad_update(uint32_t nowMs) {
     stableKey = raw;
     stableSinceMs = nowMs;
 
-    // Evento one-shot: solo su pressione (NONE -> KEY).
-    if (prev == KEY_NONE && stableKey != KEY_NONE) {
+    if (prev == KEY_BATTERY) {
+      // The first debounced release ends the readout. Consume both keys
+      // until neither is held, even if release order changes or bounces.
+      suppressedKey = KEY_BATTERY;
+      suppressedReleaseSinceMs = 0;
+      stableKey = KEY_NONE;
+      rawKeyLast = KEY_NONE;
+      rawChangeMs = nowMs;
+      pendingEvent = KEY_NONE;
+    } else if (stableKey == KEY_NONE && isBatteryChordKey(prev)) {
+      pendingEvent = prev;
+    } else if (stableKey == KEY_BATTERY &&
+               (prev == KEY_NONE || isBatteryChordKey(prev))) {
+      pendingEvent = KEY_BATTERY;
+    } else if (prev == KEY_NONE && stableKey != KEY_NONE &&
+               !isBatteryChordKey(stableKey)) {
       pendingEvent = stableKey;
     }
   }
@@ -157,6 +192,7 @@ void keypad_update(uint32_t nowMs) {
       suppressedKey == KEY_NONE &&
       (uint32_t)(nowMs - stableSinceMs) >= STUCK_KEY_MS) {
     suppressedKey = stableKey;
+    if (isBatteryChordKey(suppressedKey)) suppressedKey = KEY_BATTERY;
     suppressedReleaseSinceMs = 0;
     stableKey = KEY_NONE;
     rawKeyLast = KEY_NONE;

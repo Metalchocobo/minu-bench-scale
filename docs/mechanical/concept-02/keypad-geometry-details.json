@@ -1,0 +1,42 @@
+{
+  "units": "mm",
+  "physical_fit_verified": false,
+  "tails": [
+    {
+      "part": "keypad_tail_1",
+      "flex_centerline_mm": 76.0,
+      "connector_length_assumed_mm": 12,
+      "combined_target_mm": 88,
+      "jumper_start": [
+        77.0,
+        -48.81758702920261,
+        35.33252197932353
+      ],
+      "jumper_end": [
+        -44.5,
+        -51.0,
+        25.0
+      ],
+      "jumper_centerline_mm": 152.339,
+      "jumper_nominal_cut_length_mm": 200
+    },
+    {
+      "part": "keypad_tail_2",
+      "flex_centerline_mm": 76.0,
+      "connector_length_assumed_mm": 12,
+      "combined_target_mm": 88,
+      "jumper_start": [
+        77.0,
+        -13.639910344194305,
+        45.82843041427623
+      ],
+      "jumper_end": [
+        -36.5,
+        -51.0,
+        25.0
+      ],
+      "jumper_centerline_mm": 139.017,
+      "jumper_nominal_cut_length_mm": 200
+    }
+  ]
+}

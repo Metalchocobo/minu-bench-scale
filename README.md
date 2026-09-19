@@ -1,12 +1,15 @@
-# Minù Bench Scale — ESP32 + HX711 + OLED SSD1322 + INA219 (SLA 6 V) · v2026-07-13
+# Minù Bench Scale — ESP32 + HX711 + OLED SSD1322 + INA219 (LiFePO4 USB-C + Mini360) · v2026-09-18
 
 Bilancia da banco per uso interno in laboratorio (gelato/pasticceria), pensata per guidare e rendere affidabili le pesate ingredienti (non “pesatura legale”).
+
+Progetto meccanico separato: la [soluzione economica proposta per un solo prototipo](docs/mechanical/prototype-affordability/README.md) prevede cella e supporti commerciali T130, con scocca, fondo e piatto FDM personalizzati; costo completo e innesti sono ancora da verificare. Il [CAD della Proposta 02](docs/mechanical/concept-02/README.md) contiene invece quattro parti in alluminio su misura e non è il pacchetto da ordinare per questa soluzione. L'obiettivo resta 20 kg utili, otto tasti, display posseduto e ricarica USB; portata e accoppiamenti richiedono collaudo. Le varianti meccaniche non definiscono l'alimentazione montata, descritta nella sezione 2 e in [WIRING](docs/WIRING.md).
 
 Hardware di riferimento:
 - **ESP32 DevKit**
 - **HX711** (ADC 24 bit) per cella di carico con eccitazione a **5 V**
 - **OLED SSD1322** 256×64 (3,12", SPI)
-- **Batteria piombo SLA 6 V** con modulo caricatore/protezione **CTK3S**
+- **Batteria NASTIMA BK06-LF60-NATC**, LiFePO4 **6,4 V nominali / 6 Ah**, con BMS e ricarica USB-C integrati
+- **Mini360 DAOKAI B0B82GL5XN**, chip **MP1482DS**, uscita regolata a **5,11 V** (valore riferito sul montaggio)
 - **INA219** (CJMCU-219) per tensione/corrente batteria (high-side)
 - **Tastierino 4×2** + **buzzer**
 
@@ -77,18 +80,22 @@ Firmware disponibili nel repo:
 
 ## 2) Alimentazione (architettura)
 
+**Configurazione montata:** nuova batteria USB-C NASTIMA e Mini360; Andrea riferisce cablaggio completato e primo funzionamento apparentemente regolare. La regolazione ottenuta in uscita dal Mini360 è **5,11 V**; «linea 5 V» nel resto del documento indica questa alimentazione nominale. La conferma non comprende misure di autonomia, transitori, temperatura o ripartenza dopo intervento del BMS.
+
 Schema logico:
-1. Alimentatore → ingresso PV CTK3S  
-2. CTK3S BAT → batteria SLA 6 V  
-3. CTK3S LOAD → **buck 5 V**  
-4. Rail 5 V dal buck alimenta: **ESP32 (VIN/5V)**, **HX711**, **OLED** (se il tuo modulo accetta 5 V)
+1. Alimentatore USB esterno → passaggio USB-C nella scocca → ingresso USB-C del caricatore **interno alla batteria**; ingresso dichiarato **5 V / 1,5 A**.
+2. Batteria **+ → F1 → INA219 VIN+ → VIN− → S1 → Mini360 IN+**.
+3. Batteria **− → GND comune / Mini360 IN−**; Mini360 **OUT− → GND comune**.
+4. Mini360 **OUT+ → linea nominale 5 V**: ESP32 **VIN/5V**, HX711, OLED compatibile e circuito audio con power-gate esistente.
 
-Motivo: il CTK3S protegge la batteria staccando **LOAD** in undervoltage.
+**S1 è un interruttore semplice sul positivo dopo VIN− dell'INA219. VIN− non è massa.** In OFF stacca il Mini360 dalla batteria; la ricarica interna del pacco rimane indipendente. CTK3S e batteria al piombo non fanno parte dell'alimentazione montata. L'uscita del buck resta collegata all'ESP32: S1 non isola l'eventuale alimentazione proveniente dall'USB del PC. Il ritorno USB non è stato caratterizzato sull'esemplare e non è documentato come guasto.
 
-Condensatori consigliati (stabilità rail 5 V):
-- Ingresso buck: **220 µF** + **100 nF**
-- Uscita buck (rail 5 V): **470 µF** + **100 nF**
-- Vicino ESP32 (VIN↔GND): **10–47 µF** + **100 nF**
+Condensatori esterni, tutti **in parallelo** e con collegamenti corti vicino ai rispettivi pad del Mini360:
+- **IN+ ↔ IN−**, dopo S1: **220 µF / 16 V elettrolitico + 100 nF ceramico**.
+- **OUT+ ↔ OUT−**: **470 µF / 10 V elettrolitico + 100 nF ceramico**; sul montaggio il ceramico è più vicino al Mini360.
+- Vicino all'ESP32 restano previsti **10–47 µF + 100 nF** fra VIN/5V e GND; non sostituiscono quelli del buck.
+
+Cablaggio completo e polarità: [docs/WIRING.md](docs/WIRING.md). Tavole e dati del convertitore: [Mini360](artifacts/mini360/README.md). Le soglie di origine SLA e il rilevamento `charging` non sono stati adattati alla LiFePO4 con ricarica interna (sezioni 8–9); la combinazione **TOTAL + WIFI** permette di leggere tensione e corrente INA sul display.
 
 ---
 
@@ -240,14 +247,16 @@ La tara manuale è rifiutata durante un upload OTA, che continua quindi senza in
 
 ---
 
-## 8) Batteria SLA 6 V (INA219)
+## 8) Monitoraggio batteria INA219 (soglie firmware di origine SLA)
+
+Il pacco montato è LiFePO4 con ricarica USB-C interna. L'INA219 esterno misura tensione ai morsetti e corrente verso il Mini360; non misura la corrente netta delle celle. Il firmware mantiene la configurazione precedente: le tacche non costituiscono una stima calibrata della capacità residua della nuova batteria.
 
 ### 8.1 Collegamenti INA219
 - VCC → **3V3**
 - GND → GND
 - SDA → GPIO32
 - SCL → GPIO33
-- VIN+/VIN−: high-side sulla linea batteria (vedi schema del tuo cablaggio)
+- VIN+ dopo F1 sul positivo batteria; VIN− verso S1 e poi IN+ Mini360 (vedi [cablaggio](docs/WIRING.md))
 
 Se INA non viene trovato:
 - prima cosa: controlla **SDA/SCL non invertiti**.
@@ -259,18 +268,22 @@ Validità runtime:
 - i limiti di plausibilità correnti sono 3–9 V sul bus, ±330 mV sullo shunt e ±3.500 mA
 - countdown e sleep di protezione richiedono sempre un campione valido più recente di **1,5 s**; un valore stale non può spegnere la bilancia
 
+Lettura sul display: tenere premuti insieme **TOTAL + WIFI**, in qualunque ordine. La schermata **BATTERIA** mostra la tensione filtrata ai morsetti con due decimali e la corrente verso il carico in mA, aggiornate dalle letture INA ogni **500 ms**. Al rilascio di uno dei due tasti torna la schermata ordinaria; entrambi devono essere rilasciati prima di usarli di nuovo. La combinazione non commuta il WiFi e non esegue TOTAL. Dopo **15 s** interviene la normale protezione da tasto bloccato, che chiude la lettura fino al rilascio completo.
+
+Se il sensore è assente o la lettura è invalida/scaduta, appare il relativo messaggio senza valori numerici. Errori, sovraccarico, ENTER, TARE e calibrazione mantengono la priorità; campionamento peso, MQTT e protezione batteria continuano normalmente. Questa schermata non modifica soglie, calibrazione o rilevamento `charging`.
+
 ### 8.2 Soglie tacche (default firmware, tensione filtrata)
-Soglie “pratiche” (dipendono da carico/temperatura). Sono tarate per **usabilità UI** (tacche), non per SoC perfetto:
+Soglie ancora presenti nel codice, definite per la precedente SLA; non sono una taratura LiFePO4:
 - **4 tacche (FULL)**: ≥ **6.20 V**
 - **3 tacche (GOOD)**: ≥ **6.08 V**
 - **2 tacche (LOW)**:  ≥ **5.95 V**
 - **1 tacca (CRITICAL)**: ≥ **5.85 V**
 - **0 tacche (EMPTY)**: < **5.85 V**
 
-Nota: c'è un **cuscinetto** tra 0 tacche e lo stacco per batteria. La sequenza di countdown parte sotto **5.80 V**.
+Nota: c'è un **cuscinetto** tra 0 tacche e il light-sleep per batteria scarica. La sequenza di countdown parte a **≤ 5,80 V** dopo il debounce previsto.
 
 ### 8.3 Rilevamento “in carica” (stabilizzato)
-L’icona charging è basata sulla **corrente** (negativa = entra in batteria) con:
+Il firmware interpreta la **corrente negativa** come ricarica. Con il cablaggio attuale la corrente USB entra nel caricatore interno al pacco senza attraversare lo shunt esterno: **l'icona charging non certifica la presenza dell'USB o la ricarica della batteria**. L'algoritmo mantiene:
 - isteresi (start/stop),
 - debounce temporale,
 - **min-on time** (per evitare flicker quando il caricatore/PWM stacca a impulsi).
@@ -285,19 +298,19 @@ Default firmware:
 
 ## 9) Batteria scarica: avviso + light-sleep (protezione ESP)
 
-La protezione qui è pensata per l’ESP32 (evitare latenze/reset quando il buck 5V perde margine).
+La protezione qui è pensata per l’ESP32 (evitare latenze/reset quando il buck 5V perde margine). È ancora quella del firmware precedente: entra in light-sleep, ma non scollega fisicamente Mini360 o batteria e non sostituisce il BMS del pacco. Collegare l'USB di ricarica non garantisce che il firmware riconosca `charging` o annulli la protezione; vale il limite di misura descritto nella sezione 8.3.
 
 Comportamento:
 - **0 tacche (EMPTY)**: icona batteria **lampeggiante** + avviso sonoro
   - **0011.mp3** (batteria bassa) con **cooldown 5 min**
   - beep buzzer con **cooldown 5 min**
-  - Nota: l'avviso 0011 è agganciato al livello **EMPTY (0 tacche)**, non a una finestra fissa di volt.
-- Se V scende sotto **5,80 V** per ≥ **5 s**:
+  - L'avviso 0011 e il beep richiedono **EMPTY** con **5,80 V < V < 5,85 V** per almeno **10 s**; sotto questa finestra interviene il percorso countdown/critico.
+- Se V scende a **≤ 5,80 V** per ≥ **5 s**:
   - schermo “batteria scarica, collega alimentatore”
   - **0012.mp3** (batteria critica) **subito all'ingresso countdown** e **di nuovo a metà** (a ~60 s)
   - beep ogni **10 s** per **120 s**
-  - poi entra in **LIGHT-SLEEP**
-- La soglia hard-low deve restare confermata da campioni INA validi e freschi per circa **3 s** prima dello sleep. Questo lascia anche al debounce charging il tempo di riconoscere l'alimentatore.
+  - segue la schermata **Zzz per 5 s**, poi entra in **LIGHT-SLEEP**; la soglia hard-low può anticipare lo sleep
+- La soglia hard-low **≤ 5,70 V** deve restare confermata da campioni INA validi e freschi per circa **3 s** prima dello sleep; il debounce non aggiunge un rilevamento della presenza USB.
 - Prima del light-sleep per batteria scarica: DFPlayer viene **spento** via MOSFET (zero consumo audio in sleep).
 - Prima della disconnessione pulita MQTT viene pubblicato retained lo stato `sleeping`, così il gestionale non conserva uno status `online` mentre la bilancia dorme.
 - Anti-troncamento audio (DFPlayer): applicato un gap ~200 ms tra stop → play e ignorati i primi ~300 ms di BUSY=idle dopo il play (evita tagli tipo 0001→0002).
@@ -363,8 +376,8 @@ Persistenza:
 - si perdono solo con un **erase flash** completo o modifiche invasive alle partizioni.
 
 Tasti:
-- **WIFI**: abilita/disabilita il WiFi in modo **persistente** (salvato in NVS).
-  - Feedback immediato al tasto: **bip** (buzzer). La connessione vera e propria avviene in background.
+- **WIFI**: al rilascio abilita/disabilita il WiFi in modo **persistente** (salvato in NVS), salvo utilizzo nella combinazione **TOTAL + WIFI**.
+  - Feedback al rilascio: **bip** (buzzer). La connessione vera e propria avviene in background.
   - All’avvio il WiFi segue la preferenza utente, non l’ultimo stato momentaneo (es. WiFi spento in sleep).
   - Durante il light-sleep per inattività il WiFi viene comunque spento per consumi, ma al wake viene riattivato **solo** se la preferenza è ON.
   - Lo `scale_id` non dipende dallo stato del modulo WiFi: viene letto dal MAC STA in eFuse anche se la preferenza parte OFF. Se l'identità hardware non è valida, MQTT resta disabilitato invece di usare `000000000000`.
@@ -573,7 +586,7 @@ Stack pesate in RAM (LIFO, max 50 elementi). Ogni voce conserva grammi, offset e
 1. Metti contenitore, premi **TARA** → avvia tara manuale; se riesce azzera stack e salva la tara di riferimento
 2. Aggiungi ingrediente e premi **ENTER** sulla bilancia oppure **Conferma** nel Manager → se è già quieto accetta subito; altrimenti mostra la barra **ACQUISIZIONE PESO** fino a 1,5 s, poi accetta appena STABLE o usa il centro robusto se non c'è deriva. A quel punto applica lo zero di lavoro, registra nello stack e prepara il `confirm` MQTT
 3. Ripeti per ogni ingrediente
-4. **TOTAL** (breve) → mostra overlay di controllo con **Registrato**, **Effettivo** e **Differenza** (10 secondi)
+4. **TOTAL** (breve, al rilascio) → mostra overlay di controllo con **Registrato**, **Effettivo** e **Differenza** (10 secondi)
 5. **CLEAR** (breve) → annulla realmente l'ultima pesata: subito se locale, oppure dopo receipt/ACK dell'`undo` se associata a Laravel; a quel punto ripristina offset/zero-tracking e rimuove la voce LIFO
 6. **CLEAR** (2 secondi) → svuota soltanto lo stack locale, senza produrre una serie di undo remoti
 
@@ -583,7 +596,7 @@ Stack pesate in RAM (LIFO, max 50 elementi). Ogni voce conserva grammi, offset e
 |---|---|---|
 | **TARE** | Tara manuale; se riesce azzera stack e salva riferimento | — |
 | **ENTER** | Valida peso + zero di lavoro + push + MQTT confirm | — |
-| **TOTAL** | Mostra overlay confronto: Registrato / Effettivo / Differenza | — |
+| **TOTAL** | Al rilascio mostra overlay confronto: Registrato / Effettivo / Differenza | Con WIFI tenuto: lettura batteria |
 | **CLEAR** | Avvia undo LIFO; per una voce remota applica il ripristino dello zero dopo l'ACK | Svuota solo lo stack locale |
 
 **Note:**
@@ -831,11 +844,13 @@ Comandi:
 
 
 ### Tastiera: debounce + one-shot + long press
-La tastiera ha un debounce software (40 ms) e genera eventi **one-shot**: un tasto premuto produce **un solo evento**, anche se lo tieni premuto.
+La tastiera ha un debounce software (40 ms) e genera eventi **one-shot**: una pressione produce **un solo evento**, anche se tieni premuto il tasto. **WIFI e TOTAL agiscono al rilascio**, così possono essere premuti insieme per la lettura batteria senza attivare le rispettive azioni singole.
 
 Se un tasto o una linea resta chiusa per almeno 15 secondi, quel tasto viene soppresso fino al rilascio elettrico: il loop continua a girare e gli altri tasti restano leggibili.
 
-Dopo un wake il tasto che ha risvegliato la bilancia resta soppresso fino al rilascio: il wake non genera una seconda azione applicativa.
+Dopo un wake il tasto che ha risvegliato la bilancia resta soppresso fino al rilascio: il wake non genera una seconda azione applicativa. Se il wake o la protezione da tasto bloccato coinvolgono WIFI/TOTAL, viene consumata l'intera coppia fino al rilascio completo.
+
+**Combinazione batteria:** tenere **TOTAL + WIFI** per leggere volt e mA; rilasciare per tornare alla pesata. Dettagli e limiti della misura nella sezione 8.1.
 
 **Long press:**
 - **SKIP breve**: l'azione scatta al rilascio

@@ -10,7 +10,8 @@ enum KeyCode {
   KEY_SKIP,
   KEY_TOTAL,
   KEY_CLEAR,
-  KEY_MODE
+  KEY_MODE,
+  KEY_BATTERY  // Virtual key: WIFI + TOTAL on the same matrix row.
 };
 
 // Inizializza i pin e lo stato interno
@@ -20,12 +21,12 @@ void keypad_init();
 void keypad_suppress_wake_key();
 
 // Da chiamare nel loop principale con now = millis().
-// Debounce + evento one-shot su pressione (transizione stabile NONE -> KEY).
+// Debounce + one-shot. WIFI/TOTAL fire on release, allowing the battery chord.
 void keypad_update(uint32_t nowMs);
 
 // Ritorna l'ULTIMO tasto "nuovo" premuto (one-shot).
 // - Tenere premuto non genera eventi ripetuti
-// - Il rilascio non genera evento
+// - WIFI/TOTAL fire on release unless consumed by the battery chord.
 // Se non ci sono eventi nuovi, ritorna KEY_NONE.
 KeyCode keypad_get_event();
 

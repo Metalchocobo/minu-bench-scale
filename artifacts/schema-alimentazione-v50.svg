@@ -1,0 +1,214 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2100" height="1530" viewBox="0 0 2100 1530"><title>1 / 2 · Alimentazione completa: tutti i positivi e i negativi</title><rect width="2100" height="1530" fill="#f7f9fc"/>
+<text x="50" y="60" font-family="Arial,Helvetica,sans-serif" font-size="36" font-weight="700" fill="#26333d" text-anchor="start">1 / 2 · Alimentazione completa: tutti i positivi e i negativi</text>
+<text x="50" y="104" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="400" fill="#26333d" text-anchor="start">Voltaic V50 + Pololu 3728 · Schema elettrico di collegamento, non posizione fisica dei piedini.</text>
+<rect x="50" y="145" width="760" height="225" rx="12" fill="#fff4e6" stroke="#d2a574" stroke-width="2"/>
+<text x="75" y="178" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#26333d" text-anchor="start">ESTERNO ALLA BILANCIA · 230 V solo alla spina</text>
+<rect x="80" y="200" width="190" height="140" rx="12" fill="#fff" stroke="#b8c7d5" stroke-width="2"/>
+<text x="105" y="230" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#26333d" text-anchor="start">Presa 230 V~</text>
+<text x="105" y="270" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="400" fill="#83502c" text-anchor="start">L · fase</text>
+<text x="105" y="320" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="400" fill="#216fc0" text-anchor="start">N · neutro</text>
+<rect x="400" y="200" width="360" height="140" rx="12" fill="#fff" stroke="#b8c7d5" stroke-width="2"/>
+<text x="425" y="237" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#26333d" text-anchor="start">ALIMENTATORE COMPLETO</text>
+<text x="425" y="270" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="400" fill="#26333d" text-anchor="start">Raspberry Pi · 5,1 V / 3 A</text>
+<text x="425" y="307" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="400" fill="#26333d" text-anchor="start">Spina e cavo USB-C integrati</text>
+<polyline points="270,260 400,260" fill="none" stroke="#f7f9fc" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="270,260 400,260" fill="none" stroke="#83502c" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="270,310 400,310" fill="none" stroke="#f7f9fc" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="270,310 400,310" fill="none" stroke="#216fc0" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="835" y="186" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#26333d" text-anchor="start">Cavo USB-C: coppia di alimentazione</text>
+<text x="775" y="220" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" fill="#c93832" text-anchor="start">+</text>
+<text x="775" y="286" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="700" fill="#26333d" text-anchor="start">GND</text>
+<rect x="1050" y="410" width="400" height="420" rx="12" fill="#edf4ff" stroke="#6893bc" stroke-width="2"/>
+<text x="1090" y="565" font-family="Arial,Helvetica,sans-serif" font-size="29" font-weight="700" fill="#26333d" text-anchor="start">POLOLU 3728</text>
+<text x="1090" y="600" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="400" fill="#26333d" text-anchor="start">TPS2116 · usb09a</text>
+<text x="1090" y="635" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="400" fill="#26333d" text-anchor="start">Selezione automatica</text>
+<text x="1090" y="765" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#26333d" text-anchor="start">R1 / R2 / MODE: tavola 2</text>
+<text x="1070" y="458" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#c93832" text-anchor="start">VIN1 / USB-C +</text>
+<text x="1070" y="512" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#26333d" text-anchor="start">USB-C GND</text>
+<text x="1070" y="703" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#c93832" text-anchor="start">VIN2</text>
+<text x="1340" y="445" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#c93832" text-anchor="start">VOUT</text>
+<text x="1080" y="805" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#26333d" text-anchor="start">GND</text>
+<text x="1100" y="735" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="400" fill="#26333d" text-anchor="start">Tutti i GND della scheda sono comuni</text>
+<rect x="100" y="500" width="570" height="370" rx="12" fill="#edf8f1" stroke="#65a182" stroke-width="2"/>
+<text x="130" y="540" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700" fill="#26333d" text-anchor="start">VOLTAIC V50 · pacco completo</text>
+<text x="130" y="578" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#c93832" text-anchor="start">+  USB-C LATERALE · ingresso ricarica</text>
+<text x="130" y="633" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="400" fill="#26333d" text-anchor="start">−  GND dello stesso cavo</text>
+<text x="355" y="702" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#c93832" text-anchor="start">USB-A · uscita +5 V  +</text>
+<text x="380" y="787" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="400" fill="#26333d" text-anchor="start">USB-A · negativo / GND  −</text>
+<text x="130" y="835" font-family="Arial,Helvetica,sans-serif" font-size="18" font-weight="400" fill="#26333d" text-anchor="start">La USB-C SUPERIORE è usata solo per la misura: tavola 2.</text>
+<polyline points="760,225 940,225 940,450 1050,450" fill="none" stroke="#f7f9fc" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="760,225 940,225 940,450 1050,450" fill="none" stroke="#c93832" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="940,450 940,390 670,390" fill="none" stroke="#f7f9fc" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="940,450 940,390 670,390" fill="none" stroke="#c93832" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="550" y="366" width="120" height="48" rx="12" fill="#fff3df" stroke="#c47713" stroke-width="2"/>
+<text x="610" y="398" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#26333d" text-anchor="middle">F1</text>
+<text x="610" y="452" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="400" fill="#26333d" text-anchor="middle">T2,5 A</text>
+<polyline points="550,390 50,390 50,570 100,570" fill="none" stroke="#f7f9fc" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="550,390 50,390 50,570 100,570" fill="none" stroke="#c93832" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="80" y="425" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#26333d" text-anchor="start">Ramo di ricarica preso da VIN1, prima della selezione</text>
+<polyline points="760,305 850,305 850,505 1050,505" fill="none" stroke="#f7f9fc" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="760,305 850,305 850,505 1050,505" fill="none" stroke="#26333d" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1660" y="385" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#26333d" text-anchor="start">Interruttore sul positivo</text>
+<polyline points="670,695 740,695" fill="none" stroke="#f7f9fc" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="670,695 740,695" fill="none" stroke="#c93832" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="740" y="671" width="120" height="48" rx="12" fill="#fff3df" stroke="#c47713" stroke-width="2"/>
+<text x="800" y="703" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#26333d" text-anchor="middle">F3</text>
+<text x="800" y="657" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="400" fill="#26333d" text-anchor="middle">T1,25 A</text>
+<polyline points="860,695 1050,695" fill="none" stroke="#f7f9fc" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="860,695 1050,695" fill="none" stroke="#c93832" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1450,450 1650,450" fill="none" stroke="#f7f9fc" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1450,450 1650,450" fill="none" stroke="#c93832" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1650" y="426" width="120" height="48" rx="12" fill="#fff3df" stroke="#c47713" stroke-width="2"/>
+<text x="1710" y="458" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#26333d" text-anchor="middle">F2</text>
+<text x="1710" y="412" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="400" fill="#26333d" text-anchor="middle">T1,25 A</text>
+<polyline points="1770,450 1870,450" fill="none" stroke="#f7f9fc" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1770,450 1870,450" fill="none" stroke="#c93832" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1870,450 1925,420" fill="none" stroke="#f7f9fc" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1870,450 1925,420" fill="none" stroke="#c93832" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1940,450 1990,450 1990,590 1850,590 1850,620" fill="none" stroke="#f7f9fc" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1940,450 1990,450 1990,590 1850,590 1850,620" fill="none" stroke="#c93832" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1905" y="492" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#26333d" text-anchor="middle">S1 · ON/OFF</text>
+<rect x="1660" y="620" width="350" height="230" rx="12" fill="#fff" stroke="#b8c7d5" stroke-width="2"/>
+<text x="1685" y="660" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700" fill="#26333d" text-anchor="start">INA219</text>
+<text x="1685" y="695" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#c93832" text-anchor="start">VIN+</text>
+<text x="1685" y="820" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#c93832" text-anchor="start">VIN−</text>
+<polyline points="1850,620 1850,695" fill="none" stroke="#f7f9fc" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1850,620 1850,695" fill="none" stroke="#c93832" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1825" y="695" width="50" height="50" rx="12" fill="#fff2ed" stroke="#c93832" stroke-width="2"/>
+<text x="1890" y="726" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="400" fill="#26333d" text-anchor="start">shunt</text>
+<polyline points="1850,745 1850,850 1850,1120 350,1120" fill="none" stroke="#f7f9fc" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1850,745 1850,850 1850,1120 350,1120" fill="none" stroke="#c93832" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1685" y="756" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" fill="#26333d" text-anchor="start">VCC/SDA/SCL:</text>
+<text x="1685" y="783" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" fill="#26333d" text-anchor="start">tavola 2</text>
+<text x="1710" y="841" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" fill="#26333d" text-anchor="start">GND separato</text>
+<text x="1100" y="885" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#c93832" text-anchor="start">VIN− INA219 è ancora +5 V.</text>
+<text x="1100" y="916" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#c93832" text-anchor="start">Non collegare VIN− a GND.</text>
+<polyline points="990,450 990,550" fill="none" stroke="#f7f9fc" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="990,450 990,550" fill="none" stroke="#c93832" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="968,550 1012,550" fill="none" stroke="#f7f9fc" stroke-width="11" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="968,550 1012,550" fill="none" stroke="#26333d" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="968,568 1012,568" fill="none" stroke="#f7f9fc" stroke-width="11" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="968,568 1012,568" fill="none" stroke="#26333d" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1018" y="542" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" fill="#c93832" text-anchor="start">+</text>
+<text x="1018" y="589" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" fill="#26333d" text-anchor="start">−</text>
+<text x="820" y="547" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#26333d" text-anchor="start">C1</text>
+<text x="820" y="578" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="400" fill="#26333d" text-anchor="start">100 µF / 10 V</text>
+<polyline points="990,568 990,975" fill="none" stroke="#f7f9fc" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="990,568 990,975" fill="none" stroke="#26333d" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="920,695 920,865" fill="none" stroke="#f7f9fc" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="920,695 920,865" fill="none" stroke="#c93832" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="898,865 942,865" fill="none" stroke="#f7f9fc" stroke-width="11" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="898,865 942,865" fill="none" stroke="#26333d" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="898,883 942,883" fill="none" stroke="#f7f9fc" stroke-width="11" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="898,883 942,883" fill="none" stroke="#26333d" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="948" y="857" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" fill="#c93832" text-anchor="start">+</text>
+<text x="948" y="904" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" fill="#26333d" text-anchor="start">−</text>
+<text x="735" y="862" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#26333d" text-anchor="start">C2</text>
+<text x="735" y="893" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="400" fill="#26333d" text-anchor="start">100 µF / 10 V</text>
+<polyline points="920,883 920,975" fill="none" stroke="#f7f9fc" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="920,883 920,975" fill="none" stroke="#26333d" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1550,450 1550,550" fill="none" stroke="#f7f9fc" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1550,450 1550,550" fill="none" stroke="#c93832" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1528,550 1572,550" fill="none" stroke="#f7f9fc" stroke-width="11" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1528,550 1572,550" fill="none" stroke="#26333d" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1528,568 1572,568" fill="none" stroke="#f7f9fc" stroke-width="11" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1528,568 1572,568" fill="none" stroke="#26333d" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1578" y="542" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" fill="#c93832" text-anchor="start">+</text>
+<text x="1578" y="589" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" fill="#26333d" text-anchor="start">−</text>
+<text x="1605" y="547" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#26333d" text-anchor="start">C3</text>
+<text x="1605" y="578" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="400" fill="#26333d" text-anchor="start">470 µF / 10 V</text>
+<polyline points="1550,568 1550,975" fill="none" stroke="#f7f9fc" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1550,568 1550,975" fill="none" stroke="#26333d" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="100,625 75,625 75,1380" fill="none" stroke="#f7f9fc" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="100,625 75,625 75,1380" fill="none" stroke="#26333d" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="670,780 705,780 705,975" fill="none" stroke="#f7f9fc" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="670,780 705,780 705,975" fill="none" stroke="#26333d" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1050,790 1030,790 1030,975" fill="none" stroke="#f7f9fc" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1050,790 1030,790 1030,975" fill="none" stroke="#26333d" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1660,800 1605,800 1605,975" fill="none" stroke="#f7f9fc" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1660,800 1605,800 1605,975" fill="none" stroke="#26333d" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="75,975 1740,975" fill="none" stroke="#f7f9fc" stroke-width="13" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="75,975 1740,975" fill="none" stroke="#26333d" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="180" y="1020" font-family="Arial,Helvetica,sans-serif" font-size="25" font-weight="700" fill="#26333d" text-anchor="start">GND / 0 V · negativo comune di tutti i collegamenti a bassa tensione</text>
+<text x="180" y="1054" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#26333d" text-anchor="start">Questa linea NON è collegata al neutro N della rete elettrica.</text>
+<rect x="180" y="1175" width="340" height="155" rx="12" fill="#fff" stroke="#b8c7d5" stroke-width="2"/>
+<polyline points="350.0,1120 350.0,1175" fill="none" stroke="#f7f9fc" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="350.0,1120 350.0,1175" fill="none" stroke="#c93832" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="350.0" y="1212" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#26333d" text-anchor="middle">ESP32</text>
+<text x="350.0" y="1246" font-family="Arial,Helvetica,sans-serif" font-size="18" font-weight="400" fill="#26333d" text-anchor="middle">Pin 5V / VIN · non GPIO</text>
+<text x="350.0" y="1280" font-family="Arial,Helvetica,sans-serif" font-size="18" font-weight="400" fill="#26333d" text-anchor="middle">+5 V in alto · GND in basso</text>
+<polyline points="350.0,1330 350.0,1380" fill="none" stroke="#f7f9fc" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="350.0,1330 350.0,1380" fill="none" stroke="#26333d" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="650" y="1175" width="290" height="155" rx="12" fill="#fff" stroke="#b8c7d5" stroke-width="2"/>
+<polyline points="795.0,1120 795.0,1175" fill="none" stroke="#f7f9fc" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="795.0,1120 795.0,1175" fill="none" stroke="#c93832" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="795.0" y="1212" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#26333d" text-anchor="middle">OLED</text>
+<text x="795.0" y="1246" font-family="Arial,Helvetica,sans-serif" font-size="18" font-weight="400" fill="#26333d" text-anchor="middle">Ingresso alimentazione 5 V</text>
+<text x="795.0" y="1280" font-family="Arial,Helvetica,sans-serif" font-size="18" font-weight="400" fill="#26333d" text-anchor="middle">+5 V in alto · GND in basso</text>
+<polyline points="795.0,1330 795.0,1380" fill="none" stroke="#f7f9fc" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="795.0,1330 795.0,1380" fill="none" stroke="#26333d" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1050" y="1175" width="290" height="155" rx="12" fill="#fff" stroke="#b8c7d5" stroke-width="2"/>
+<polyline points="1195.0,1120 1195.0,1175" fill="none" stroke="#f7f9fc" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1195.0,1120 1195.0,1175" fill="none" stroke="#c93832" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1195.0" y="1212" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#26333d" text-anchor="middle">HX711</text>
+<text x="1195.0" y="1246" font-family="Arial,Helvetica,sans-serif" font-size="18" font-weight="400" fill="#26333d" text-anchor="middle">VCC a 5 V</text>
+<text x="1195.0" y="1280" font-family="Arial,Helvetica,sans-serif" font-size="18" font-weight="400" fill="#26333d" text-anchor="middle">+5 V in alto · GND in basso</text>
+<polyline points="1195.0,1330 1195.0,1380" fill="none" stroke="#f7f9fc" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1195.0,1330 1195.0,1380" fill="none" stroke="#26333d" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1450" y="1175" width="510" height="155" rx="12" fill="#fff" stroke="#b8c7d5" stroke-width="2"/>
+<polyline points="1705.0,1120 1705.0,1175" fill="none" stroke="#f7f9fc" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1705.0,1120 1705.0,1175" fill="none" stroke="#c93832" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1705.0" y="1212" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#26333d" text-anchor="middle">CIRCUITO AUDIO ESISTENTE</text>
+<text x="1705.0" y="1246" font-family="Arial,Helvetica,sans-serif" font-size="18" font-weight="400" fill="#26333d" text-anchor="middle">Ingresso 5 V → power-gate → DFPlayer</text>
+<text x="1705.0" y="1280" font-family="Arial,Helvetica,sans-serif" font-size="18" font-weight="400" fill="#26333d" text-anchor="middle">+5 V in alto · GND in basso</text>
+<polyline points="1705.0,1330 1705.0,1380" fill="none" stroke="#f7f9fc" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1705.0,1330 1705.0,1380" fill="none" stroke="#26333d" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="75,1380 1950,1380" fill="none" stroke="#f7f9fc" stroke-width="13" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="75,1380 1950,1380" fill="none" stroke="#26333d" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="180" y="1097" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" fill="#c93832" text-anchor="start">+5 V DAL GRUPPO · presenti con S1 chiuso</text>
+<text x="50" y="1465" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#26333d" text-anchor="start">Rosso = positivo DC · nero = GND · marrone/blu = L/N, solo lato rete · pallino pieno = fili uniti.</text>
+<text x="50" y="1500" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="400" fill="#26333d" text-anchor="start">Incrocio senza pallino = nessun collegamento · fusibili per carico massimo 1 A · progetto da montare e collaudare.</text>
+<circle cx="1050" cy="450" r="6" fill="white" stroke="#c93832" stroke-width="3"/>
+<circle cx="1050" cy="505" r="6" fill="white" stroke="#26333d" stroke-width="3"/>
+<circle cx="1050" cy="695" r="6" fill="white" stroke="#c93832" stroke-width="3"/>
+<circle cx="1050" cy="790" r="6" fill="white" stroke="#26333d" stroke-width="3"/>
+<circle cx="1450" cy="450" r="6" fill="white" stroke="#c93832" stroke-width="3"/>
+<circle cx="100" cy="570" r="6" fill="white" stroke="#c93832" stroke-width="3"/>
+<circle cx="100" cy="625" r="6" fill="white" stroke="#26333d" stroke-width="3"/>
+<circle cx="670" cy="695" r="6" fill="white" stroke="#c93832" stroke-width="3"/>
+<circle cx="670" cy="780" r="6" fill="white" stroke="#26333d" stroke-width="3"/>
+<circle cx="940" cy="450" r="7" fill="#c93832"/>
+<circle cx="940" cy="390" r="7" fill="#c93832"/>
+<circle cx="1870" cy="450" r="6" fill="white" stroke="#c93832" stroke-width="3"/>
+<circle cx="1940" cy="450" r="6" fill="white" stroke="#c93832" stroke-width="3"/>
+<circle cx="1850" cy="620" r="6" fill="white" stroke="#c93832" stroke-width="3"/>
+<circle cx="1850" cy="850" r="6" fill="white" stroke="#c93832" stroke-width="3"/>
+<circle cx="1660" cy="800" r="6" fill="white" stroke="#26333d" stroke-width="3"/>
+<circle cx="990" cy="450" r="7" fill="#c93832"/>
+<circle cx="920" cy="695" r="7" fill="#c93832"/>
+<circle cx="1550" cy="450" r="7" fill="#c93832"/>
+<circle cx="75" cy="975" r="7" fill="#26333d"/>
+<circle cx="705" cy="975" r="7" fill="#26333d"/>
+<circle cx="920" cy="975" r="7" fill="#26333d"/>
+<circle cx="990" cy="975" r="7" fill="#26333d"/>
+<circle cx="1030" cy="975" r="7" fill="#26333d"/>
+<circle cx="1550" cy="975" r="7" fill="#26333d"/>
+<circle cx="1605" cy="975" r="7" fill="#26333d"/>
+<circle cx="350.0" cy="1120" r="7" fill="#c93832"/>
+<circle cx="350.0" cy="1175" r="6" fill="white" stroke="#c93832" stroke-width="3"/>
+<circle cx="350.0" cy="1330" r="6" fill="white" stroke="#26333d" stroke-width="3"/>
+<circle cx="350.0" cy="1380" r="7" fill="#26333d"/>
+<circle cx="795.0" cy="1120" r="7" fill="#c93832"/>
+<circle cx="795.0" cy="1175" r="6" fill="white" stroke="#c93832" stroke-width="3"/>
+<circle cx="795.0" cy="1330" r="6" fill="white" stroke="#26333d" stroke-width="3"/>
+<circle cx="795.0" cy="1380" r="7" fill="#26333d"/>
+<circle cx="1195.0" cy="1120" r="7" fill="#c93832"/>
+<circle cx="1195.0" cy="1175" r="6" fill="white" stroke="#c93832" stroke-width="3"/>
+<circle cx="1195.0" cy="1330" r="6" fill="white" stroke="#26333d" stroke-width="3"/>
+<circle cx="1195.0" cy="1380" r="7" fill="#26333d"/>
+<circle cx="1705.0" cy="1120" r="7" fill="#c93832"/>
+<circle cx="1705.0" cy="1175" r="6" fill="white" stroke="#c93832" stroke-width="3"/>
+<circle cx="1705.0" cy="1330" r="6" fill="white" stroke="#26333d" stroke-width="3"/>
+<circle cx="1705.0" cy="1380" r="7" fill="#26333d"/>
+<circle cx="75" cy="1380" r="7" fill="#26333d"/>
+</svg>

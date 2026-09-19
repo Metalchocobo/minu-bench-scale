@@ -1,0 +1,87 @@
+{
+  "research_date": "2026-09-07",
+  "units": "mm",
+  "purchases_made": false,
+  "design_payload_kg": 20,
+  "load_cell": {
+    "manufacturer": "Zemic",
+    "model": "L6D-C3-30kg-0.4B",
+    "quantity": 1,
+    "capacity_kg": {"value": 30, "status": "CERTAIN"},
+    "envelope": {"length": 130, "width": 30, "height": 22, "status": "CERTAIN"},
+    "mounting": {
+      "thread": "M6-6H THRU",
+      "holes": 4,
+      "longitudinal_pitch": 106,
+      "transverse_pitch": 15,
+      "end_offset": 12,
+      "centered_hole_positions_xy": [[-53,-7.5],[-53,7.5],[53,-7.5],[53,7.5]],
+      "end_contact_surface": [25,30],
+      "status": "CERTAIN",
+      "fixed_end": "Cable end",
+      "moving_end": "Arrow end",
+      "torque_30kg_nm": null,
+      "torque_status": "UNCONFIRMED",
+      "torque_reason": "Manufacturer table specifies <30kg and >30kg; exactly 30kg omitted. Countersunk moving-end screw needs joint-specific approval."
+    },
+    "maximum_platform": {
+      "dimensions": [250,350],
+      "dimensions_status": "CERTAIN",
+      "longitudinal_axis_assignment": null,
+      "axis_assignment_status": "UNCONFIRMED",
+      "design_platform": [280,200],
+      "design_axis_choice": "Cell length parallel to 280mm platform side; requires Zemic confirmation."
+    },
+    "maximum_deflection_range": {"min": 0.6, "max": 0.8, "status": "CERTAIN"},
+    "combined_error_percent_full_scale": {"value": 0.020, "status": "CERTAIN"},
+    "derived_combined_error_g": 6,
+    "one_gram_accuracy_proven": false,
+    "cable_exit": {"reserve_both": ["top edge", "mid-height"], "status": "CERTAIN"},
+    "source_pdf": "sources/Zemic-L6D-Rev12.pdf",
+    "source_dimension_image": "sources/Zemic-L6D-dimensions.png",
+    "source_url": "https://www.essmann-shop.com/media/eb/a6/ea/1752248218/L6D_Datasheet.pdf?ts=1752248218",
+    "purchase_url": "https://www.essmann-shop.com/en/single-point-load-cell-zemic-l6d-c3-30kg-0.4b/11250496",
+    "supplier_sku": "11250496",
+    "listed_price_eur_ex_vat": 56.60,
+    "listed_delivery": "2-5 days",
+    "supplier_page_status": "READ"
+  },
+  "feet": {
+    "manufacturer": "Elesa",
+    "model": "LX.30-SW17-AS-M6x22",
+    "sku": "531051",
+    "quantity": 4,
+    "base_diameter": {"value": 30, "status": "CERTAIN"},
+    "stem_thread": {"value": "M6", "status": "CERTAIN"},
+    "hex_across_flats": {"value": 17, "status": "CERTAIN"},
+    "body_height_l2": {"value": 12, "status": "CERTAIN"},
+    "overall_with_pad_L1": {"value": 36, "status": "CERTAIN_EN_PDF"},
+    "stem_length_l": {"value": 23, "status": "CERTAIN_EN_PDF"},
+    "body_plus_pad_design_envelope": {"value": 13, "status": "DERIVED_EN_PDF"},
+    "edition_discrepancy": "USA PDF has 22mm stem and 35mm total; reserve larger envelope and confirm sample.",
+    "maximum_static_limit_N": {"value": 1500, "status": "CERTAIN", "note": "Manufacturer limit, not a recommended working load without application factor."},
+    "pad": "SBR, supplied assembled",
+    "purchase_url": "https://www.elesa-ganter.nl/p/lx-30-sw17-as-m6x22/127394/",
+    "purchase_page_status": "SEARCH_INDEX_VERIFIED_DIRECT_403",
+    "price": null,
+    "source_pdf": "sources/Elesa-LX-2025.pdf",
+    "source_url": "https://www.elesa.com/siteassets/PDF/PDF_EN/LX.pdf"
+  },
+  "fasteners": [
+    {"id":"cell_fixed_screw","quantity":2,"standard":"ISO 4762","thread":"M6x1","length":25,"length_convention":"under head","property_class":"8.8","head_diameter":10,"head_height":6,"hex_socket":5,"status":"CERTAIN","sku":"240912625","source_url":"https://www.keller-kalmbach.com/products/fasteners/screws/hexagon-socket-cap-screws/iso-4762--din-912-cap-screw/p/240912625"},
+    {"id":"cell_moving_screw","quantity":2,"standard":"DIN 7991","thread":"M6x1","length":45,"length_convention":"including countersunk head","property_class":"10.9","head_diameter":12,"head_height":3.3,"head_angle_deg":90,"hex_socket":4,"status":"CERTAIN","sku":"SSK-M6-45-10.9-Z","source_url":"https://www.accu.co.uk/countersunk-socket-head-screws/495060-SSK-M6-45-10-9-Z","joint_approval":"UNCONFIRMED"},
+    {"id":"cell_fixed_washer","quantity":2,"standard":"ISO 7089","material":"200HV zinc plated steel","inside_diameter":6.4,"outside_diameter":12,"thickness":1.6,"status":"CERTAIN","source_url":"https://www.westfieldfasteners.co.uk/BZP-Washer-M6.html"},
+    {"id":"foot_locknut","quantity":4,"standard":"DIN 934","thread":"M6x1","material":"Zinc plated steel","across_flats":10,"height":5,"status":"CERTAIN","sku":"051060040952","source_url":"https://www.essentracomponents.com/en-gb/p/standard-hex-nuts-metal/051060040952"},
+    {"id":"overload_stop","quantity":4,"standard":"DIN 913","thread":"M6x1","length":60,"material":"45H zinc plated steel","hex_socket":3,"status":"CERTAIN","sku":"D913V060060","source_url":"https://www.rwproducts.nl/din-913-stelschroef-binnenzeskant-met-afschuining-elvz-m6x60"},
+    {"id":"overload_locknut","quantity":4,"standard":"DIN 934","thread":"M6x1","material":"Zinc plated steel","across_flats":10,"height":5,"status":"CERTAIN","sku":"051060040952","source_url":"https://www.essentracomponents.com/en-gb/p/standard-hex-nuts-metal/051060040952"}
+  ],
+  "custom_parts": [
+    {"id":"base_plate","quantity":1,"envelope":[300,320,6],"material":"6061-T6 aluminum","status":"DESIGNED","source_url":"https://jlccnc.com/"},
+    {"id":"moving_carrier","quantity":1,"envelope":[276,196,8],"material":"6061-T6 aluminum","status":"DESIGNED","source_url":"https://jlccnc.com/"},
+    {"id":"fixed_spacer","quantity":1,"envelope":[25,30,6],"clearance_hole_pitch":15,"material":"6061-T6 aluminum","status":"DESIGNED","source_url":"https://jlccnc.com/"},
+    {"id":"moving_spacer","quantity":1,"envelope":[25,30,22],"clearance_hole_pitch":15,"material":"6061-T6 aluminum","status":"DESIGNED","source_url":"https://jlccnc.com/"},
+    {"id":"plastic_pan_cover","quantity":1,"surface_dimensions":[280,200],"nominal_skin_thickness":4,"material":"PA12 MJF or SLS","status":"DESIGNED","source_url":"https://jlc3dp.com/"}
+  ],
+  "not_proven": ["Complete assembly 20kg load rating", "1g accuracy", "Platform maximum-axis assignment", "30kg cell mounting torque", "Commercial foot edition exact stem length", "Supplier manufacturing quotation", "Physical fit and overload stop adjustment"]
+}
+

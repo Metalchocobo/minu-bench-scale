@@ -5,6 +5,12 @@ Le fonti canoniche sono mantenute nella root del repository:
 - `../../README.md` — comportamento firmware, comandi, MQTT, build e diagnostica.
 - `../../docs/WIRING.md` — pinout e cablaggio fisico.
 
+## Alimentazione montata e configurazione firmware
+
+La bilancia usa la batteria USB-C NASTIMA LiFePO4 e il Mini360 MP1482DS, con uscita regolata a **5,11 V** e primo funzionamento positivo riferito da Andrea. Il firmware conserva le soglie batteria di origine SLA e `charging` basato sulla corrente negativa dell'INA219. La ricarica interna USB non attraversa lo shunt esterno; tacche e icona non sono una misura calibrata della carica del nuovo pacco. Soglie effettive e limiti sono nel [README principale](../../README.md#8-monitoraggio-batteria-ina219-soglie-firmware-di-origine-sla); percorso elettrico in [WIRING](../../docs/WIRING.md#9-alimentazione-e-masse).
+
+**Lettura batteria:** tenere premuti **TOTAL + WIFI** per visualizzare tensione e corrente INA aggiornate; rilasciare per chiudere. I tasti singoli WIFI/TOTAL agiscono al rilascio e vengono consumati dalla combinazione. Campioni invalidi/scaduti non vengono mostrati; safety, TARE, ENTER e calibrazione hanno priorità. Restano invariati soglie e rilevamento ricarica. Dettagli nella [sezione INA219](../../README.md#81-collegamenti-ina219).
+
 ## Riferimento rapido MQTT firmware 1.5.2
 
 - Un `weigh` può includere `command_id` (8–64 caratteri; lettere ASCII, cifre, `-`, `_`; vuoto solo per legacy). Il firmware lo memorizza con UUID, prodotto, `session_id` e `connection_id`. Se quest'ultima è presente, il comando diventa operativo soltanto con l'owner retained fresco ed esatto e, dopo reconnect, dopo avere processato anche lo snapshot retained `command` corrente.

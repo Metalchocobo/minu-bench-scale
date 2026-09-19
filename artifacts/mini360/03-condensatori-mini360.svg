@@ -1,0 +1,105 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1020" viewBox="0 0 1800 1020"><title>3 / 3 · Condensatori in ingresso e in uscita</title><rect width="1800" height="1020" fill="#f4f7fa"/>
+<text x="55" y="53" fill="#087d69" font-family="Arial,Helvetica,sans-serif" font-size="18" font-weight="700" text-anchor="start">MINÙ / CABLAGGIO ALIMENTAZIONE</text>
+<text x="55" y="107" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="36" font-weight="700" text-anchor="start">3 / 3 · Condensatori in ingresso e in uscita</text>
+<text x="55" y="146" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" text-anchor="start">Collegamenti in parallelo ai morsetti del Mini360. Nel montaggio reale, connessioni corte vicino ai pad.</text>
+<rect x="55" y="215" width="650" height="510" rx="14" fill="#edf3fa" stroke="#a0b8d3" stroke-width="2"/>
+<rect x="1095" y="215" width="650" height="510" rx="14" fill="#e6f4ef" stroke="#83b6a0" stroke-width="2"/>
+<text x="85" y="263" fill="#236bb5" font-family="Arial,Helvetica,sans-serif" font-size="29" font-weight="700" text-anchor="start">INGRESSO · tra IN+ e IN−</text>
+<text x="85" y="304" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="400" text-anchor="start">C1 + C2 · lato batteria, dopo S1</text>
+<text x="1125" y="263" fill="#087d69" font-family="Arial,Helvetica,sans-serif" font-size="29" font-weight="700" text-anchor="start">USCITA · tra OUT+ e OUT−</text>
+<text x="1125" y="304" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="400" text-anchor="start">C3 + C4 · lato 5 V della bilancia</text>
+<rect x="760" y="350" width="280" height="330" rx="14" fill="#283845" stroke="#1c2932" stroke-width="2"/>
+<text x="900" y="469" fill="white" font-family="Arial,Helvetica,sans-serif" font-size="32" font-weight="700" text-anchor="middle">MINI360</text>
+<text x="900" y="512" fill="white" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700" text-anchor="middle">5,11 V</text>
+<text x="900" y="570" fill="white" font-family="Arial,Helvetica,sans-serif" font-size="18" font-weight="400" text-anchor="middle">Schema funzionale</text>
+<text x="900" y="600" fill="white" font-family="Arial,Helvetica,sans-serif" font-size="18" font-weight="400" text-anchor="middle">Pad reali: tavola 2</text>
+<polyline points="110,390 760,390" fill="none" stroke="#f4f7fa" stroke-width="12" stroke-linejoin="round"/>
+<polyline points="110,390 760,390" fill="none" stroke="#c63d36" stroke-width="5" stroke-linejoin="round"/>
+<polyline points="110,640 760,640" fill="none" stroke="#f4f7fa" stroke-width="12" stroke-linejoin="round"/>
+<polyline points="110,640 760,640" fill="none" stroke="#26333d" stroke-width="5" stroke-linejoin="round"/>
+<polyline points="1040,390 1690,390" fill="none" stroke="#f4f7fa" stroke-width="12" stroke-linejoin="round"/>
+<polyline points="1040,390 1690,390" fill="none" stroke="#c63d36" stroke-width="5" stroke-linejoin="round"/>
+<polyline points="1040,640 1690,640" fill="none" stroke="#f4f7fa" stroke-width="12" stroke-linejoin="round"/>
+<polyline points="1040,640 1690,640" fill="none" stroke="#26333d" stroke-width="5" stroke-linejoin="round"/>
+<text x="780" y="413" fill="white" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" text-anchor="start">IN+</text>
+<text x="780" y="632" fill="white" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" text-anchor="start">IN−</text>
+<text x="1020" y="413" fill="white" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" text-anchor="end">OUT+</text>
+<text x="1020" y="632" fill="white" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" text-anchor="end">OUT−</text>
+<polyline points="135,390 135,506.0" fill="none" stroke="#f4f7fa" stroke-width="12" stroke-linejoin="round"/>
+<polyline points="135,390 135,506.0" fill="none" stroke="#c63d36" stroke-width="5" stroke-linejoin="round"/>
+<polyline points="117,506.0 153,506.0" fill="none" stroke="#f4f7fa" stroke-width="11" stroke-linejoin="round"/>
+<polyline points="117,506.0 153,506.0" fill="none" stroke="#26333d" stroke-width="4" stroke-linejoin="round"/>
+<polyline points="117,524.0 153,524.0" fill="none" stroke="#f4f7fa" stroke-width="11" stroke-linejoin="round"/>
+<polyline points="117,524.0 153,524.0" fill="none" stroke="#26333d" stroke-width="4" stroke-linejoin="round"/>
+<polyline points="135,524.0 135,640" fill="none" stroke="#f4f7fa" stroke-width="12" stroke-linejoin="round"/>
+<polyline points="135,524.0 135,640" fill="none" stroke="#26333d" stroke-width="5" stroke-linejoin="round"/>
+<text x="160" y="503.0" fill="#c63d36" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" text-anchor="start">+</text>
+<text x="175" y="521.0" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" text-anchor="start"></text>
+<text x="181" y="468" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" text-anchor="start">C1</text>
+<text x="181" y="517" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700" text-anchor="start">220 µF</text>
+<text x="181" y="555" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" text-anchor="start">16 V</text>
+<text x="181" y="594" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" text-anchor="start">Elettrolitico</text>
+<polyline points="455,390 455,506.0" fill="none" stroke="#f4f7fa" stroke-width="12" stroke-linejoin="round"/>
+<polyline points="455,390 455,506.0" fill="none" stroke="#c63d36" stroke-width="5" stroke-linejoin="round"/>
+<polyline points="437,506.0 473,506.0" fill="none" stroke="#f4f7fa" stroke-width="11" stroke-linejoin="round"/>
+<polyline points="437,506.0 473,506.0" fill="none" stroke="#26333d" stroke-width="4" stroke-linejoin="round"/>
+<polyline points="437,524.0 473,524.0" fill="none" stroke="#f4f7fa" stroke-width="11" stroke-linejoin="round"/>
+<polyline points="437,524.0 473,524.0" fill="none" stroke="#26333d" stroke-width="4" stroke-linejoin="round"/>
+<polyline points="455,524.0 455,640" fill="none" stroke="#f4f7fa" stroke-width="12" stroke-linejoin="round"/>
+<polyline points="455,524.0 455,640" fill="none" stroke="#26333d" stroke-width="5" stroke-linejoin="round"/>
+<text x="495" y="521.0" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" text-anchor="start"></text>
+<text x="501" y="468" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" text-anchor="start">C2</text>
+<text x="501" y="517" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700" text-anchor="start">100 nF</text>
+<text x="501" y="555" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" text-anchor="start">0,1 µF · 104</text>
+<text x="501" y="594" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" text-anchor="start">Ceramico</text>
+<polyline points="1150,390 1150,506.0" fill="none" stroke="#f4f7fa" stroke-width="12" stroke-linejoin="round"/>
+<polyline points="1150,390 1150,506.0" fill="none" stroke="#c63d36" stroke-width="5" stroke-linejoin="round"/>
+<polyline points="1132,506.0 1168,506.0" fill="none" stroke="#f4f7fa" stroke-width="11" stroke-linejoin="round"/>
+<polyline points="1132,506.0 1168,506.0" fill="none" stroke="#26333d" stroke-width="4" stroke-linejoin="round"/>
+<polyline points="1132,524.0 1168,524.0" fill="none" stroke="#f4f7fa" stroke-width="11" stroke-linejoin="round"/>
+<polyline points="1132,524.0 1168,524.0" fill="none" stroke="#26333d" stroke-width="4" stroke-linejoin="round"/>
+<polyline points="1150,524.0 1150,640" fill="none" stroke="#f4f7fa" stroke-width="12" stroke-linejoin="round"/>
+<polyline points="1150,524.0 1150,640" fill="none" stroke="#26333d" stroke-width="5" stroke-linejoin="round"/>
+<text x="1175" y="503.0" fill="#c63d36" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" text-anchor="start">+</text>
+<text x="1190" y="521.0" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" text-anchor="start"></text>
+<text x="1196" y="468" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" text-anchor="start">C3</text>
+<text x="1196" y="517" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700" text-anchor="start">470 µF</text>
+<text x="1196" y="555" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" text-anchor="start">10 V</text>
+<text x="1196" y="594" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" text-anchor="start">Elettrolitico</text>
+<polyline points="1470,390 1470,506.0" fill="none" stroke="#f4f7fa" stroke-width="12" stroke-linejoin="round"/>
+<polyline points="1470,390 1470,506.0" fill="none" stroke="#c63d36" stroke-width="5" stroke-linejoin="round"/>
+<polyline points="1452,506.0 1488,506.0" fill="none" stroke="#f4f7fa" stroke-width="11" stroke-linejoin="round"/>
+<polyline points="1452,506.0 1488,506.0" fill="none" stroke="#26333d" stroke-width="4" stroke-linejoin="round"/>
+<polyline points="1452,524.0 1488,524.0" fill="none" stroke="#f4f7fa" stroke-width="11" stroke-linejoin="round"/>
+<polyline points="1452,524.0 1488,524.0" fill="none" stroke="#26333d" stroke-width="4" stroke-linejoin="round"/>
+<polyline points="1470,524.0 1470,640" fill="none" stroke="#f4f7fa" stroke-width="12" stroke-linejoin="round"/>
+<polyline points="1470,524.0 1470,640" fill="none" stroke="#26333d" stroke-width="5" stroke-linejoin="round"/>
+<text x="1510" y="521.0" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" text-anchor="start"></text>
+<text x="1516" y="468" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" text-anchor="start">C4</text>
+<text x="1516" y="517" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700" text-anchor="start">100 nF</text>
+<text x="1516" y="555" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" text-anchor="start">0,1 µF · 104</text>
+<text x="1516" y="594" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" text-anchor="start">Ceramico</text>
+<text x="85" y="692" fill="#236bb5" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="700" text-anchor="start">C1: + su IN+ / − su IN−</text>
+<text x="1125" y="692" fill="#087d69" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="700" text-anchor="start">C3: + su OUT+ / − su OUT−</text>
+<polyline points="730,640 730,750 1070,750 1070,640" fill="none" stroke="#f4f7fa" stroke-width="12" stroke-linejoin="round"/>
+<polyline points="730,640 730,750 1070,750 1070,640" fill="none" stroke="#26333d" stroke-width="5" stroke-linejoin="round"/>
+<text x="900" y="788" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="700" text-anchor="middle">IN− e OUT−: GND comune</text>
+<text x="80" y="850" fill="#087d69" font-family="Arial,Helvetica,sans-serif" font-size="25" font-weight="700" text-anchor="start">MONTAGGIO: direttamente sui pad se ci stanno, oppure subito accanto con collegamenti corti.</text>
+<text x="80" y="890" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="400" text-anchor="start">I ceramici non hanno polarità. La distanza nel disegno serve solo a leggere i collegamenti.</text>
+<text x="55" y="955" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="400" text-anchor="start">Rosso = positivo DC   •   Nero = negativo / GND   •   Pallino pieno = collegamento</text>
+<text x="55" y="991" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="18" font-weight="400" text-anchor="start">Dettaglio dello stesso cablaggio della tavola 1 · 18/09/2026 · Nessuna modifica del circuito di ricarica.</text>
+<circle cx="760" cy="390" r="6" fill="white" stroke="#c63d36" stroke-width="3"/>
+<circle cx="760" cy="640" r="6" fill="white" stroke="#26333d" stroke-width="3"/>
+<circle cx="1040" cy="390" r="6" fill="white" stroke="#c63d36" stroke-width="3"/>
+<circle cx="1040" cy="640" r="6" fill="white" stroke="#26333d" stroke-width="3"/>
+<circle cx="135" cy="390" r="6" fill="#c63d36"/>
+<circle cx="135" cy="640" r="6" fill="#26333d"/>
+<circle cx="455" cy="390" r="6" fill="#c63d36"/>
+<circle cx="455" cy="640" r="6" fill="#26333d"/>
+<circle cx="1150" cy="390" r="6" fill="#c63d36"/>
+<circle cx="1150" cy="640" r="6" fill="#26333d"/>
+<circle cx="1470" cy="390" r="6" fill="#c63d36"/>
+<circle cx="1470" cy="640" r="6" fill="#26333d"/>
+<circle cx="730" cy="640" r="6" fill="#26333d"/>
+<circle cx="1070" cy="640" r="6" fill="#26333d"/>
+</svg>

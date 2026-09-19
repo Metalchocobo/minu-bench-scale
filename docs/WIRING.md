@@ -1,6 +1,6 @@
 # Cablaggio hardware
 
-Stato corrente del cablaggio usato dal firmware `firmware/esp32_hx711_serial`.
+Stato corrente del cablaggio usato dal firmware `firmware/esp32_hx711_serial`. Alimentazione montata: batteria USB-C NASTIMA LiFePO4 e Mini360 MP1482DS regolato a **5,11 V**, valore riferito da Andrea. Cablaggio completato e primo funzionamento apparentemente regolare riferiti il 18 settembre 2026; soglie batteria e rilevamento ricarica conservano la configurazione precedente.
 
 Moduli: ESP32 DevKit, HX711 alimentato a 5 V, cella di carico a 4 fili, OLED SSD1322 SPI, INA219 I2C, tastiera 4x2, buzzer, DFPlayer Mini e LED di standby.
 
@@ -52,7 +52,7 @@ Il partitore limita a circa 3,3 V un eventuale livello DOUT a 5 V. GPIO35 è inp
 - **VCC → 3,3 V**, salvo diversa indicazione del modulo
 - **GND → GND comune**
 
-L'INA219 misura la batteria e lo stato di carica. Il percorso di potenza e lo shunt devono rispettare lo schema del modulo specifico; SDA/SCL non trasportano la corrente del carico.
+L'INA219 misura la tensione ai morsetti batteria e la corrente diretta al Mini360. **VIN+ riceve il positivo dopo F1; VIN− va a S1 e poi a IN+ del Mini360. VIN− è ancora il positivo, non GND.** SDA/SCL non trasportano la corrente del carico. La ricarica USB interna del pacco non attraversa questo shunt: il sensore non misura la corrente netta delle celle e l'icona firmware `charging` non certifica la ricarica USB.
 
 ## 5) Tastiera 4x2 → ESP32
 
@@ -94,6 +94,36 @@ Il power-gate previsto dal firmware è un high-side con P-MOSFET comandato trami
 Il firmware usa logica active-high: LED acceso durante standby/light sleep.
 
 ## 9) Alimentazione e masse
+
+### Percorso montato
+
+- **Batteria scelta:** NASTIMA **BK06-LF60-NATC**, LiFePO4 **6,4 V nominali / 6 Ah**, caricatore USB-C e BMS integrati. Il riferimento commerciale «6 V» non indica una batteria al piombo.
+- **Ricarica:** alimentatore USB esterno → collegamento USB-C da scocca → ingresso USB-C del pacco, dichiarato **5 V / 1,5 A**. Il caricatore è dentro il pacco; la prolunga non è un caricatore.
+- **Positivo di potenza:** batteria + → **F1 vicino alla batteria → INA219 VIN+ → VIN− → S1 → Mini360 IN+**.
+- **Negativo:** batteria −, Mini360 IN− e OUT−, ESP32 e periferiche condividono GND.
+- **Uscita:** Mini360 OUT+ → linea nominale 5 V, regolata sul montaggio a **5,11 V** → ESP32 **VIN/5V**, HX711, OLED compatibile e power-gate audio esistente. Non alimentare il pin 3V3 con questa linea.
+- **S1:** interruttore semplice dopo VIN− dell'INA219 e prima di IN+ e dei condensatori d'ingresso. In OFF disalimenta il Mini360 dalla batteria; non interrompe la ricarica interna del pacco. Gli ingressi INA219 possono restare sul bus batteria con VCC spento, come ammesso dal [datasheet TI, §8.3.1](https://www.ti.com/lit/ds/symlink/ina219.pdf).
+
+F1 **T2 A** resta il valore proposto nello schema per fili corti in rame ≥ 0,5 mm²; non sono stati riferiti valore effettivamente montato o misure degli spunti. CTK3S e SLA non sono componenti del percorso corrente.
+
+### Condensatori e collocazione
+
+| Posizione | Elettrolitico | Ceramico | Collegamento |
+|---|---|---|---|
+| Ingresso Mini360, dopo S1 | C1: **220 µF / 16 V** | C2: **100 nF** | Entrambi tra **IN+ e IN−** |
+| Uscita Mini360 | C3: **470 µF / 10 V** | C4: **100 nF** | Entrambi tra **OUT+ e OUT−** |
+
+Ogni coppia è in parallelo all'alimentazione. Saldare vicino ai rispettivi pad, direttamente sulla schedina se c'è spazio oppure subito accanto con collegamenti corti. Andrea ha montato il ceramico di uscita più vicino al Mini360 e poi l'elettrolitico: disposizione coerente con il cablaggio. Il + dell'elettrolitico va al + della relativa coppia; la banda − va a IN−/OUT−. I ceramici non hanno polarità. Restano previsti i condensatori locali **10–47 µF + 100 nF** presso VIN/5V e GND dell'ESP32.
+
+### Stato delle verifiche e monitoraggio
+
+Il montaggio risulta funzionante dalla prima prova riferita da Andrea. **5,11 V** è la regolazione comunicata, non una registrazione di stabilità su tutti i carichi. Autonomia, cadute con Wi-Fi/audio, temperatura, transitori USB e riavvio dopo stacco BMS non hanno misure riportate.
+
+Il firmware conserva le soglie di origine SLA e il rilevamento charging tramite corrente negativa: vedere [README, monitoraggio batteria](../README.md#8-monitoraggio-batteria-ina219-soglie-firmware-di-origine-sla). Il light-sleep non è uno stacco elettrico del pacco.
+
+L'USB del PC sull'ESP32 è distinta dall'USB di ricarica del pacco. OUT+ rimane collegato all'ESP32 anche con S1 OFF: se la scheda riporta la tensione USB su VIN/5V, può rialimentare il Mini360. La sola rialimentazione non dimostra un danno; questo caso non è stato caratterizzato sulla scheda specifica. Tavole, pinout del retro e dettagli: [Mini360](../artifacts/mini360/README.md).
+
+### Masse e segnali
 
 - Tutti i moduli che scambiano segnali devono condividere la massa con l'ESP32.
 - Non applicare mai 5 V direttamente a un GPIO ESP32.
