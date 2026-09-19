@@ -1938,7 +1938,8 @@ static bool maybeEnterSafeShutdown(uint32_t nowMs) {
     return true;
   }
 
-  const bool inEmptyZone = (st.level == BATT_LEVEL_EMPTY) && (st.voltage_V > V_SAFE_SHUTDOWN_MIN_V);
+  const bool inEmptyZone = (st.voltage_V < V_EMPTY_WARNING_MAX_V) &&
+                           (st.voltage_V > V_SAFE_SHUTDOWN_MIN_V);
   if (inEmptyZone) {
     if (!g_emptyWarnActive) {
       if (g_emptyCandidateSinceMs == 0) g_emptyCandidateSinceMs = nowMs;

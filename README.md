@@ -95,7 +95,7 @@ Condensatori esterni, tutti **in parallelo** e con collegamenti corti vicino ai 
 - **OUT+ ↔ OUT−**: **470 µF / 10 V elettrolitico + 100 nF ceramico**; sul montaggio il ceramico è più vicino al Mini360.
 - Vicino all'ESP32 restano previsti **10–47 µF + 100 nF** fra VIN/5V e GND; non sostituiscono quelli del buck.
 
-Cablaggio completo e polarità: [docs/WIRING.md](docs/WIRING.md). Tavole e dati del convertitore: [Mini360](artifacts/mini360/README.md). Le soglie di origine SLA e il rilevamento `charging` non sono stati adattati alla LiFePO4 con ricarica interna (sezioni 8–9); la combinazione **TOTAL + WIFI** permette di leggere tensione e corrente INA sul display.
+Cablaggio completo e polarità: [docs/WIRING.md](docs/WIRING.md). Tavole e dati del convertitore: [Mini360](artifacts/mini360/README.md). Le tacche usano fasce indicative LiFePO4; avvisi sonori, countdown, protezioni e rilevamento `charging` conservano il comportamento esistente (sezioni 8–9). La combinazione **TOTAL + WIFI** permette di leggere tensione e corrente INA sul display.
 
 ---
 
@@ -247,9 +247,9 @@ La tara manuale è rifiutata durante un upload OTA, che continua quindi senza in
 
 ---
 
-## 8) Monitoraggio batteria INA219 (soglie firmware di origine SLA)
+## 8) Monitoraggio batteria INA219
 
-Il pacco montato è LiFePO4 con ricarica USB-C interna. L'INA219 esterno misura tensione ai morsetti e corrente verso il Mini360; non misura la corrente netta delle celle. Il firmware mantiene la configurazione precedente: le tacche non costituiscono una stima calibrata della capacità residua della nuova batteria.
+Il pacco montato è LiFePO4 con ricarica USB-C interna. L'INA219 esterno misura tensione ai morsetti e corrente verso il Mini360; non misura la corrente netta delle celle. Le tacche rappresentano fasce indicative di tensione, non percentuali calibrate di capacità residua.
 
 ### 8.1 Collegamenti INA219
 - VCC → **3V3**
@@ -273,12 +273,14 @@ Lettura sul display: tenere premuti insieme **TOTAL + WIFI**, in qualunque ordin
 Se il sensore è assente o la lettura è invalida/scaduta, appare il relativo messaggio senza valori numerici. Errori, sovraccarico, ENTER, TARE e calibrazione mantengono la priorità; campionamento peso, MQTT e protezione batteria continuano normalmente. Questa schermata non modifica soglie, calibrazione o rilevamento `charging`.
 
 ### 8.2 Soglie tacche (default firmware, tensione filtrata)
-Soglie ancora presenti nel codice, definite per la precedente SLA; non sono una taratura LiFePO4:
-- **4 tacche (FULL)**: ≥ **6.20 V**
-- **3 tacche (GOOD)**: ≥ **6.08 V**
-- **2 tacche (LOW)**:  ≥ **5.95 V**
-- **1 tacca (CRITICAL)**: ≥ **5.85 V**
-- **0 tacche (EMPTY)**: < **5.85 V**
+Fasce iniziali LiFePO4 definite in `config/config_battery.h`, da verificare durante una scarica reale:
+- **4 tacche (FULL)**: ≥ **6,60 V**
+- **3 tacche (GOOD)**: **6,50 V ≤ V < 6,60 V**
+- **2 tacche (LOW)**: **6,35 V ≤ V < 6,50 V**
+- **1 tacca (CRITICAL)**: **6,10 V ≤ V < 6,35 V**
+- **0 tacche (EMPTY)**: < **6,10 V**
+
+FULL indica la fascia alta, non certifica una carica completa. La lettura riferita di **6,63–6,64 V** dopo 15 minuti con USB scollegata rientra nella fascia alta; le soglie inferiori non derivano ancora da una scarica misurata. Restano il filtro di tensione e i tempi esistenti, senza nuova isteresi o debounce delle tacche.
 
 Nota: c'è un **cuscinetto** tra 0 tacche e il light-sleep per batteria scarica. La sequenza di countdown parte a **≤ 5,80 V** dopo il debounce previsto.
 
@@ -301,10 +303,10 @@ Default firmware:
 La protezione qui è pensata per l’ESP32 (evitare latenze/reset quando il buck 5V perde margine). È ancora quella del firmware precedente: entra in light-sleep, ma non scollega fisicamente Mini360 o batteria e non sostituisce il BMS del pacco. Collegare l'USB di ricarica non garantisce che il firmware riconosca `charging` o annulli la protezione; vale il limite di misura descritto nella sezione 8.3.
 
 Comportamento:
-- **0 tacche (EMPTY)**: icona batteria **lampeggiante** + avviso sonoro
+- **0 tacche (EMPTY)**: icona batteria **lampeggiante** sotto **6,10 V**. L'avviso sonoro ha una soglia separata dalle tacche:
   - **0011.mp3** (batteria bassa) con **cooldown 5 min**
   - beep buzzer con **cooldown 5 min**
-  - L'avviso 0011 e il beep richiedono **EMPTY** con **5,80 V < V < 5,85 V** per almeno **10 s**; sotto questa finestra interviene il percorso countdown/critico.
+  - L'avviso 0011 e il beep richiedono **5,80 V < V < 5,85 V** per almeno **10 s** (`V_EMPTY_WARNING_MAX_V`); sotto questa finestra interviene il percorso countdown/critico. Cambiare le tacche non cambia questa finestra o il recupero del countdown.
 - Se V scende a **≤ 5,80 V** per ≥ **5 s**:
   - schermo “batteria scarica, collega alimentatore”
   - **0012.mp3** (batteria critica) **subito all'ingresso countdown** e **di nuovo a metà** (a ~60 s)

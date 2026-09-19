@@ -32,25 +32,6 @@ static const uint32_t CHARGE_DEBOUNCE_OUT_MS = 10000; // 10s
 // per evitare flicker quando il caricatore/PWM interrompe a impulsi.
 static const uint32_t CHARGE_MIN_ON_MS = 20000; // 20s
 
-// Soglie di tensione (V) per batteria SLA 6V (3 celle) sul valore filtrato.
-// Nota: la tensione dipende molto dal carico e dalla fase di carica; queste soglie sono
-// una mappa "pratica" per UI (tacche) e non una misura precisa di SoC.
-//
-// Soglie tarate per "usabilità" (tacche) su SLA 6V, basate su tensione filtrata.
-// Non sono una misura precisa di SoC: sotto carico e dopo una carica la tensione
-// può cambiare parecchio a parità di energia reale.
-//
-// FULL: alto, ma ancora realistico anche a riposo (evita che FULL duri 1 minuto).
-static const float V_FULL_MIN      = 6.20f;
-// GOOD: batteria ancora "comoda" sotto carico leggero.
-static const float V_GOOD_MIN      = 6.08f;
-// LOW: zona medio-bassa.
-static const float V_LOW_MIN       = 5.95f;
-// CRITICAL: 1 tacca; sotto questa soglia l'UI mostra 0 tacche (EMPTY).
-// Nota: abbiamo volutamente un "cuscinetto" tra 0 tacche (sotto 5.85) e countdown stacco (5.80).
-static const float V_CRITICAL_MIN  = 5.85f;
-// Sotto V_CRITICAL_MIN => LEVEL_EMPTY (0 tacche)
-
 // -----------------------------------------------------------------------------
 // STATO INTERNO
 // -----------------------------------------------------------------------------
@@ -84,13 +65,13 @@ static float lowPassUpdate(float prev, float value, float alpha) {
 }
 
 static BatteryLevel levelFromVoltage(float v) {
-  if (v >= V_FULL_MIN) {
+  if (v >= BatteryConfig::V_FULL_MIN) {
     return BATT_LEVEL_FULL;
-  } else if (v >= V_GOOD_MIN) {
+  } else if (v >= BatteryConfig::V_GOOD_MIN) {
     return BATT_LEVEL_GOOD;
-  } else if (v >= V_LOW_MIN) {
+  } else if (v >= BatteryConfig::V_LOW_MIN) {
     return BATT_LEVEL_LOW;
-  } else if (v >= V_CRITICAL_MIN) {
+  } else if (v >= BatteryConfig::V_CRITICAL_MIN) {
     return BATT_LEVEL_CRITICAL;
   } else {
     return BATT_LEVEL_EMPTY;

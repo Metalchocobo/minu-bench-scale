@@ -160,7 +160,7 @@ Il modello 71D incorpora già il diodo di protezione della bobina: rispettare 3 
 
 **La lettura ADC va tarata:** verificare SBU prima di collegarlo, confrontare la lettura con il multimetro a batteria carica e parzialmente scarica, configurare ADC1 per il campo fino a 2,1 V e filtrare i campioni. La relazione iniziale è tensione cella ≈ 2 × tensione SBU; la calibrazione tiene conto del partitore interno e dell'ADC. Non aggiungere un altro partitore a bassa impedenza.
 
-Il risultato è una **percentuale stimata dalla tensione**, non una percentuale digitale certificata dal powerbank. Durante la ricarica la tensione risente del caricatore: non promette la precisione di un contatore di coulomb. Il firmware attuale per SLA 6 V deve essere adattato: percentuale e soglie dalla nuova lettura ADC; INA219 usato per i 5 V e il consumo, non con le vecchie soglie SLA. La ricarica e la protezione del V50 restano autonome dal firmware.
+Il risultato è una **percentuale stimata dalla tensione**, non una percentuale digitale certificata dal powerbank. Durante la ricarica la tensione risente del caricatore: non promette la precisione di un contatore di coulomb. Il firmware attuale per la NASTIMA LiFePO4 2S deve essere adattato: percentuale e soglie dalla nuova lettura ADC; INA219 usato per i 5 V e il consumo, non con le vecchie soglie SLA. La ricarica e la protezione del V50 restano autonome dal firmware.
 
 ## Cosa succede nell'uso
 

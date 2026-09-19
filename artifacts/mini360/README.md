@@ -82,7 +82,7 @@ Vicino all'ESP32 rimangono i condensatori locali già previsti: **10–47 µF + 
 
 ## Monitoraggio quando la ricarica è interna al pacco
 
-Con la NASTIMA, la corrente USB entra nel pacco internamente e non attraversa l'INA219 posto sui morsetti di uscita: questo cablaggio misura **la corrente diretta al buck**, non la corrente netta delle celle. Il firmware attuale ricava `charging` da corrente negativa e mantiene le soglie per SLA (countdown a ≤ 5,80 V dopo 5 s; durata 120 s; light-sleep anticipato a ≤ 5,70 V per 3 s). **Le tacche non sono calibrate per la LiFePO4 e l'icona charging non certifica la ricarica USB.** Il light-sleep non scollega fisicamente il Mini360. Firmware e soglie restano invariati; un eventuale adattamento del monitoraggio è un intervento distinto dal montaggio concluso.
+Con la NASTIMA, la corrente USB entra nel pacco internamente e non attraversa l'INA219 posto sui morsetti di uscita: questo cablaggio misura **la corrente diretta al buck**, non la corrente netta delle celle. Il firmware ricava `charging` da corrente negativa; il countdown parte a ≤ 5,80 V dopo 5 s e dura 120 s, mentre il light-sleep anticipato interviene a ≤ 5,70 V per 3 s. **Le tacche usano fasce indicative LiFePO4, non percentuali calibrate, e l'icona charging non certifica la ricarica USB.** Avvisi sonori e protezioni sono indipendenti dalla mappa delle tacche. Il light-sleep non scollega fisicamente il Mini360. Soglie e comportamento corrente sono nel [README principale](../../README.md#8-monitoraggio-batteria-ina219).
 
 ## Analisi e verifica del ritorno dall'USB del PC
 

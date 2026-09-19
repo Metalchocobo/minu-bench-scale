@@ -8,6 +8,15 @@
 
 namespace BatteryConfig {
 
+// Indicative LiFePO4 voltage bands; bars are not state-of-charge percentages.
+static const float V_FULL_MIN            = 6.60f;
+static const float V_GOOD_MIN            = 6.50f;
+static const float V_LOW_MIN             = 6.35f;
+static const float V_CRITICAL_MIN        = 6.10f;
+
+// Keep the audible low-battery warning independent of the display bands.
+static const float V_EMPTY_WARNING_MAX_V = 5.85f;
+
 // ========================= SOGLIE TENSIONE =========================
 // Tensione sotto la quale inizia il countdown per lo sleep
 static const float V_SAFE_SHUTDOWN_MIN_V   = 5.80f;
