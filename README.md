@@ -95,7 +95,7 @@ Condensatori esterni, tutti **in parallelo** e con collegamenti corti vicino ai 
 - **OUT+ ↔ OUT−**: **470 µF / 10 V elettrolitico + 100 nF ceramico**; sul montaggio il ceramico è più vicino al Mini360.
 - Vicino all'ESP32 restano previsti **10–47 µF + 100 nF** fra VIN/5V e GND; non sostituiscono quelli del buck.
 
-Cablaggio completo e polarità: [docs/WIRING.md](docs/WIRING.md). Tavole e dati del convertitore: [Mini360](artifacts/mini360/README.md). Le tacche usano fasce indicative LiFePO4; avvisi sonori, countdown, protezioni e rilevamento `charging` conservano il comportamento esistente (sezioni 8–9). La combinazione **TOTAL + WIFI** permette di leggere tensione e corrente INA sul display.
+Cablaggio completo e polarità: [docs/WIRING.md](docs/WIRING.md). Tavole e dati del convertitore: [Mini360](artifacts/mini360/README.md). Le tacche usano fasce indicative LiFePO4 e l'icona `charging` stima la ricarica dalla tensione; avvisi sonori, countdown e protezioni conservano soglie e tempi, indipendenti dall'icona (sezioni 8–9). La combinazione **TOTAL + WIFI** permette di leggere tensione e corrente INA sul display.
 
 ---
 
@@ -264,7 +264,7 @@ Se INA non viene trovato:
 
 Validità runtime:
 - tensione e corrente aggiornano stato, filtro e rilevamento charging soltanto se ogni lettura I2C termina con successo e i valori sono finiti e plausibili
-- un errore di lettura non viene convertito in una falsa tensione bassa: resta disponibile l'ultimo campione valido per la sola UI, marcato con la propria età
+- un errore di lettura non viene convertito in una falsa tensione bassa: resta disponibile l'ultimo campione valido per la sola UI, marcato con la propria età; `charging` e i suoi timer vengono azzerati su letture invalide o scadute, senza far avanzare il debounce
 - i limiti di plausibilità correnti sono 3–9 V sul bus, ±330 mV sullo shunt e ±3.500 mA
 - countdown e sleep di protezione richiedono sempre un campione valido più recente di **1,5 s**; un valore stale non può spegnere la bilancia
 
@@ -284,23 +284,22 @@ FULL indica la fascia alta, non certifica una carica completa. La lettura riferi
 
 Nota: c'è un **cuscinetto** tra 0 tacche e il light-sleep per batteria scarica. La sequenza di countdown parte a **≤ 5,80 V** dopo il debounce previsto.
 
-### 8.3 Rilevamento “in carica” (stabilizzato)
-Il firmware interpreta la **corrente negativa** come ricarica. Con il cablaggio attuale la corrente USB entra nel caricatore interno al pacco senza attraversare lo shunt esterno: **l'icona charging non certifica la presenza dell'USB o la ricarica della batteria**. L'algoritmo mantiene:
-- isteresi (start/stop),
-- debounce temporale,
-- **min-on time** (per evitare flicker quando il caricatore/PWM stacca a impulsi).
+### 8.3 Indicatore “in carica” da tensione
+Con la NASTIMA, la corrente USB entra nel caricatore interno al pacco senza attraversare lo shunt esterno. L'INA219 misura **la corrente diretta al carico**, che resta disponibile nella diagnostica ma non determina `charging`. L'icona usa invece la tensione filtrata, con soglie iniziali scelte dalle letture riferite da Andrea:
 
-Default firmware:
-- entra in carica se **I < −80 mA**
-- esce da carica se **I > −20 mA**
-- debounce ingresso **1,5 s**, uscita **10 s**
-- min-on **20 s**
+- si accende con **V ≥ 6,70 V** per almeno **5 s** continui
+- si spegne con **V ≤ 6,68 V** per almeno **10 s** continui
+- nella banda **6,68 V < V < 6,70 V** conserva lo stato; una conferma interrotta riparte da zero
+- non impone un tempo minimo acceso aggiuntivo
+- usa soltanto campioni validi e freschi: una lettura invalida o scaduta spegne l'indicazione e azzera i timer; per riaccenderla serve una nuova conferma completa
+
+Il campionamento resta ogni **500 ms**, con filtro EMA di tensione **α = 0,2**. È una **stima indicativa della ricarica**, non una prova di USB collegata né una misura della carica residua. Con batteria bassa la ricarica può essere attiva senza raggiungere 6,70 V; dopo aver scollegato l'USB l'icona resta accesa finché non è confermata la soglia di uscita. Questa indicazione non disabilita le protezioni per tensione bassa.
 
 ---
 
 ## 9) Batteria scarica: avviso + light-sleep (protezione ESP)
 
-La protezione qui è pensata per l’ESP32 (evitare latenze/reset quando il buck 5V perde margine). È ancora quella del firmware precedente: entra in light-sleep, ma non scollega fisicamente Mini360 o batteria e non sostituisce il BMS del pacco. Collegare l'USB di ricarica non garantisce che il firmware riconosca `charging` o annulli la protezione; vale il limite di misura descritto nella sezione 8.3.
+La protezione qui è pensata per l’ESP32 (evitare latenze/reset quando il buck 5V perde margine). Entra in light-sleep, ma non scollega fisicamente Mini360 o batteria e non sostituisce il BMS del pacco. Avvisi, countdown e soglia hard-low restano attivi anche con l'icona `charging` accesa: il collegamento USB o lo stato dell'icona non annullano la protezione. Il recupero dipende dalla tensione misurata.
 
 Comportamento:
 - **0 tacche (EMPTY)**: icona batteria **lampeggiante** sotto **6,10 V**. L'avviso sonoro ha una soglia separata dalle tacche:

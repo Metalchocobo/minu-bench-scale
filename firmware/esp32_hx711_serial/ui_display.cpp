@@ -328,7 +328,7 @@ static uint8_t uiGetBatteryLevel4Step() {
 
 static bool uiIsBatteryCharging() {
   BatteryStatus st = battery_get_status();
-  return st.charging;
+  return battery_has_fresh_sample(millis()) && st.charging;
 }
 
 // -----------------------------------------------------------------------------

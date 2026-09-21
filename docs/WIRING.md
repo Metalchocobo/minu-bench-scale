@@ -1,6 +1,6 @@
 # Cablaggio hardware
 
-Stato corrente del cablaggio usato dal firmware `firmware/esp32_hx711_serial`. Alimentazione montata: batteria USB-C NASTIMA LiFePO4 e Mini360 MP1482DS regolato a **5,11 V**, valore riferito da Andrea. Cablaggio completato e primo funzionamento apparentemente regolare riferiti il 18 settembre 2026; le tacche firmware usano fasce indicative LiFePO4, mentre protezioni e rilevamento ricarica conservano la configurazione precedente.
+Stato corrente del cablaggio usato dal firmware `firmware/esp32_hx711_serial`. Alimentazione montata: batteria USB-C NASTIMA LiFePO4 e Mini360 MP1482DS regolato a **5,11 V**, valore riferito da Andrea. Cablaggio completato e primo funzionamento apparentemente regolare riferiti il 18 settembre 2026; le tacche firmware usano fasce indicative LiFePO4 e l'icona di ricarica usa la tensione filtrata, senza modificare soglie e tempi delle protezioni.
 
 Moduli: ESP32 DevKit, HX711 alimentato a 5 V, cella di carico a 4 fili, OLED SSD1322 SPI, INA219 I2C, tastiera 4x2, buzzer, DFPlayer Mini e LED di standby.
 
@@ -52,7 +52,7 @@ Il partitore limita a circa 3,3 V un eventuale livello DOUT a 5 V. GPIO35 è inp
 - **VCC → 3,3 V**, salvo diversa indicazione del modulo
 - **GND → GND comune**
 
-L'INA219 misura la tensione ai morsetti batteria e la corrente diretta al Mini360. **VIN+ riceve il positivo dopo F1; VIN− va a S1 e poi a IN+ del Mini360. VIN− è ancora il positivo, non GND.** SDA/SCL non trasportano la corrente del carico. La ricarica USB interna del pacco non attraversa questo shunt: il sensore non misura la corrente netta delle celle e l'icona firmware `charging` non certifica la ricarica USB.
+L'INA219 misura la tensione ai morsetti batteria e la corrente diretta al Mini360. **VIN+ riceve il positivo dopo F1; VIN− va a S1 e poi a IN+ del Mini360. VIN− è ancora il positivo, non GND.** SDA/SCL non trasportano la corrente del carico. La ricarica USB interna del pacco non attraversa questo shunt: il sensore non misura la corrente netta delle celle. L'icona firmware `charging` è una stima dalla tensione e non certifica la ricarica USB.
 
 ## 5) Tastiera 4x2 → ESP32
 
@@ -119,7 +119,7 @@ Ogni coppia è in parallelo all'alimentazione. Saldare vicino ai rispettivi pad,
 
 Il montaggio risulta funzionante dalla prima prova riferita da Andrea. **5,11 V** è la regolazione comunicata, non una registrazione di stabilità su tutti i carichi. Autonomia, cadute con Wi-Fi/audio, temperatura, transitori USB e riavvio dopo stacco BMS non hanno misure riportate.
 
-Le tacche firmware usano fasce indicative LiFePO4; avvisi sonori e soglie di sleep restano indipendenti dalla mappa delle tacche. Il rilevamento charging usa ancora la corrente negativa: vedere [README, monitoraggio batteria](../README.md#8-monitoraggio-batteria-ina219). Il light-sleep non è uno stacco elettrico del pacco.
+Le tacche firmware usano fasce indicative LiFePO4. L'icona `charging` si accende a tensione filtrata ≥ **6,70 V per 5 s** e si spegne a ≤ **6,68 V per 10 s**; nella banda intermedia conserva lo stato. Sono soglie indicative ricavate dalle letture riferite, non un rilevamento della presenza USB: a batteria bassa la ricarica può non raggiungerle. Avvisi sonori e protezioni di sleep restano attivi indipendentemente dalle tacche e dall'icona; campioni invalidi/scaduti non alimentano il rilevamento. Dettagli nel [README, monitoraggio batteria](../README.md#8-monitoraggio-batteria-ina219). Il light-sleep non è uno stacco elettrico del pacco.
 
 L'USB del PC sull'ESP32 è distinta dall'USB di ricarica del pacco. OUT+ rimane collegato all'ESP32 anche con S1 OFF: se la scheda riporta la tensione USB su VIN/5V, può rialimentare il Mini360. La sola rialimentazione non dimostra un danno; questo caso non è stato caratterizzato sulla scheda specifica. Tavole, pinout del retro e dettagli: [Mini360](../artifacts/mini360/README.md).
 

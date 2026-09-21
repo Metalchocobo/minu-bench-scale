@@ -1880,24 +1880,7 @@ static bool maybeEnterSafeShutdown(uint32_t nowMs) {
     return false;
   }
 
-  if (st.charging) {
-    g_lowBattSinceMs = 0;
-    g_preSleepStartMs = 0;
-    g_lastEmptyBeepMs = 0;
-    g_lastCountdownBeepMs = 0;
-    g_countdownMidMp3Played = false;
-    g_countdownExitSinceMs = 0;
-    g_emptyCandidateSinceMs = 0;
-    g_emptyWarnActive = false;
-    g_recoverySinceMs = 0;
-    g_lastMp3BattLowMs = 0;
-    g_lastMp3BattCritMs = 0;
-    g_battSleepStage = BATT_SLEEP_NONE;
-    g_battStageStartMs = 0;
-    g_hardLowSinceMs = 0;
-    return false;
-  }
-
+  // The voltage-based charging icon is not evidence of a usable external supply.
   if (st.voltage_V <= V_HARD_SLEEP_MIN_V) {
     if (g_hardLowSinceMs == 0) g_hardLowSinceMs = nowMs;
   } else {

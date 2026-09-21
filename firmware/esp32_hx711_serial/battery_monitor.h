@@ -12,9 +12,9 @@ enum BatteryLevel {
 
 struct BatteryStatus {
   float voltage_V;     // Tensione batteria filtrata (V)
-  float current_mA;    // Corrente filtrata (mA), >0 = scarica, <0 = carica
+  float current_mA;    // Filtered load-branch current; USB charging bypasses the shunt.
   BatteryLevel level;  // Livello batteria (4 step)
-  bool charging;       // true = in carica (corrente che entra nella batteria)
+  bool charging;       // Voltage-based UI indication, not a power-protection signal.
   bool valid;          // true only when the latest attempted read is valid
   uint32_t lastValidMs;
 };

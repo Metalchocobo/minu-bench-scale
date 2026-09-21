@@ -7,7 +7,7 @@ Le fonti canoniche sono mantenute nella root del repository:
 
 ## Alimentazione montata e configurazione firmware
 
-La bilancia usa la batteria USB-C NASTIMA LiFePO4 e il Mini360 MP1482DS, con uscita regolata a **5,11 V** e primo funzionamento positivo riferito da Andrea. Le tacche usano fasce indicative LiFePO4 definite in `config/config_battery.h`; avvisi sonori, countdown e protezioni conservano le soglie e i tempi esistenti. `charging` resta basato sulla corrente negativa dell'INA219. La ricarica interna USB non attraversa lo shunt esterno; tacche e icona non sono una misura calibrata della carica del nuovo pacco. Soglie effettive e limiti sono nel [README principale](../../README.md#8-monitoraggio-batteria-ina219); percorso elettrico in [WIRING](../../docs/WIRING.md#9-alimentazione-e-masse).
+La bilancia usa la batteria USB-C NASTIMA LiFePO4 e il Mini360 MP1482DS, con uscita regolata a **5,11 V** e primo funzionamento positivo riferito da Andrea. Le tacche usano fasce indicative LiFePO4 definite in `config/config_battery.h`. L'icona `charging` usa la tensione filtrata: ON a **≥ 6,70 V per 5 s**, OFF a **≤ 6,68 V per 10 s**, stato conservato nella banda intermedia, senza un tempo minimo acceso aggiuntivo. Campioni invalidi/scaduti azzerano indicazione e timer. La corrente INA219 è quella del carico: la ricarica interna USB non attraversa lo shunt esterno. Queste soglie, scelte dalle letture riferite, non provano la presenza USB o la carica residua; a batteria bassa la ricarica può essere attiva senza raggiungerle. Avvisi sonori, countdown e protezioni conservano soglie e tempi e restano attivi anche con `charging` acceso. Soglie effettive e limiti sono nel [README principale](../../README.md#8-monitoraggio-batteria-ina219); percorso elettrico in [WIRING](../../docs/WIRING.md#9-alimentazione-e-masse).
 
 **Lettura batteria:** tenere premuti **TOTAL + WIFI** per visualizzare tensione e corrente INA aggiornate; rilasciare per chiudere. I tasti singoli WIFI/TOTAL agiscono al rilascio e vengono consumati dalla combinazione. Campioni invalidi/scaduti non vengono mostrati; safety, TARE, ENTER e calibrazione hanno priorità. La schermata è diagnostica e non modifica soglie o rilevamento ricarica. Dettagli nella [sezione INA219](../../README.md#81-collegamenti-ina219).
 
@@ -33,4 +33,12 @@ Verifica locale:
 c++ -std=c++17 -Wall -Wextra -Werror tests/firmware_mqtt_protocol_harness.cpp -o /tmp/firmware_mqtt_protocol_harness
 /tmp/firmware_mqtt_protocol_harness
 arduino-cli compile --fqbn esp32:esp32:esp32 firmware/esp32_hx711_serial
+```
+
+Il test batteria compila il monitor reale con letture INA219 simulate e verifica soglie, tempi, isteresi e interruzioni dei campioni. Dalla root, nel Developer Command Prompt MSVC (output fuori dal repository):
+
+```bat
+if not exist "%TEMP%\minu-battery-harness" mkdir "%TEMP%\minu-battery-harness"
+cl /nologo /std:c++17 /EHsc /W4 /I tests\battery_stubs tests\firmware_battery_harness.cpp firmware\esp32_hx711_serial\battery_monitor.cpp /Fe:"%TEMP%\minu-battery-harness\firmware_battery_harness.exe" /Fo:"%TEMP%\minu-battery-harness/"
+"%TEMP%\minu-battery-harness\firmware_battery_harness.exe"
 ```

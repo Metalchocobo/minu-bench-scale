@@ -82,7 +82,9 @@ Vicino all'ESP32 rimangono i condensatori locali già previsti: **10–47 µF + 
 
 ## Monitoraggio quando la ricarica è interna al pacco
 
-Con la NASTIMA, la corrente USB entra nel pacco internamente e non attraversa l'INA219 posto sui morsetti di uscita: questo cablaggio misura **la corrente diretta al buck**, non la corrente netta delle celle. Il firmware ricava `charging` da corrente negativa; il countdown parte a ≤ 5,80 V dopo 5 s e dura 120 s, mentre il light-sleep anticipato interviene a ≤ 5,70 V per 3 s. **Le tacche usano fasce indicative LiFePO4, non percentuali calibrate, e l'icona charging non certifica la ricarica USB.** Avvisi sonori e protezioni sono indipendenti dalla mappa delle tacche. Il light-sleep non scollega fisicamente il Mini360. Soglie e comportamento corrente sono nel [README principale](../../README.md#8-monitoraggio-batteria-ina219).
+Con la NASTIMA, la corrente USB entra nel pacco internamente e non attraversa l'INA219 posto sui morsetti di uscita: questo cablaggio misura **la corrente diretta al buck**, non la corrente netta delle celle. Il firmware stima `charging` dalla tensione filtrata: ON a **≥ 6,70 V per 5 s**, OFF a **≤ 6,68 V per 10 s**, stato conservato nella banda intermedia. Campioni invalidi/scaduti azzerano indicazione e timer. Le soglie sono basate sulle letture riferite da Andrea: **l'icona non prova la presenza USB o la ricarica**, che a batteria bassa può essere attiva senza raggiungere 6,70 V. Le tacche usano fasce indicative LiFePO4, non percentuali calibrate.
+
+Avvisi sonori e protezioni restano attivi anche con l'icona accesa. Il countdown parte a **≤ 5,80 V dopo 5 s**, dura **120 s**, poi mostra **Zzz per 5 s** prima del light-sleep; la soglia hard-low **≤ 5,70 V per 3 s** può anticiparlo. Soglie e tempi restano indipendenti dalla mappa delle tacche. Il light-sleep non scollega fisicamente il Mini360. Soglie e comportamento corrente sono nel [README principale](../../README.md#8-monitoraggio-batteria-ina219).
 
 ## Analisi e verifica del ritorno dall'USB del PC
 

@@ -19,19 +19,6 @@ static const uint32_t READ_INTERVAL_MS = 500;
 static const float ALPHA_VOLTAGE = 0.2f;
 static const float ALPHA_CURRENT = 0.3f;
 
-// Soglie e debounce per considerare la batteria "in carica" (mA)
-// Nota: con VIN+ lato sorgente (batteria/charger) e VIN- lato carico, corrente < 0 = carica
-static const float I_CHARGE_START_MA = 80.0f;  // entra in carica se I < -80 mA
-static const float I_CHARGE_STOP_MA  = 20.0f;  // esce da carica se I > -20 mA
-
-// Debounce temporale (ms) per evitare start/stop continui con caricatori a impulsi o rumore
-static const uint32_t CHARGE_DEBOUNCE_IN_MS  = 1500;  // 3 letture @500ms
-static const uint32_t CHARGE_DEBOUNCE_OUT_MS = 10000; // 10s
-
-// Min-on time: una volta entrato in carica, resta "charging" almeno per questo tempo
-// per evitare flicker quando il caricatore/PWM interrompe a impulsi.
-static const uint32_t CHARGE_MIN_ON_MS = 20000; // 20s
-
 // -----------------------------------------------------------------------------
 // STATO INTERNO
 // -----------------------------------------------------------------------------
@@ -48,12 +35,9 @@ static float g_iFilt = 0.0f;
 static uint32_t g_lastReadMs = 0;
 static bool g_invalidLogged = false;
 
-// Debounce per stato carica
-static uint32_t g_chargeCandidateSinceMs = 0;     // quando I indica "carica" (entry)
-static uint32_t g_dischargeCandidateSinceMs = 0;  // quando I indica "non carica" (exit)
-
-// Timestamp di ingresso in carica (per min-on time)
-static uint32_t g_chargingSinceMs = 0;
+// Continuous valid-sample windows for the voltage-based charging indication.
+static uint32_t g_chargeCandidateSinceMs = 0;
+static uint32_t g_dischargeCandidateSinceMs = 0;
 
 // -----------------------------------------------------------------------------
 // FUNZIONI INTERNE
@@ -78,10 +62,15 @@ static BatteryLevel levelFromVoltage(float v) {
   }
 }
 
-static void invalidateSample() {
-  g_status.valid = false;
+static void resetChargeDetection() {
+  g_status.charging = false;
   g_chargeCandidateSinceMs = 0;
   g_dischargeCandidateSinceMs = 0;
+}
+
+static void invalidateSample() {
+  g_status.valid = false;
+  resetChargeDetection();
   if (!g_invalidLogged) {
     Serial.println(F("[BATT] Lettura INA219 non valida"));
     g_invalidLogged = true;
@@ -93,6 +82,7 @@ static void invalidateSample() {
 // -----------------------------------------------------------------------------
 
 void battery_init() {
+  resetChargeDetection();
   // Si assume che Wire.begin(...) sia già stato chiamato nel setup
   if (!g_ina219.begin()) {
     // Se fallisce l'init, lasciamo g_inited = false; la update non farà nulla.
@@ -131,6 +121,11 @@ bool battery_is_available() {
 
 void battery_update(uint32_t nowMs) {
   if (!g_inited) return;
+
+  // A missed sampling window cannot count towards either debounce period.
+  if (g_haveSample && !battery_has_fresh_sample(nowMs)) {
+    resetChargeDetection();
+  }
 
   if (nowMs - g_lastReadMs < READ_INTERVAL_MS) {
     return;  // ancora troppo presto per una nuova lettura
@@ -179,42 +174,32 @@ void battery_update(uint32_t nowMs) {
   g_status.valid = true;
   g_status.lastValidMs = nowMs;
 
-  // Logica "in carica": corrente verso la batteria (segno negativo) sopra soglia
-  // Stato "in carica" calcolato dalla corrente filtrata, con isteresi + debounce
-  const bool wantsCharge   = (g_iFilt < -I_CHARGE_START_MA);
-  const bool wantsNoCharge = (g_iFilt > -I_CHARGE_STOP_MA);
+  // The internal USB charger bypasses the INA219 shunt: use voltage for the icon.
+  const bool wantsCharge   = (g_vFilt >= BatteryConfig::V_CHARGE_START_V);
+  const bool wantsNoCharge = (g_vFilt <= BatteryConfig::V_CHARGE_STOP_V);
 
   if (g_status.charging) {
-    if (g_chargingSinceMs == 0) g_chargingSinceMs = nowMs;
-
-    const bool minOnSatisfied = (nowMs - g_chargingSinceMs >= CHARGE_MIN_ON_MS);
-
-    // Siamo in carica: usciamo solo se per un po' la corrente non indica più carica
-    if (wantsNoCharge && minOnSatisfied) {
+    if (wantsNoCharge) {
       if (g_dischargeCandidateSinceMs == 0) g_dischargeCandidateSinceMs = nowMs;
-      if (nowMs - g_dischargeCandidateSinceMs >= CHARGE_DEBOUNCE_OUT_MS) {
+      if (nowMs - g_dischargeCandidateSinceMs >= BatteryConfig::CHARGE_DEBOUNCE_OUT_MS) {
         g_status.charging = false;
         g_dischargeCandidateSinceMs = 0;
-        g_chargingSinceMs = 0;
       }
     } else {
       g_dischargeCandidateSinceMs = 0;
     }
     g_chargeCandidateSinceMs = 0;
   } else {
-    // Non siamo in carica: entriamo solo se per un po' la corrente indica carica
     if (wantsCharge) {
       if (g_chargeCandidateSinceMs == 0) g_chargeCandidateSinceMs = nowMs;
-      if (nowMs - g_chargeCandidateSinceMs >= CHARGE_DEBOUNCE_IN_MS) {
+      if (nowMs - g_chargeCandidateSinceMs >= BatteryConfig::CHARGE_DEBOUNCE_IN_MS) {
         g_status.charging = true;
         g_chargeCandidateSinceMs = 0;
-        g_chargingSinceMs = nowMs;
       }
     } else {
       g_chargeCandidateSinceMs = 0;
     }
     g_dischargeCandidateSinceMs = 0;
-    g_chargingSinceMs = 0;
   }
 
 }
