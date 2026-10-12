@@ -153,17 +153,22 @@ def power_sheet():
 
     # Loads and output capacitors.
     d.wire([(340,830),(90,830),(90,1195),(1690,1195)],GND,6)
-    load_specs = [(175,270,'ESP32','Pin VIN / 5V'),(505,245,'HX711','VCC'),(810,245,'OLED','VCC compatibile 5 V'),(1115,310,'AUDIO ESISTENTE','Power-gate → DFPlayer')]
+    load_specs = [(175,270,'ESP32','Pin VIN / 5V'),(505,245,'HX711','VCC'),(810,245,'OLED','VCC da 3V3 ESP32'),(1115,310,'AUDIO ESISTENTE','IRF9540 → DFPlayer')]
     for x,w,title,note in load_specs:
         cx=x+w/2
         d.rect(x,1010,w,125)
-        d.wire([(cx,950),(cx,1010)])
-        d.dot(cx,950); d.port(cx,1010)
+        if title != 'OLED':
+            d.wire([(cx,950),(cx,1010)])
+            d.dot(cx,950); d.port(cx,1010)
         d.text(cx,1051,title,24,GND,True,'middle')
         d.text(cx,1087,note,19,GND,False,'middle')
         d.text(cx,1116,'GND in basso',17,GND,False,'middle')
         d.wire([(cx,1135),(cx,1195)],GND)
         d.dot(cx,1195,GND); d.port(cx,1135,GND)
+    # The OLED supply comes from the ESP32 3V3 pin, not the Mini360 output rail.
+    d.wire([(445,1087),(475,1087),(475,990),(932.5,990),(932.5,1010)],BLUE)
+    d.port(445,1087,BLUE); d.port(932.5,1010,BLUE)
+    d.text(438,1072,'3V3',17,BLUE,True,'end')
     d.cap(1485,950,1195,'C3',True)
     d.text(1445,907,'USCITA MINI360',22,GREEN,True)
     d.text(1445,935,'C3 / C4 tra OUT+ e OUT−',18)

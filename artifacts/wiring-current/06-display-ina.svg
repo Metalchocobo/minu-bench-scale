@@ -1,0 +1,112 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1250" viewBox="0 0 1800 1250" role="img">
+<title>Minù: tavola 6 del cablaggio corrente</title>
+<desc>Illustrazione di montaggio. I valori ignoti sono marcati da confermare. I terminali dei moduli seguono le sigle, non una posizione fisica universale.</desc>
+<rect x="0" y="0" width="1800" height="1250" rx="0" fill="#ffffff" stroke="#ffffff" stroke-width="2"/>
+<polyline points="410,380 1270,380" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="410,380 1270,380" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="410,450 1270,450" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="410,450 1270,450" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="410,520 1270,520" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="410,520 1270,520" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="410,590 1270,590" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="410,590 1270,590" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="410,660 1270,660" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="410,660 1270,660" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="410,730 1270,730" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="410,730 1270,730" fill="none" stroke="#c57a12" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="410,800 1270,800" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="410,800 1270,800" fill="none" stroke="#25323a" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="410,945 1270,945" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="410,945 1270,945" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="410,1005 1270,1005" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="410,1005 1270,1005" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="410,1065 1270,1065" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="410,1065 1270,1065" fill="none" stroke="#c57a12" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1170,800 1170,1138 1450,1138 1450,1125" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1170,800 1170,1138 1450,1138 1450,1125" fill="none" stroke="#25323a" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="65,1177 117,1177" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="65,1177 117,1177" fill="none" stroke="#ca4239" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="380,1177 432,1177" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="380,1177 432,1177" fill="none" stroke="#25323a" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="715,1177 767,1177" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="715,1177 767,1177" fill="none" stroke="#c57a12" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="950,1177 1002,1177" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="950,1177 1002,1177" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="65" y="47" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="700" fill="#267751" text-anchor="start">MINÙ / CABLAGGIO · SCHEMI FORNITI + DOCUMENTAZIONE HX711</text>
+<text x="65" y="102" font-family="Arial,Helvetica,sans-serif" font-size="38" font-weight="700" fill="#25323a" text-anchor="start">06   Display OLED e segnali INA219</text>
+<text x="65" y="143" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#596a76" text-anchor="start">OLED e INA219 ricevono VCC dall’ESP32 3V3, come nello schema fornito.</text>
+<rect x="65" y="220" width="345" height="905" rx="18" fill="#edf2f7" stroke="#8cab9b" stroke-width="2"/>
+<circle cx="83" cy="238" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
+<circle cx="392" cy="238" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
+<text x="237.5" y="265" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700" fill="#25323a" text-anchor="middle">ESP32 DevKit</text>
+<text x="237.5" y="295" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" fill="#596a76" text-anchor="middle">Usa le sigle GPIO sulla scheda</text>
+<rect x="110" y="315" width="255" height="75" rx="5" fill="#aab4bc" stroke="#87939c" stroke-width="2"/>
+<text x="237.5" y="360" font-family="Arial,Helvetica,sans-serif" font-size="25" font-weight="700" fill="#25323a" text-anchor="middle">ESP32</text>
+<rect x="1270" y="220" width="465" height="600" rx="18" fill="#e8f3ee" stroke="#8cab9b" stroke-width="2"/>
+<circle cx="1288" cy="238" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
+<circle cx="1717" cy="238" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
+<text x="1502.5" y="265" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700" fill="#25323a" text-anchor="middle">OLED SSD1322 · 256 × 64</text>
+<text x="1502.5" y="295" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" fill="#596a76" text-anchor="middle">Sigle equivalenti secondo il modulo</text>
+<rect x="1340" y="313" width="325" height="50" rx="5" fill="#20343b" stroke="#20343b" stroke-width="2"/>
+<text x="1502" y="346" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#d6f7e4" text-anchor="middle">MINÙ      0.000 kg</text>
+<text x="393" y="388" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#226db5" text-anchor="end">GPIO18</text>
+<text x="1287" y="388" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="start">SCK / CLK</text>
+<text x="393" y="458" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#226db5" text-anchor="end">GPIO23</text>
+<text x="1287" y="458" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="start">MOSI / DIN</text>
+<text x="393" y="528" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#226db5" text-anchor="end">GPIO25</text>
+<text x="1287" y="528" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="start">CS</text>
+<text x="393" y="598" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#226db5" text-anchor="end">GPIO26</text>
+<text x="1287" y="598" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="start">DC</text>
+<text x="393" y="668" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#226db5" text-anchor="end">GPIO27</text>
+<text x="1287" y="668" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="start">RST / RES</text>
+<text x="393" y="738" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#c57a12" text-anchor="end">3V3</text>
+<text x="1287" y="738" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#c57a12" text-anchor="start">VCC</text>
+<text x="393" y="808" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#25323a" text-anchor="end">GND</text>
+<text x="1287" y="808" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#25323a" text-anchor="start">GND</text>
+<rect x="1270" y="870" width="365" height="255" rx="18" fill="#e8f3ee" stroke="#8cab9b" stroke-width="2"/>
+<circle cx="1288" cy="888" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
+<circle cx="1617" cy="888" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
+<text x="1452.5" y="915" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700" fill="#25323a" text-anchor="middle">INA219</text>
+<text x="393" y="953" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#226db5" text-anchor="end">GPIO32</text>
+<text x="1287" y="953" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#226db5" text-anchor="start">SDA</text>
+<text x="393" y="1013" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#226db5" text-anchor="end">GPIO33</text>
+<text x="1287" y="1013" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#226db5" text-anchor="start">SCL</text>
+<text x="393" y="1073" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#c57a12" text-anchor="end">3V3</text>
+<text x="1287" y="1073" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#c57a12" text-anchor="start">VCC</text>
+<text x="1470" y="1110" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#25323a" text-anchor="start">GND</text>
+<text x="1618" y="953" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#ca4239" text-anchor="end">VIN+</text>
+<text x="1618" y="1048" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#ca4239" text-anchor="end">VIN−</text>
+<text x="1665" y="967" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="700" fill="#ca4239" text-anchor="start">Potenza</text>
+<text x="1665" y="1000" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#ca4239" text-anchor="start">tavola 2</text>
+<text x="65" y="1152" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="400" fill="#25323a" text-anchor="start">VCC OLED e INA219 a 3V3. Le posizioni dei loro terminali nel disegno sono funzionali: seguire le sigle.</text>
+<text x="133" y="1185" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">Positivo 5 V</text>
+<text x="448" y="1185" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">GND comune</text>
+<text x="783" y="1185" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">3,3 V</text>
+<text x="1018" y="1185" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">Segnali</text>
+<text x="1235" y="1185" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">● = unione dei fili</text>
+<text x="65" y="1224" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" fill="#596a76" text-anchor="start">INA219 VIN+/VIN− appartengono al positivo batteria. VCC / SDA / SCL / GND sono collegamenti separati.</text>
+<circle cx="410" cy="380" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="1270" cy="380" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="410" cy="450" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="1270" cy="450" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="410" cy="520" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="1270" cy="520" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="410" cy="590" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="1270" cy="590" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="410" cy="660" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="1270" cy="660" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="410" cy="730" r="7" fill="white" stroke="#c57a12" stroke-width="3"/>
+<circle cx="1270" cy="730" r="7" fill="white" stroke="#c57a12" stroke-width="3"/>
+<circle cx="410" cy="800" r="7" fill="white" stroke="#25323a" stroke-width="3"/>
+<circle cx="1270" cy="800" r="7" fill="white" stroke="#25323a" stroke-width="3"/>
+<circle cx="410" cy="945" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="1270" cy="945" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="410" cy="1005" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="1270" cy="1005" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="410" cy="1065" r="7" fill="white" stroke="#c57a12" stroke-width="3"/>
+<circle cx="1270" cy="1065" r="7" fill="white" stroke="#c57a12" stroke-width="3"/>
+<circle cx="1450" cy="1125" r="7" fill="white" stroke="#25323a" stroke-width="3"/>
+<circle cx="1170" cy="800" r="7" fill="#25323a"/>
+<circle cx="1635" cy="945" r="7" fill="white" stroke="#ca4239" stroke-width="3"/>
+<circle cx="1635" cy="1040" r="7" fill="white" stroke="#ca4239" stroke-width="3"/>
+</svg>

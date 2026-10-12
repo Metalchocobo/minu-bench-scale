@@ -1,0 +1,185 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1250" viewBox="0 0 1800 1250" role="img">
+<title>Minù: tavola 4 del cablaggio corrente</title>
+<desc>Illustrazione di montaggio. I valori ignoti sono marcati da confermare. I terminali dei moduli seguono le sigle, non una posizione fisica universale.</desc>
+<rect x="0" y="0" width="1800" height="1250" rx="0" fill="#ffffff" stroke="#ffffff" stroke-width="2"/>
+<rect x="1065" y="185" width="670" height="355" rx="16" fill="#fff7e8" stroke="#dfc79a" stroke-width="2"/>
+<polyline points="65,190 690,190 690,420 610,420" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="65,190 690,190 690,420 610,420" fill="none" stroke="#ca4239" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="365,190 365,240" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="365,190 365,240" fill="none" stroke="#ca4239" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="365,390 365,420 400,420" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="365,390 365,420 400,420" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="470,420 400,420 400,640 810,640" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="470,420 400,420 400,640 810,640" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="540,420 540,590 1170,590 1170,710 1270,710" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="540,420 540,590 1170,590 1170,710 1270,710" fill="none" stroke="#ca4239" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="320,730 425,730" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="320,730 425,730" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="575,730 720,730" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="575,730 720,730" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="650,730 650,740" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="650,730 650,740" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="650,890 650,1060" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="650,890 650,1060" fill="none" stroke="#25323a" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="810,815 810,1060" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="810,815 810,1060" fill="none" stroke="#25323a" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1090,280 1495,280" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1090,280 1495,280" fill="none" stroke="#ca4239" stroke-width="4" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="12 10"/>
+<polyline points="1090,460 1495,460" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1090,460 1495,460" fill="none" stroke="#25323a" stroke-width="4" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="12 10"/>
+<polyline points="1135,280 1135,443 1182,443 1182,425" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1135,280 1135,443 1182,443 1182,425" fill="none" stroke="#ca4239" stroke-width="4" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="12 10"/>
+<polyline points="1238,425 1238,460" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1238,425 1238,460" fill="none" stroke="#25323a" stroke-width="4" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="12 10"/>
+<polyline points="1385,280 1385,443 1422,443 1422,402" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1385,280 1385,443 1422,443 1422,402" fill="none" stroke="#ca4239" stroke-width="4" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="12 10"/>
+<polyline points="1458,402 1458,460" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1458,402 1458,460" fill="none" stroke="#25323a" stroke-width="4" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="12 10"/>
+<polyline points="1170,590 1170,555 1050,555 1050,280 1090,280" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1170,590 1170,555 1050,555 1050,280 1090,280" fill="none" stroke="#ca4239" stroke-width="4" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="12 10"/>
+<polyline points="1495,460 1770,460 1770,1060 1720,1060" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1495,460 1770,460 1770,1060 1720,1060" fill="none" stroke="#25323a" stroke-width="4" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="12 10"/>
+<polyline points="320,875 400,875" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="320,875 400,875" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="550,875 1100,875 1100,875 1270,875" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="550,875 1100,875 1100,875 1270,875" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="320,930 1270,930" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="320,930 1270,930" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="320,985 1270,985" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="320,985 1270,985" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="65,1060 1720,1060" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="65,1060 1720,1060" fill="none" stroke="#25323a" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1410,1040 1410,1060" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1410,1040 1410,1060" fill="none" stroke="#25323a" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1555,750 1590,750 1590,760 1630,760" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1555,750 1590,750 1590,760 1630,760" fill="none" stroke="#267751" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1555,805 1608,805 1608,815 1630,815" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1555,805 1608,805 1608,815 1630,815" fill="none" stroke="#267751" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="65,1177 117,1177" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="65,1177 117,1177" fill="none" stroke="#ca4239" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="380,1177 432,1177" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="380,1177 432,1177" fill="none" stroke="#25323a" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="715,1177 767,1177" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="715,1177 767,1177" fill="none" stroke="#c57a12" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="950,1177 1002,1177" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="950,1177 1002,1177" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="65" y="47" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="700" fill="#267751" text-anchor="start">MINÙ / CABLAGGIO · SCHEMI FORNITI + DOCUMENTAZIONE HX711</text>
+<text x="65" y="102" font-family="Arial,Helvetica,sans-serif" font-size="38" font-weight="700" fill="#25323a" text-anchor="start">04   DFPlayer, MOSFET, transistor e altoparlante</text>
+<text x="65" y="143" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#596a76" text-anchor="start">Resistenze come nello schema fornito: 1 kΩ sulla UART, 10 kΩ alla base e due resistenze da 100 kΩ.</text>
+<text x="65" y="220" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#ca4239" text-anchor="start">Linea 5 V dal Mini360</text>
+<rect x="423" y="245" width="235" height="86" rx="7" fill="#b3bdc4" stroke="#87939c" stroke-width="2"/>
+<circle cx="541" cy="270" r="14" fill="#ffffff" stroke="#7c8b95" stroke-width="2"/>
+<rect x="415" y="310" width="250" height="80" rx="5" fill="#293741" stroke="#1e2a31" stroke-width="2"/>
+<text x="540" y="347" font-family="Arial,Helvetica,sans-serif" font-size="27" font-weight="700" fill="white" text-anchor="middle">IRF9540</text>
+<text x="540" y="378" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="white" text-anchor="middle">P-channel</text>
+<path d="M470 390V420" stroke="#899ba6" stroke-width="12"/>
+<text x="470" y="452" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" fill="#226db5" text-anchor="middle">G</text>
+<path d="M540 390V420" stroke="#899ba6" stroke-width="12"/>
+<text x="568" y="452" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" fill="#ca4239" text-anchor="middle">D</text>
+<path d="M610 390V420" stroke="#899ba6" stroke-width="12"/>
+<text x="610" y="452" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" fill="#ca4239" text-anchor="middle">S</text>
+<text x="695" y="291" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#25323a" text-anchor="start">Fronte con scritta leggibile</text>
+<text x="695" y="329" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="400" fill="#25323a" text-anchor="start">Piedini verso il basso: G · D · S</text>
+<text x="695" y="367" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="400" fill="#25323a" text-anchor="start">Linguetta metallica = D</text>
+<g transform="translate(365 315) rotate(90)"><path d="M-75 0H-42 M42 0H75" stroke="#226db5" stroke-width="6"/><rect x="-42" y="-15" width="84" height="30" rx="11" fill="#edd8ac" stroke="#a99169" stroke-width="2"/><path d="M-24 -13V13 M0 -13V13 M24 -13V13" stroke="#b69c74" stroke-width="6"/></g>
+<text x="337" y="323" font-family="Arial,Helvetica,sans-serif" font-size="25" font-weight="700" fill="#25323a" text-anchor="end">100 kΩ G–S</text>
+<text x="865" y="581" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#ca4239" text-anchor="middle">D → VCC DFPlayer</text>
+<rect x="720" y="640" width="285" height="175" rx="18" fill="#f3eee5" stroke="#8cab9b" stroke-width="2"/>
+<circle cx="738" cy="658" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
+<circle cx="987" cy="658" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
+<text x="862.5" y="685" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700" fill="#25323a" text-anchor="middle">2N3904</text>
+<text x="862.5" y="715" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" fill="#596a76" text-anchor="middle">H331 · NPN montato</text>
+<rect x="830" y="731" width="75" height="45" rx="9" fill="#293741" stroke="#293741" stroke-width="2"/>
+<text x="867" y="760" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="700" fill="white" text-anchor="middle">NPN</text>
+<text x="810" y="623" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">C · collettore</text>
+<text x="737" y="738" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="700" fill="#226db5" text-anchor="start">B · base</text>
+<text x="842" y="839" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#25323a" text-anchor="start">E · emettitore</text>
+<rect x="65" y="635" width="255" height="175" rx="18" fill="#e8f3ee" stroke="#8cab9b" stroke-width="2"/>
+<circle cx="83" cy="653" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
+<circle cx="302" cy="653" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
+<text x="192.5" y="680" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700" fill="#25323a" text-anchor="middle">ESP32</text>
+<text x="192.5" y="710" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" fill="#596a76" text-anchor="middle">Comando audio</text>
+<text x="303" y="738" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#226db5" text-anchor="end">GPIO2</text>
+<g transform="translate(500 730)"><path d="M-75 0H-42 M42 0H75" stroke="#226db5" stroke-width="6"/><rect x="-42" y="-15" width="84" height="30" rx="11" fill="#edd8ac" stroke="#a99169" stroke-width="2"/><path d="M-24 -13V13 M0 -13V13 M24 -13V13" stroke="#b69c74" stroke-width="6"/></g>
+<text x="500" y="702" font-family="Arial,Helvetica,sans-serif" font-size="25" font-weight="700" fill="#25323a" text-anchor="middle">10 kΩ</text>
+<g transform="translate(650 815) rotate(90)"><path d="M-75 0H-42 M42 0H75" stroke="#25323a" stroke-width="6"/><rect x="-42" y="-15" width="84" height="30" rx="11" fill="#edd8ac" stroke="#a99169" stroke-width="2"/><path d="M-24 -13V13 M0 -13V13 M24 -13V13" stroke="#b69c74" stroke-width="6"/></g>
+<text x="622" y="823" font-family="Arial,Helvetica,sans-serif" font-size="25" font-weight="700" fill="#25323a" text-anchor="end">100 kΩ B–GND</text>
+<text x="1087" y="222" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" fill="#98651a" text-anchor="start">Condensatori audio presenti</text>
+<rect x="1160" y="315" width="100" height="110" rx="8" fill="#354b5a" stroke="#263b48" stroke-width="2"/>
+<rect x="1230" y="319" width="16" height="102" rx="0" fill="#ced9de" stroke="#ced9de" stroke-width="2"/>
+<ellipse cx="1210" cy="315" rx="50" ry="12" fill="#bdc9d0" stroke="#728895" stroke-width="2"/>
+<text x="1198" y="357" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="700" fill="white" text-anchor="middle">470 µF</text>
+<text x="1202" y="388" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="700" fill="white" text-anchor="middle">16 V</text>
+<text x="1238" y="416" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#25323a" text-anchor="middle">−</text>
+<text x="1182" y="441" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="700" fill="#ca4239" text-anchor="middle">+</text>
+<text x="1210" y="260" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#25323a" text-anchor="middle">Elettrolitico</text>
+<circle cx="1440" cy="375" r="32" fill="#c88839" stroke="#9d672b" stroke-width="2"/>
+<text x="1440" y="383" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="white" text-anchor="middle">104</text>
+<text x="1440" y="260" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#25323a" text-anchor="middle">Ceramico</text>
+<text x="1087" y="497" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="700" fill="#98651a" text-anchor="start">Tratteggi: riferimento VCC DFPlayer / GND.</text>
+<text x="1087" y="529" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">470 µF / 16 V + 100 nF (104), confermati.</text>
+<rect x="1270" y="670" width="285" height="370" rx="18" fill="#e8f3ee" stroke="#8cab9b" stroke-width="2"/>
+<circle cx="1288" cy="688" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
+<circle cx="1537" cy="688" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
+<text x="1412.5" y="715" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700" fill="#25323a" text-anchor="middle"></text>
+<text x="1413" y="650" font-family="Arial,Helvetica,sans-serif" font-size="27" font-weight="700" fill="#25323a" text-anchor="middle">DFPlayer Mini</text>
+<rect x="1348" y="773" width="130" height="75" rx="4" fill="#69757e" stroke="#43515b" stroke-width="2"/>
+<text x="1413" y="818" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="white" text-anchor="middle">microSD</text>
+<text x="1287" y="718" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#ca4239" text-anchor="start">VCC</text>
+<text x="1287" y="883" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#226db5" text-anchor="start">RX</text>
+<text x="1287" y="938" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#226db5" text-anchor="start">TX</text>
+<text x="1287" y="993" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#226db5" text-anchor="start">BUSY</text>
+<text x="1434" y="1030" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#25323a" text-anchor="start">GND</text>
+<rect x="65" y="840" width="255" height="200" rx="18" fill="#e8f3ee" stroke="#8cab9b" stroke-width="2"/>
+<circle cx="83" cy="858" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
+<circle cx="302" cy="858" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
+<text x="192.5" y="885" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700" fill="#25323a" text-anchor="middle"></text>
+<text x="190" y="828" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" fill="#25323a" text-anchor="middle">ESP32 · UART</text>
+<text x="303" y="883" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="end">GPIO4</text>
+<text x="303" y="938" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="end">GPIO34</text>
+<text x="303" y="993" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="end">GPIO39 / VN</text>
+<g transform="translate(475 875)"><path d="M-75 0H-42 M42 0H75" stroke="#226db5" stroke-width="6"/><rect x="-42" y="-15" width="84" height="30" rx="11" fill="#edd8ac" stroke="#a99169" stroke-width="2"/><path d="M-24 -13V13 M0 -13V13 M24 -13V13" stroke="#b69c74" stroke-width="6"/></g>
+<text x="475" y="847" font-family="Arial,Helvetica,sans-serif" font-size="25" font-weight="700" fill="#25323a" text-anchor="middle">1 kΩ</text>
+<text x="1600" y="1100" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#25323a" text-anchor="start">GND comune</text>
+<text x="1538" y="758" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#267751" text-anchor="end">SPK1</text>
+<text x="1538" y="813" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#267751" text-anchor="end">SPK2</text>
+<circle cx="1690" cy="788" r="69" fill="#3f505d" stroke="#293741" stroke-width="2"/>
+<circle cx="1690" cy="788" r="48" fill="#697d8a" stroke="#899ba6" stroke-width="2"/>
+<circle cx="1690" cy="788" r="22" fill="#293741" stroke="#293741" stroke-width="2"/>
+<text x="1690" y="888" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="700" fill="#25323a" text-anchor="middle">Altoparlante</text>
+<text x="1690" y="919" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="middle">SPK1 ↔ SPK2</text>
+<text x="1660" y="950" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="700" fill="#25323a" text-anchor="middle">Nessun filo a GND</text>
+<text x="65" y="1122" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="400" fill="#25323a" text-anchor="start">GPIO2 HIGH = audio acceso. BUSY è diretto nello schema; la pull-up opzionale non è mostrata come montata.</text>
+<text x="133" y="1185" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">Positivo 5 V</text>
+<text x="448" y="1185" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">GND comune</text>
+<text x="783" y="1185" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">3,3 V</text>
+<text x="1018" y="1185" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">Segnali</text>
+<text x="1235" y="1185" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">● = unione dei fili</text>
+<text x="65" y="1224" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" fill="#596a76" text-anchor="start">2N3904: B/C/E funzionali, ordine da verificare. Caps audio: fili e polarità di riferimento da riscontrare.</text>
+<circle cx="470" cy="420" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="540" cy="420" r="7" fill="white" stroke="#ca4239" stroke-width="3"/>
+<circle cx="610" cy="420" r="7" fill="white" stroke="#ca4239" stroke-width="3"/>
+<circle cx="365" cy="190" r="7" fill="#ca4239"/>
+<circle cx="470" cy="420" r="7" fill="#226db5"/>
+<circle cx="400" cy="420" r="7" fill="#226db5"/>
+<circle cx="810" cy="640" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="720" cy="730" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="810" cy="815" r="7" fill="white" stroke="#25323a" stroke-width="3"/>
+<circle cx="320" cy="730" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="650" cy="730" r="7" fill="#226db5"/>
+<circle cx="1270" cy="710" r="7" fill="white" stroke="#ca4239" stroke-width="3"/>
+<circle cx="1270" cy="875" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="1270" cy="930" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="1270" cy="985" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="1410" cy="1040" r="7" fill="white" stroke="#25323a" stroke-width="3"/>
+<circle cx="320" cy="875" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="320" cy="930" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="320" cy="985" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="650" cy="1060" r="7" fill="#25323a"/>
+<circle cx="810" cy="1060" r="7" fill="#25323a"/>
+<circle cx="1410" cy="1060" r="7" fill="#25323a"/>
+<circle cx="1555" cy="750" r="7" fill="white" stroke="#267751" stroke-width="3"/>
+<circle cx="1555" cy="805" r="7" fill="white" stroke="#267751" stroke-width="3"/>
+<circle cx="1630" cy="760" r="7" fill="white" stroke="#267751" stroke-width="3"/>
+<circle cx="1630" cy="815" r="7" fill="white" stroke="#267751" stroke-width="3"/>
+</svg>

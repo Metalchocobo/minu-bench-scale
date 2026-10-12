@@ -1,0 +1,635 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="3200" height="2250" viewBox="0 0 3200 2250" role="img">
+<title>Minù: tutti i collegamenti e disposizione ESP32 a 30 pin</title>
+<desc>Ogni collegamento documentato è disegnato. L’ordine fisico dei pin ESP32 segue la mappa fornita da Andrea; gli altri moduli sono disposti per funzione. Le incognite fisiche sono indicate.</desc>
+<rect x="0" y="0" width="3200" height="2250" rx="0" fill="#ffffff" stroke="#ffffff" stroke-width="2"/>
+<rect x="2500" y="505" width="530" height="295" rx="16" fill="#edf5f1" stroke="#8cab9b" stroke-width="2"/>
+<rect x="2500" y="825" width="530" height="300" rx="16" fill="#fff7e8" stroke="#dfc79a" stroke-width="2"/>
+<polyline points="520,230 3080,230" fill="none" stroke="white" stroke-width="15" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="520,230 3080,230" fill="none" stroke="#ca4239" stroke-width="7" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="520,230 520,2030" fill="none" stroke="white" stroke-width="15" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="520,230 520,2030" fill="none" stroke="#ca4239" stroke-width="7" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="3080,230 3080,2030" fill="none" stroke="white" stroke-width="15" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="3080,230 3080,2030" fill="none" stroke="#ca4239" stroke-width="7" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1210,590 1230,590 1230,275 3120,275 3120,1660 3040,1660" fill="none" stroke="white" stroke-width="15" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1210,590 1230,590 1230,275 3120,275 3120,1660 3040,1660" fill="none" stroke="#c57a12" stroke-width="7" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="65,500 65,2180 3140,2180 3140,490" fill="none" stroke="white" stroke-width="15" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="65,500 65,2180 3140,2180 3140,490" fill="none" stroke="#25323a" stroke-width="7" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="65,690 2450,690 2450,500 3140,500" fill="none" stroke="white" stroke-width="15" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="65,690 2450,690 2450,500 3140,500" fill="none" stroke="#25323a" stroke-width="7" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="100,500 65,500" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="100,500 65,500" fill="none" stroke="#25323a" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="400,430 540,430" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="400,430 540,430" fill="none" stroke="#ca4239" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="670,430 850,430" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="670,430 850,430" fill="none" stroke="#ca4239" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="960,580 960,690" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="960,580 960,690" fill="none" stroke="#25323a" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1200,430 1310,430" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1200,430 1310,430" fill="none" stroke="#ca4239" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1490,430 1580,430" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1490,430 1580,430" fill="none" stroke="#ca4239" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1580,530 1520,530 1520,690" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1580,530 1520,530 1520,690" fill="none" stroke="#25323a" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1980,530 2000,530 2000,690" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1980,530 2000,530 2000,690" fill="none" stroke="#25323a" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1980,430 2030,430 2030,230" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1980,430 2030,430 2030,230" fill="none" stroke="#ca4239" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1540,430 1540,480 1285,480" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1540,430 1540,480 1285,480" fill="none" stroke="#ca4239" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1285,480 1285,480 1285,650 1330,650 1330,635" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1285,480 1285,480 1285,650 1330,650 1330,635" fill="none" stroke="#ca4239" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1387,635 1387,690" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1387,635 1387,690" fill="none" stroke="#25323a" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1440,480 1440,480 1440,650 1465,650 1465,611" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1440,480 1440,480 1440,650 1465,650 1465,611" fill="none" stroke="#ca4239" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1495,611 1495,690" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1495,611 1495,690" fill="none" stroke="#25323a" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2030,430 2030,480 2280,480" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2030,430 2030,480 2280,480" fill="none" stroke="#ca4239" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2075,480 2075,480 2075,650 2120,650 2120,635" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2075,480 2075,480 2075,650 2120,650 2120,635" fill="none" stroke="#ca4239" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2177,635 2177,690" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2177,635 2177,690" fill="none" stroke="#25323a" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2280,480 2280,480 2280,650 2305,650 2305,611" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2280,480 2280,480 2280,650 2305,650 2305,611" fill="none" stroke="#ca4239" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2335,611 2335,690" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2335,611 2335,690" fill="none" stroke="#25323a" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2610,490 3140,490" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2610,490 3140,490" fill="none" stroke="#25323a" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2470,485 2470,490 2550,490" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2470,485 2470,490 2550,490" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1950,810 2480,810 2480,910 3080,910" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1950,810 2480,810 2480,910 3080,910" fill="none" stroke="#ca4239" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1950,865 2480,865 2480,1090 3140,1090" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1950,865 2480,865 2480,1090 3140,1090" fill="none" stroke="#25323a" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2515,600 2920,600" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2515,600 2920,600" fill="none" stroke="#ca4239" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2515,780 2920,780" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2515,780 2920,780" fill="none" stroke="#25323a" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2560,600 2560,763 2607,763 2607,745" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2560,600 2560,763 2607,763 2607,745" fill="none" stroke="#ca4239" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2663,745 2663,780" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2663,745 2663,780" fill="none" stroke="#25323a" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2810,600 2810,763 2847,763 2847,722" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2810,600 2810,763 2847,763 2847,722" fill="none" stroke="#ca4239" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2883,722 2883,780" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2883,722 2883,780" fill="none" stroke="#25323a" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2515,600 3080,600" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2515,600 3080,600" fill="none" stroke="#ca4239" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2920,780 3140,780" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2920,780 3140,780" fill="none" stroke="#25323a" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2515,910 2920,910" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2515,910 2920,910" fill="none" stroke="#ca4239" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2515,1090 2920,1090" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2515,1090 2920,1090" fill="none" stroke="#25323a" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2560,910 2560,1073 2607,1073 2607,1055" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2560,910 2560,1073 2607,1073 2607,1055" fill="none" stroke="#ca4239" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2663,1055 2663,1090" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2663,1055 2663,1090" fill="none" stroke="#25323a" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2810,910 2810,1073 2847,1073 2847,1032" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2810,910 2810,1073 2847,1073 2847,1032" fill="none" stroke="#ca4239" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2883,1032 2883,1090" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2883,1032 2883,1090" fill="none" stroke="#25323a" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2515,910 2480,910" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2515,910 2480,910" fill="none" stroke="#ca4239" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2920,1090 3140,1090" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2920,1090 3140,1090" fill="none" stroke="#25323a" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1240,865 1200,865 1200,690" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1240,865 1200,865 1200,690" fill="none" stroke="#25323a" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1240,810 1210,810 1210,590 900,590 900,580" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1240,810 1210,810 1210,590 900,590 900,580" fill="none" stroke="#c57a12" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1950,1250 2330,1250 2330,665 1080,665 1080,580" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1950,1250 2330,1250 2330,665 1080,665 1080,580" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1950,1305 2300,1305 2300,680 1020,680 1020,580" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1950,1305 2300,1305 2300,680 1020,680 1020,580" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1240,920 1120,920 1120,605 800,605 800,260 2470,260 2470,335" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1240,920 1120,920 1120,605 800,605 800,260 2470,260 2470,335" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="100,870 65,870" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="100,870 65,870" fill="none" stroke="#25323a" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="100,1110 445,1110" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="100,1110 445,1110" fill="none" stroke="#ca4239" stroke-width="4" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="12 10"/>
+<polyline points="100,1290 445,1290" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="100,1290 445,1290" fill="none" stroke="#25323a" stroke-width="4" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="12 10"/>
+<polyline points="145,1110 145,1273 192,1273 192,1255" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="145,1110 145,1273 192,1273 192,1255" fill="none" stroke="#ca4239" stroke-width="4" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="12 10"/>
+<polyline points="248,1255 248,1290" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="248,1255 248,1290" fill="none" stroke="#25323a" stroke-width="4" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="12 10"/>
+<polyline points="335,1110 335,1273 372,1273 372,1232" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="335,1110 335,1273 372,1273 372,1232" fill="none" stroke="#ca4239" stroke-width="4" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="12 10"/>
+<polyline points="408,1232 408,1290" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="408,1232 408,1290" fill="none" stroke="#25323a" stroke-width="4" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="12 10"/>
+<polyline points="570,870 590,870 590,1110 100,1110" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="570,870 590,870 590,1110 100,1110" fill="none" stroke="#9e3655" stroke-width="4" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="12 10"/>
+<polyline points="445,1290 65,1290" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="445,1290 65,1290" fill="none" stroke="#25323a" stroke-width="4" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="12 10"/>
+<polyline points="170,1090 80,1090 80,1327 193,1327" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="170,1090 80,1090 80,1327 193,1327" fill="none" stroke="#267751" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="350,1090 480,1090 480,1327 277,1327" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="350,1090 480,1090 480,1327 277,1327" fill="none" stroke="#267751" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1950,1415 2420,1415 2420,750 460,750 460,970 430,970" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1950,1415 2420,1415 2420,750 460,750 460,970 430,970" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1950,1470 2450,1470 2450,720 490,720 490,1020 430,1020" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1950,1470 2450,1470 2450,720 490,720 490,1020 430,1020" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1240,1030 1160,1030 1160,1330 725,1330" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1240,1030 1160,1030 1160,1330 725,1330" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="575,1330 550,1330 550,920 430,920" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="575,1330 550,1330 550,920 430,920" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="520,760 955,760 955,1010 855,1010" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="520,760 955,760 955,1010 855,1010" fill="none" stroke="#ca4239" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="640,760 640,815" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="640,760 640,815" fill="none" stroke="#ca4239" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="640,965 640,1010 715,1010" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="640,965 640,1010 715,1010" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="785,1010 785,1060 570,1060 570,870 430,870" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="785,1010 785,1060 570,1060 570,870 430,870" fill="none" stroke="#9e3655" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="715,1010 715,1080 690,1080 690,1090" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="715,1010 715,1080 690,1080 690,1090" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1240,975 1190,975 1190,1160 1025,1160" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1240,975 1190,975 1190,1160 1025,1160" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="875,1160 850,1160" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="875,1160 850,1160" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="865,1160 865,1375" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="865,1160 865,1375" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="865,1525 865,2150 65,2150" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="865,1525 865,2150 65,2150" fill="none" stroke="#25323a" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="690,1270 740,1270 740,1300 65,1300" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="690,1270 740,1270 740,1300 65,1300" fill="none" stroke="#25323a" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="100,1500 65,1500" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="100,1500 65,1500" fill="none" stroke="#25323a" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="430,1500 520,1500" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="430,1500 520,1500" fill="none" stroke="#ca4239" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1240,1085 1130,1085 1130,1570 1025,1570" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1240,1085 1130,1085 1130,1570 1025,1570" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="875,1570 430,1570" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="875,1570 430,1570" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="580,1570 580,1695" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="580,1570 580,1695" fill="none" stroke="#226db5" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="580,1845 580,1910 65,1910" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="580,1845 580,1910 65,1910" fill="none" stroke="#25323a" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="430,1640 650,1640" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="430,1640 650,1640" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="800,1640 900,1640 980,1640 980,1800 2050,1800 2050,1360 1950,1360" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="800,1640 900,1640 980,1640 980,1800 2050,1800 2050,1360 1950,1360" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="900,1640 900,1665" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="900,1640 900,1665" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="900,1815 900,2120 65,2120" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="900,1815 900,2120 65,2120" fill="none" stroke="#25323a" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="150,1850 150,1960" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="150,1850 150,1960" fill="none" stroke="#ca4239" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="240,1850 240,1960" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="240,1850 240,1960" fill="none" stroke="#25323a" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="330,1850 330,1960" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="330,1850 330,1960" fill="none" stroke="#267751" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="400,1850 400,1960" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="400,1850 400,1960" fill="none" stroke="#89959f" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="3040,1730 3140,1730" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="3040,1730 3140,1730" fill="none" stroke="#25323a" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1240,1250 1050,1250 1050,1860 2090,1860 2090,1310 2710,1310" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1240,1250 1050,1250 1050,1860 2090,1860 2090,1310 2710,1310" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1240,1580 1080,1580 1080,1890 2120,1890 2120,1380 2710,1380" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1240,1580 1080,1580 1080,1890 2120,1890 2120,1380 2710,1380" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1950,1195 2180,1195 2180,1450 2710,1450" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1950,1195 2180,1195 2180,1450 2710,1450" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1950,1140 2210,1140 2210,1520 2710,1520" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1950,1140 2210,1140 2210,1520 2710,1520" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1950,1085 2240,1085 2240,1590 2710,1590" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1950,1085 2240,1085 2240,1590 2710,1590" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1240,1140 1140,1140 1140,1720 1690,1720 1690,1940" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1240,1140 1140,1140 1140,1720 1690,1720 1690,1940" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1240,1195 1110,1195 1110,1750 1560,1750 1560,1940" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1240,1195 1110,1195 1110,1750 1560,1750 1560,1940" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1240,1305 1180,1305 1180,1840 1430,1840 1430,1940" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1240,1305 1180,1305 1180,1840 1430,1840 1430,1940" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1240,1360 1210,1360 1210,1870 1300,1870 1300,1940" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1240,1360 1210,1360 1210,1870 1300,1870 1300,1940" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1950,920 2360,920 2360,1720 1820,1720 1820,1940" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1950,920 2360,920 2360,1720 1820,1720 1820,1940" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1950,1030 2390,1030 2390,1750 1950,1750 1950,1940" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1950,1030 2390,1030 2390,1750 1950,1750 1950,1940" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1240,1525 1100,1525 1100,1830 2240,1830 2240,2050 2290,2050" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1240,1525 1100,1525 1100,1830 2240,1830 2240,2050 2290,2050" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2360,2120 3140,2120" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2360,2120 3140,2120" fill="none" stroke="#25323a" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="70" y="58" font-family="Arial,Helvetica,sans-serif" font-size="26" font-weight="700" fill="#267751" text-anchor="start">MINÙ / CABLAGGIO · SCHEMI FORNITI + DOCUMENTAZIONE HX711</text>
+<text x="70" y="120" font-family="Arial,Helvetica,sans-serif" font-size="45" font-weight="700" fill="#25323a" text-anchor="start">Tutti i fili, con i pin dell’ESP32 nella posizione della tua mappa</text>
+<text x="70" y="171" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="400" fill="#596a76" text-anchor="start">Un solo foglio A2 · Leggi i valori delle resistenze · Incrocio senza pallino = fili separati</text>
+<text x="540" y="214" font-family="Arial,Helvetica,sans-serif" font-size="27" font-weight="700" fill="#ca4239" text-anchor="start">5 V nominali · Mini360 regolato a 5,11 V sul montaggio</text>
+<text x="2620" y="326" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#c57a12" text-anchor="start">3V3 ESP32 → OLED + VCC INA219</text>
+<text x="2710" y="2161" font-family="Arial,Helvetica,sans-serif" font-size="26" font-weight="700" fill="#25323a" text-anchor="start">GND / negativo comune</text>
+<rect x="100" y="320" width="300" height="250" rx="18" fill="#dde8ef" stroke="#8cab9b" stroke-width="2"/>
+<circle cx="118" cy="338" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
+<circle cx="382" cy="338" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
+<text x="250.0" y="365" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700" fill="#25323a" text-anchor="middle">NASTIMA</text>
+<text x="250.0" y="395" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" fill="#596a76" text-anchor="middle">LiFePO4 · 6,4 V / 6 Ah</text>
+<text x="250" y="490" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#25323a" text-anchor="middle">USB-C sul pacco</text>
+<text x="250" y="530" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="middle">Ricarica esterna 5 V</text>
+<text x="383" y="438" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#ca4239" text-anchor="end">+</text>
+<text x="117" y="508" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#25323a" text-anchor="start">−</text>
+<rect x="540" y="406" width="130" height="48" rx="8" fill="#ecdabe" stroke="#b4a17e" stroke-width="2"/>
+<text x="605" y="439" font-family="Arial,Helvetica,sans-serif" font-size="26" font-weight="700" fill="#25323a" text-anchor="middle">F1</text>
+<text x="605" y="388" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#98651a" text-anchor="middle">Valore ignoto</text>
+<rect x="850" y="300" width="350" height="280" rx="18" fill="#e8f3ee" stroke="#8cab9b" stroke-width="2"/>
+<circle cx="868" cy="318" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
+<circle cx="1182" cy="318" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
+<text x="1025.0" y="345" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700" fill="#25323a" text-anchor="middle">INA219</text>
+<text x="1025.0" y="375" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" fill="#596a76" text-anchor="middle">VIN− è positivo, non GND</text>
+<text x="867" y="438" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#ca4239" text-anchor="start">VIN+</text>
+<text x="1183" y="438" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#ca4239" text-anchor="end">VIN−</text>
+<text x="900" y="550" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#c57a12" text-anchor="middle">VCC</text>
+<text x="960" y="550" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#25323a" text-anchor="middle">GND</text>
+<text x="1020" y="550" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">SDA</text>
+<text x="1080" y="550" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">SCL</text>
+<rect x="1310" y="350" width="180" height="100" rx="9" fill="#e8edf0" stroke="#a1afb8" stroke-width="2"/>
+<rect x="1380" y="370" width="45" height="55" rx="5" fill="#35434c" stroke="#35434c" stroke-width="2"/>
+<text x="1400" y="328" font-family="Arial,Helvetica,sans-serif" font-size="26" font-weight="700" fill="#25323a" text-anchor="middle">S1 · ON/OFF</text>
+<rect x="1580" y="300" width="400" height="280" rx="18" fill="#e8f3ee" stroke="#8cab9b" stroke-width="2"/>
+<circle cx="1598" cy="318" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
+<circle cx="1962" cy="318" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
+<text x="1780.0" y="345" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700" fill="#25323a" text-anchor="middle">Mini360</text>
+<text x="1780.0" y="375" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" fill="#596a76" text-anchor="middle">Terminali funzionali, non vista pad</text>
+<text x="1597" y="438" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#ca4239" text-anchor="start">IN+</text>
+<text x="1597" y="538" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#25323a" text-anchor="start">IN−</text>
+<text x="1963" y="438" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#ca4239" text-anchor="end">OUT+</text>
+<text x="1963" y="538" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#25323a" text-anchor="end">OUT−</text>
+<rect x="1310" y="505" width="100" height="130" rx="8" fill="#354b5a" stroke="#263b48" stroke-width="2"/>
+<ellipse cx="1360" cy="505" rx="50" ry="12" fill="#bdc9d0" stroke="#728895" stroke-width="2"/>
+<rect x="1380" y="509" width="16" height="126" rx="0" fill="#c9d5dc" stroke="#c9d5dc" stroke-width="2"/>
+<text x="1354" y="553" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="700" fill="white" text-anchor="middle">220 µF</text>
+<text x="1354" y="583" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="400" fill="white" text-anchor="middle">16 V</text>
+<text x="1387" y="617" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#25323a" text-anchor="middle">−</text>
+<text x="1345" y="663" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="700" fill="#ca4239" text-anchor="start">+</text>
+<circle cx="1480" cy="580" r="35" fill="#c88839" stroke="#9d672b" stroke-width="2"/>
+<text x="1480" y="589" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="700" fill="white" text-anchor="middle">104</text>
+<rect x="2100" y="505" width="100" height="130" rx="8" fill="#354b5a" stroke="#263b48" stroke-width="2"/>
+<ellipse cx="2150" cy="505" rx="50" ry="12" fill="#bdc9d0" stroke="#728895" stroke-width="2"/>
+<rect x="2170" y="509" width="16" height="126" rx="0" fill="#c9d5dc" stroke="#c9d5dc" stroke-width="2"/>
+<text x="2144" y="553" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="700" fill="white" text-anchor="middle">470 µF</text>
+<text x="2144" y="583" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="400" fill="white" text-anchor="middle">10 V</text>
+<text x="2177" y="617" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#25323a" text-anchor="middle">−</text>
+<text x="2135" y="663" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="700" fill="#ca4239" text-anchor="start">+</text>
+<circle cx="2320" cy="580" r="35" fill="#c88839" stroke="#9d672b" stroke-width="2"/>
+<text x="2320" y="589" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="700" fill="white" text-anchor="middle">104</text>
+<text x="1780" y="485" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" fill="#25323a" text-anchor="middle">104 = 100 nF</text>
+<path d="M2525 460V415 A45 45 0 0 1 2615 415V460Z" fill="#d84d46" stroke="#a9312e" stroke-width="3"/>
+<rect x="2518" y="455" width="104" height="12" rx="4" fill="#bb3834" stroke="#bb3834" stroke-width="2"/>
+<path d="M2550 467V490 M2610 467V490" stroke="#899ba6" stroke-width="6"/>
+<text x="2660" y="396" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700" fill="#25323a" text-anchor="start">LED rosso sleep</text>
+<text x="2660" y="434" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="400" fill="#25323a" text-anchor="start">Anodo + dal GPIO15</text>
+<text x="2660" y="471" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="400" fill="#25323a" text-anchor="start">Catodo − a GND</text>
+<g transform="translate(2470 410) rotate(90)"><path d="M-75 0H-42 M42 0H75" stroke="#226db5" stroke-width="6"/><rect x="-42" y="-15" width="84" height="30" rx="11" fill="#edd8ac" stroke="#a99169" stroke-width="2"/><path d="M-24 -13V13 M0 -13V13 M24 -13V13" stroke="#b69c74" stroke-width="6"/></g>
+<text x="2442" y="418" font-family="Arial,Helvetica,sans-serif" font-size="25" font-weight="700" fill="#25323a" text-anchor="end">1 kΩ LED</text>
+<rect x="1380" y="775" width="430" height="850" rx="35" fill="#dce9fc" stroke="#8eadd2" stroke-width="2"/>
+<text x="1595" y="1090" font-family="Arial,Helvetica,sans-serif" font-size="44" font-weight="700" fill="#25323a" text-anchor="middle">ESP32</text>
+<text x="1595" y="1140" font-family="Arial,Helvetica,sans-serif" font-size="27" font-weight="700" fill="#25323a" text-anchor="middle">30 pin · 15 per lato</text>
+<text x="1595" y="1180" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="400" fill="#25323a" text-anchor="middle">Ordine della mappa di Andrea</text>
+<rect x="1240" y="791" width="140" height="38" rx="2" fill="#fff2c9" stroke="#ccb980" stroke-width="2"/>
+<text x="1310" y="818" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#c57a12" text-anchor="middle">3V3</text>
+<rect x="1810" y="791" width="140" height="38" rx="2" fill="#fff2c9" stroke="#ccb980" stroke-width="2"/>
+<text x="1880" y="818" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#ca4239" text-anchor="middle">VIN / 5V</text>
+<rect x="1240" y="846" width="140" height="38" rx="2" fill="#fff2c9" stroke="#ccb980" stroke-width="2"/>
+<text x="1310" y="873" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#25323a" text-anchor="middle">GND</text>
+<rect x="1810" y="846" width="140" height="38" rx="2" fill="#fff2c9" stroke="#ccb980" stroke-width="2"/>
+<text x="1880" y="873" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#25323a" text-anchor="middle">GND</text>
+<rect x="1240" y="901" width="140" height="38" rx="2" fill="#fff2c9" stroke="#ccb980" stroke-width="2"/>
+<text x="1310" y="928" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">GPIO15</text>
+<rect x="1810" y="901" width="140" height="38" rx="2" fill="#fff2c9" stroke="#ccb980" stroke-width="2"/>
+<text x="1880" y="928" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">GPIO13</text>
+<rect x="1240" y="956" width="140" height="38" rx="2" fill="#fff2c9" stroke="#ccb980" stroke-width="2"/>
+<text x="1310" y="983" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">GPIO2</text>
+<rect x="1810" y="956" width="140" height="38" rx="2" fill="#e5e9ed" stroke="#bdc6cd" stroke-width="2"/>
+<text x="1880" y="983" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#596a76" text-anchor="middle">GPIO12</text>
+<rect x="1240" y="1011" width="140" height="38" rx="2" fill="#fff2c9" stroke="#ccb980" stroke-width="2"/>
+<text x="1310" y="1038" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">GPIO4</text>
+<rect x="1810" y="1011" width="140" height="38" rx="2" fill="#fff2c9" stroke="#ccb980" stroke-width="2"/>
+<text x="1880" y="1038" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">GPIO14</text>
+<rect x="1240" y="1066" width="140" height="38" rx="2" fill="#fff2c9" stroke="#ccb980" stroke-width="2"/>
+<text x="1310" y="1093" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">RX2 / 16</text>
+<rect x="1810" y="1066" width="140" height="38" rx="2" fill="#fff2c9" stroke="#ccb980" stroke-width="2"/>
+<text x="1880" y="1093" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">GPIO27</text>
+<rect x="1240" y="1121" width="140" height="38" rx="2" fill="#fff2c9" stroke="#ccb980" stroke-width="2"/>
+<text x="1310" y="1148" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">TX2 / 17</text>
+<rect x="1810" y="1121" width="140" height="38" rx="2" fill="#fff2c9" stroke="#ccb980" stroke-width="2"/>
+<text x="1880" y="1148" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">GPIO26</text>
+<rect x="1240" y="1176" width="140" height="38" rx="2" fill="#fff2c9" stroke="#ccb980" stroke-width="2"/>
+<text x="1310" y="1203" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">GPIO5</text>
+<rect x="1810" y="1176" width="140" height="38" rx="2" fill="#fff2c9" stroke="#ccb980" stroke-width="2"/>
+<text x="1880" y="1203" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">GPIO25</text>
+<rect x="1240" y="1231" width="140" height="38" rx="2" fill="#fff2c9" stroke="#ccb980" stroke-width="2"/>
+<text x="1310" y="1258" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">GPIO18</text>
+<rect x="1810" y="1231" width="140" height="38" rx="2" fill="#fff2c9" stroke="#ccb980" stroke-width="2"/>
+<text x="1880" y="1258" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">GPIO33</text>
+<rect x="1240" y="1286" width="140" height="38" rx="2" fill="#fff2c9" stroke="#ccb980" stroke-width="2"/>
+<text x="1310" y="1313" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">GPIO19</text>
+<rect x="1810" y="1286" width="140" height="38" rx="2" fill="#fff2c9" stroke="#ccb980" stroke-width="2"/>
+<text x="1880" y="1313" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">GPIO32</text>
+<rect x="1240" y="1341" width="140" height="38" rx="2" fill="#fff2c9" stroke="#ccb980" stroke-width="2"/>
+<text x="1310" y="1368" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">GPIO21</text>
+<rect x="1810" y="1341" width="140" height="38" rx="2" fill="#fff2c9" stroke="#ccb980" stroke-width="2"/>
+<text x="1880" y="1368" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">GPIO35</text>
+<rect x="1240" y="1396" width="140" height="38" rx="2" fill="#e5e9ed" stroke="#bdc6cd" stroke-width="2"/>
+<text x="1310" y="1423" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#596a76" text-anchor="middle">RX0 / 3</text>
+<rect x="1810" y="1396" width="140" height="38" rx="2" fill="#fff2c9" stroke="#ccb980" stroke-width="2"/>
+<text x="1880" y="1423" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">GPIO34</text>
+<rect x="1240" y="1451" width="140" height="38" rx="2" fill="#e5e9ed" stroke="#bdc6cd" stroke-width="2"/>
+<text x="1310" y="1478" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#596a76" text-anchor="middle">TX0 / 1</text>
+<rect x="1810" y="1451" width="140" height="38" rx="2" fill="#fff2c9" stroke="#ccb980" stroke-width="2"/>
+<text x="1880" y="1478" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">GPIO39 / VN</text>
+<rect x="1240" y="1506" width="140" height="38" rx="2" fill="#fff2c9" stroke="#ccb980" stroke-width="2"/>
+<text x="1310" y="1533" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">GPIO22</text>
+<rect x="1810" y="1506" width="140" height="38" rx="2" fill="#e5e9ed" stroke="#bdc6cd" stroke-width="2"/>
+<text x="1880" y="1533" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#596a76" text-anchor="middle">GPIO36 / VP</text>
+<rect x="1240" y="1561" width="140" height="38" rx="2" fill="#fff2c9" stroke="#ccb980" stroke-width="2"/>
+<text x="1310" y="1588" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">GPIO23</text>
+<rect x="1810" y="1561" width="140" height="38" rx="2" fill="#e5e9ed" stroke="#bdc6cd" stroke-width="2"/>
+<text x="1880" y="1588" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#596a76" text-anchor="middle">EN</text>
+<text x="1595" y="1460" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="400" fill="#596a76" text-anchor="middle">Pin grigi: nessun filo esterno</text>
+<text x="1595" y="1510" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="400" fill="#25323a" text-anchor="middle">SDA21 / SCL22 sono alias:</text>
+<text x="1595" y="1550" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#25323a" text-anchor="middle">INA219 usa GPIO32 / GPIO33</text>
+<text x="2525" y="546" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" fill="#25323a" text-anchor="start">PCB custom · tra Mini360 e ESP32</text>
+<rect x="2585" y="635" width="100" height="110" rx="8" fill="#354b5a" stroke="#263b48" stroke-width="2"/>
+<rect x="2655" y="639" width="16" height="102" rx="0" fill="#ced9de" stroke="#ced9de" stroke-width="2"/>
+<ellipse cx="2635" cy="635" rx="50" ry="12" fill="#bdc9d0" stroke="#728895" stroke-width="2"/>
+<text x="2623" y="677" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="700" fill="white" text-anchor="middle">47 µF</text>
+<text x="2627" y="708" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="700" fill="white" text-anchor="middle">16 V</text>
+<text x="2663" y="736" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#25323a" text-anchor="middle">−</text>
+<text x="2607" y="761" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="700" fill="#ca4239" text-anchor="middle">+</text>
+<text x="2635" y="580" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#25323a" text-anchor="middle">Elettrolitico</text>
+<circle cx="2865" cy="695" r="32" fill="#c88839" stroke="#9d672b" stroke-width="2"/>
+<text x="2865" y="703" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="white" text-anchor="middle">104</text>
+<text x="2865" y="580" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#25323a" text-anchor="middle">Ceramico</text>
+<text x="2525" y="798" font-family="Arial,Helvetica,sans-serif" font-size="18" font-weight="700" fill="#25323a" text-anchor="start">47 µF / 16 V + 104 · coppia aggiuntiva montata</text>
+<text x="2525" y="869" font-family="Arial,Helvetica,sans-serif" font-size="25" font-weight="700" fill="#25323a" text-anchor="start">Condensatori presso ESP32</text>
+<rect x="2585" y="945" width="100" height="110" rx="8" fill="#354b5a" stroke="#263b48" stroke-width="2"/>
+<rect x="2655" y="949" width="16" height="102" rx="0" fill="#ced9de" stroke="#ced9de" stroke-width="2"/>
+<ellipse cx="2635" cy="945" rx="50" ry="12" fill="#bdc9d0" stroke="#728895" stroke-width="2"/>
+<text x="2623" y="987" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="700" fill="white" text-anchor="middle">47 µF</text>
+<text x="2627" y="1018" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="700" fill="white" text-anchor="middle">16 V</text>
+<text x="2663" y="1046" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#25323a" text-anchor="middle">−</text>
+<text x="2607" y="1071" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="700" fill="#ca4239" text-anchor="middle">+</text>
+<text x="2635" y="890" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#25323a" text-anchor="middle">Elettrolitico</text>
+<circle cx="2865" cy="1005" r="32" fill="#c88839" stroke="#9d672b" stroke-width="2"/>
+<text x="2865" y="1013" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="white" text-anchor="middle">104</text>
+<text x="2865" y="890" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#25323a" text-anchor="middle">Ceramico</text>
+<text x="2525" y="1114" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="700" fill="#98651a" text-anchor="start">Valori consigliati; montati da leggere.</text>
+<rect x="100" y="750" width="330" height="340" rx="18" fill="#e8f3ee" stroke="#8cab9b" stroke-width="2"/>
+<circle cx="118" cy="768" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
+<circle cx="412" cy="768" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
+<text x="265.0" y="795" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700" fill="#25323a" text-anchor="middle">DFPlayer Mini</text>
+<text x="265.0" y="825" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" fill="#596a76" text-anchor="middle">RX / TX / BUSY / SPK</text>
+<text x="413" y="878" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#9e3655" text-anchor="end">VCC</text>
+<text x="413" y="928" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#226db5" text-anchor="end">RX</text>
+<text x="413" y="978" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#226db5" text-anchor="end">TX</text>
+<text x="413" y="1028" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#226db5" text-anchor="end">BUSY</text>
+<text x="117" y="878" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#25323a" text-anchor="start">GND</text>
+<rect x="170" y="915" width="130" height="60" rx="5" fill="#697a86" stroke="#435562" stroke-width="2"/>
+<text x="235" y="954" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="white" text-anchor="middle">microSD</text>
+<text x="170" y="1067" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#267751" text-anchor="middle">SPK1</text>
+<text x="350" y="1067" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#267751" text-anchor="middle">SPK2</text>
+<rect x="170" y="1145" width="100" height="110" rx="8" fill="#354b5a" stroke="#263b48" stroke-width="2"/>
+<rect x="240" y="1149" width="16" height="102" rx="0" fill="#ced9de" stroke="#ced9de" stroke-width="2"/>
+<ellipse cx="220" cy="1145" rx="50" ry="12" fill="#bdc9d0" stroke="#728895" stroke-width="2"/>
+<text x="208" y="1187" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="700" fill="white" text-anchor="middle">470 µF</text>
+<text x="212" y="1218" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="700" fill="white" text-anchor="middle">16 V</text>
+<text x="248" y="1246" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#25323a" text-anchor="middle">−</text>
+<text x="192" y="1271" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="700" fill="#ca4239" text-anchor="middle">+</text>
+<text x="220" y="1140" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#25323a" text-anchor="middle">Elettrolitico</text>
+<circle cx="390" cy="1205" r="32" fill="#c88839" stroke="#9d672b" stroke-width="2"/>
+<text x="390" y="1213" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="white" text-anchor="middle">104</text>
+<text x="390" y="1140" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#25323a" text-anchor="middle">Ceramico</text>
+<circle cx="235" cy="1365" r="55" fill="#3f505d" stroke="#293741" stroke-width="2"/>
+<circle cx="235" cy="1365" r="38" fill="#728591" stroke="#899ba6" stroke-width="2"/>
+<circle cx="235" cy="1365" r="18" fill="#293741" stroke="#293741" stroke-width="2"/>
+<text x="350" y="1355" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" fill="#25323a" text-anchor="start">Altoparlante</text>
+<text x="350" y="1387" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="400" fill="#25323a" text-anchor="start">Solo SPK1/SPK2</text>
+<text x="350" y="1419" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#25323a" text-anchor="start">Nessun filo a GND</text>
+<g transform="translate(650 1330)"><path d="M-75 0H-42 M42 0H75" stroke="#226db5" stroke-width="6"/><rect x="-42" y="-15" width="84" height="30" rx="11" fill="#edd8ac" stroke="#a99169" stroke-width="2"/><path d="M-24 -13V13 M0 -13V13 M24 -13V13" stroke="#b69c74" stroke-width="6"/></g>
+<text x="650" y="1302" font-family="Arial,Helvetica,sans-serif" font-size="25" font-weight="700" fill="#25323a" text-anchor="middle">1 kΩ</text>
+<rect x="687" y="805" width="210" height="76" rx="5" fill="#b3bdc4" stroke="#87939c" stroke-width="2"/>
+<circle cx="792" cy="833" r="13" fill="#ffffff" stroke="#7c8b95" stroke-width="2"/>
+<rect x="680" y="860" width="225" height="115" rx="5" fill="#293741" stroke="#1e2a31" stroke-width="2"/>
+<text x="792" y="909" font-family="Arial,Helvetica,sans-serif" font-size="26" font-weight="700" fill="white" text-anchor="middle">IRF9540</text>
+<text x="792" y="947" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="400" fill="white" text-anchor="middle">P-MOSFET</text>
+<path d="M715 975V1010" stroke="#899ba6" stroke-width="11"/>
+<text x="690" y="1042" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" fill="#226db5" text-anchor="middle">G</text>
+<path d="M785 975V1010" stroke="#899ba6" stroke-width="11"/>
+<text x="809" y="1042" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" fill="#9e3655" text-anchor="middle">D</text>
+<path d="M855 975V1010" stroke="#899ba6" stroke-width="11"/>
+<text x="855" y="1042" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" fill="#ca4239" text-anchor="middle">S</text>
+<g transform="translate(640 890) rotate(90)"><path d="M-75 0H-42 M42 0H75" stroke="#226db5" stroke-width="6"/><rect x="-42" y="-15" width="84" height="30" rx="11" fill="#edd8ac" stroke="#a99169" stroke-width="2"/><path d="M-24 -13V13 M0 -13V13 M24 -13V13" stroke="#b69c74" stroke-width="6"/></g>
+<text x="612" y="898" font-family="Arial,Helvetica,sans-serif" font-size="25" font-weight="700" fill="#25323a" text-anchor="end"></text>
+<text x="640" y="795" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#25323a" text-anchor="middle">100 kΩ G–S</text>
+<rect x="620" y="1090" width="230" height="180" rx="18" fill="#f3eee5" stroke="#8cab9b" stroke-width="2"/>
+<circle cx="638" cy="1108" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
+<circle cx="832" cy="1108" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
+<text x="735.0" y="1135" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700" fill="#25323a" text-anchor="middle">2N3904</text>
+<text x="735.0" y="1165" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" fill="#596a76" text-anchor="middle">H331 · NPN</text>
+<text x="735" y="1228" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="700" fill="#98651a" text-anchor="middle">Pin da verificare</text>
+<text x="668" y="1083" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" fill="#226db5" text-anchor="start">C</text>
+<text x="833" y="1168" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#226db5" text-anchor="end">B</text>
+<text x="669" y="1260" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" fill="#25323a" text-anchor="start">E</text>
+<g transform="translate(950 1160)"><path d="M-75 0H-42 M42 0H75" stroke="#226db5" stroke-width="6"/><rect x="-42" y="-15" width="84" height="30" rx="11" fill="#edd8ac" stroke="#a99169" stroke-width="2"/><path d="M-24 -13V13 M0 -13V13 M24 -13V13" stroke="#b69c74" stroke-width="6"/></g>
+<text x="950" y="1132" font-family="Arial,Helvetica,sans-serif" font-size="25" font-weight="700" fill="#25323a" text-anchor="middle">10 kΩ</text>
+<g transform="translate(865 1450) rotate(90)"><path d="M-75 0H-42 M42 0H75" stroke="#25323a" stroke-width="6"/><rect x="-42" y="-15" width="84" height="30" rx="11" fill="#edd8ac" stroke="#a99169" stroke-width="2"/><path d="M-24 -13V13 M0 -13V13 M24 -13V13" stroke="#b69c74" stroke-width="6"/></g>
+<text x="837" y="1458" font-family="Arial,Helvetica,sans-serif" font-size="25" font-weight="700" fill="#25323a" text-anchor="end">100 kΩ B–GND</text>
+<rect x="100" y="1430" width="330" height="420" rx="18" fill="#e8f3ee" stroke="#8cab9b" stroke-width="2"/>
+<circle cx="118" cy="1448" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
+<circle cx="412" cy="1448" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
+<text x="265.0" y="1475" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700" fill="#25323a" text-anchor="middle">HX711</text>
+<text x="413" y="1508" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#ca4239" text-anchor="end">VCC</text>
+<text x="413" y="1578" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#226db5" text-anchor="end">SCK / CLK</text>
+<text x="413" y="1648" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#226db5" text-anchor="end">DOUT / DT</text>
+<text x="117" y="1508" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#25323a" text-anchor="start">GND</text>
+<g transform="translate(950 1570)"><path d="M-75 0H-42 M42 0H75" stroke="#226db5" stroke-width="6"/><rect x="-42" y="-15" width="84" height="30" rx="11" fill="#edd8ac" stroke="#a99169" stroke-width="2"/><path d="M-24 -13V13 M0 -13V13 M24 -13V13" stroke="#b69c74" stroke-width="6"/></g>
+<text x="950" y="1542" font-family="Arial,Helvetica,sans-serif" font-size="25" font-weight="700" fill="#25323a" text-anchor="middle">220 Ω</text>
+<g transform="translate(580 1770) rotate(90)"><path d="M-75 0H-42 M42 0H75" stroke="#25323a" stroke-width="6"/><rect x="-42" y="-15" width="84" height="30" rx="11" fill="#edd8ac" stroke="#a99169" stroke-width="2"/><path d="M-24 -13V13 M0 -13V13 M24 -13V13" stroke="#b69c74" stroke-width="6"/></g>
+<text x="608" y="1778" font-family="Arial,Helvetica,sans-serif" font-size="25" font-weight="700" fill="#25323a" text-anchor="start">100 kΩ</text>
+<text x="610" y="1815" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="400" fill="#25323a" text-anchor="start">Da prevedere per replica</text>
+<g transform="translate(725 1640)"><path d="M-75 0H-42 M42 0H75" stroke="#226db5" stroke-width="6"/><rect x="-42" y="-15" width="84" height="30" rx="11" fill="#edd8ac" stroke="#a99169" stroke-width="2"/><path d="M-24 -13V13 M0 -13V13 M24 -13V13" stroke="#b69c74" stroke-width="6"/></g>
+<text x="725" y="1612" font-family="Arial,Helvetica,sans-serif" font-size="25" font-weight="700" fill="#25323a" text-anchor="middle">10 kΩ</text>
+<g transform="translate(900 1740) rotate(90)"><path d="M-75 0H-42 M42 0H75" stroke="#25323a" stroke-width="6"/><rect x="-42" y="-15" width="84" height="30" rx="11" fill="#edd8ac" stroke="#a99169" stroke-width="2"/><path d="M-24 -13V13 M0 -13V13 M24 -13V13" stroke="#b69c74" stroke-width="6"/></g>
+<text x="928" y="1748" font-family="Arial,Helvetica,sans-serif" font-size="25" font-weight="700" fill="#25323a" text-anchor="start">20 kΩ</text>
+<text x="790" y="1615" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#226db5" text-anchor="start">Punto comune GPIO35</text>
+<rect x="100" y="1960" width="330" height="150" rx="8" fill="#bdc8cf" stroke="#899ba6" stroke-width="2"/>
+<rect x="202" y="1990" width="125" height="88" rx="6" fill="#ffffff" stroke="#8ea0ab" stroke-width="2"/>
+<circle cx="145" cy="2040" r="14" fill="#8197a4" stroke="#647e8c" stroke-width="2"/>
+<circle cx="386" cy="2040" r="14" fill="#8197a4" stroke="#647e8c" stroke-width="2"/>
+<text x="150" y="1826" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#ca4239" text-anchor="middle">E+</text>
+<text x="240" y="1826" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#25323a" text-anchor="middle">E−</text>
+<text x="330" y="1826" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#267751" text-anchor="middle">A+</text>
+<text x="400" y="1826" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#89959f" text-anchor="middle">A−</text>
+<text x="505" y="1998" font-family="Arial,Helvetica,sans-serif" font-size="27" font-weight="700" fill="#25323a" text-anchor="start">Cella di carico</text>
+<text x="505" y="2036" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="400" fill="#25323a" text-anchor="start">Rosso E+ · nero E−</text>
+<text x="505" y="2074" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="400" fill="#25323a" text-anchor="start">Verde A+ · bianco A−</text>
+<text x="505" y="2112" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="400" fill="#596a76" text-anchor="start">Controlla i colori della tua cella</text>
+<rect x="2710" y="1130" width="330" height="650" rx="18" fill="#e8f3ee" stroke="#8cab9b" stroke-width="2"/>
+<circle cx="2728" cy="1148" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
+<circle cx="3022" cy="1148" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
+<text x="2875.0" y="1175" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700" fill="#25323a" text-anchor="middle">OLED SSD1322</text>
+<text x="2875.0" y="1205" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" fill="#596a76" text-anchor="middle">256 × 64 · VCC da ESP32 3V3</text>
+<rect x="2740" y="1225" width="270" height="55" rx="5" fill="#20343b" stroke="#20343b" stroke-width="2"/>
+<text x="2875" y="1262" font-family="Arial,Helvetica,sans-serif" font-size="25" font-weight="700" fill="#d6f7e4" text-anchor="middle">MINÙ 0.000 kg</text>
+<text x="2727" y="1318" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#226db5" text-anchor="start">SCK / CLK</text>
+<text x="2727" y="1388" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#226db5" text-anchor="start">MOSI / DIN</text>
+<text x="2727" y="1458" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#226db5" text-anchor="start">CS</text>
+<text x="2727" y="1528" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#226db5" text-anchor="start">DC</text>
+<text x="2727" y="1598" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#226db5" text-anchor="start">RST / RES</text>
+<text x="3023" y="1668" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#c57a12" text-anchor="end">VCC</text>
+<text x="3023" y="1738" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#25323a" text-anchor="end">GND</text>
+<rect x="1250" y="1940" width="760" height="180" rx="18" fill="#e8f3ee" stroke="#8cab9b" stroke-width="2"/>
+<circle cx="1268" cy="1958" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
+<circle cx="1992" cy="1958" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
+<text x="1630.0" y="1985" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700" fill="#25323a" text-anchor="middle">Tastiera 4 × 2</text>
+<text x="1630.0" y="2015" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" fill="#596a76" text-anchor="middle">Nessun filo a VCC o GND</text>
+<text x="1300" y="1920" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">C2 / filo6</text>
+<text x="1430" y="1920" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">C1 / filo5</text>
+<text x="1560" y="1920" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">R2 / filo2</text>
+<text x="1690" y="1920" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">R1 / filo1</text>
+<text x="1820" y="1920" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">R3 / filo3</text>
+<text x="1950" y="1920" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">R4 / filo4</text>
+<text x="1630" y="2071" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#25323a" text-anchor="middle">SKIP / ENTER · WIFI / TOTAL · SLEEP / MODE · CLEAR / TARE</text>
+<circle cx="2360" cy="2050" r="70" fill="#293b46" stroke="#1c2b33" stroke-width="2"/>
+<circle cx="2360" cy="2050" r="17" fill="#14222a" stroke="#14222a" stroke-width="2"/>
+<text x="2310" y="2041" font-family="Arial,Helvetica,sans-serif" font-size="26" font-weight="700" fill="white" text-anchor="start">+</text>
+<text x="2400" y="2120" font-family="Arial,Helvetica,sans-serif" font-size="26" font-weight="700" fill="#25323a" text-anchor="start">−</text>
+<text x="2210" y="2160" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" fill="#25323a" text-anchor="start">Buzzer passivo · GPIO22 + GND</text>
+<rect x="2530" y="1810" width="500" height="280" rx="16" fill="#fff7e8" stroke="#dfc79a" stroke-width="2"/>
+<text x="2552" y="1846" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" fill="#98651a" text-anchor="start">Da rilevare sul circuito</text>
+<text x="2552" y="1880" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">2N3904: ordine fisico B/C/E.</text>
+<text x="2552" y="1911" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">ESP32: valori montati da leggere.</text>
+<text x="2552" y="1942" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">47 µF / 16 V + 104: consigliati ESP32.</text>
+<text x="2552" y="1973" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">Caps audio tratteggiati: riferimento.</text>
+<text x="2552" y="2004" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">Audio: fili e polarità da verificare.</text>
+<text x="2552" y="2035" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">Fusibile F1: valore da leggere.</text>
+<text x="2552" y="2066" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">SCK: replica 100 kΩ; montata da verificare.</text>
+<text x="70" y="2223" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="400" fill="#596a76" text-anchor="start">Solo ESP32: posizione dei pin come nella mappa fornita. Gli altri terminali sono per sigla. Bande resistori illustrative. Firmware e LEDsleep invariati.</text>
+<circle cx="520" cy="230" r="7" fill="#ca4239"/>
+<circle cx="3080" cy="230" r="7" fill="#ca4239"/>
+<circle cx="1210" cy="590" r="7" fill="#c57a12"/>
+<circle cx="65" cy="690" r="7" fill="#25323a"/>
+<circle cx="3140" cy="500" r="7" fill="#25323a"/>
+<circle cx="400" cy="430" r="7" fill="white" stroke="#ca4239" stroke-width="3"/>
+<circle cx="100" cy="500" r="7" fill="white" stroke="#25323a" stroke-width="3"/>
+<circle cx="850" cy="430" r="7" fill="white" stroke="#ca4239" stroke-width="3"/>
+<circle cx="1200" cy="430" r="7" fill="white" stroke="#ca4239" stroke-width="3"/>
+<circle cx="900" cy="580" r="7" fill="white" stroke="#c57a12" stroke-width="3"/>
+<circle cx="960" cy="580" r="7" fill="white" stroke="#25323a" stroke-width="3"/>
+<circle cx="1020" cy="580" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="1080" cy="580" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="960" cy="690" r="7" fill="#25323a"/>
+<circle cx="1580" cy="430" r="7" fill="white" stroke="#ca4239" stroke-width="3"/>
+<circle cx="1580" cy="530" r="7" fill="white" stroke="#25323a" stroke-width="3"/>
+<circle cx="1980" cy="430" r="7" fill="white" stroke="#ca4239" stroke-width="3"/>
+<circle cx="1980" cy="530" r="7" fill="white" stroke="#25323a" stroke-width="3"/>
+<circle cx="1520" cy="690" r="7" fill="#25323a"/>
+<circle cx="2000" cy="690" r="7" fill="#25323a"/>
+<circle cx="2030" cy="230" r="7" fill="#ca4239"/>
+<circle cx="1540" cy="430" r="7" fill="#ca4239"/>
+<circle cx="1285" cy="480" r="7" fill="#ca4239"/>
+<circle cx="1387" cy="690" r="7" fill="#25323a"/>
+<circle cx="1440" cy="480" r="7" fill="#ca4239"/>
+<circle cx="1495" cy="690" r="7" fill="#25323a"/>
+<circle cx="2030" cy="430" r="7" fill="#ca4239"/>
+<circle cx="2075" cy="480" r="7" fill="#ca4239"/>
+<circle cx="2177" cy="690" r="7" fill="#25323a"/>
+<circle cx="2280" cy="480" r="7" fill="#ca4239"/>
+<circle cx="2335" cy="690" r="7" fill="#25323a"/>
+<circle cx="2550" cy="490" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="2610" cy="490" r="7" fill="white" stroke="#25323a" stroke-width="3"/>
+<circle cx="3140" cy="490" r="7" fill="#25323a"/>
+<circle cx="1240" cy="810" r="7" fill="white" stroke="#c57a12" stroke-width="3"/>
+<circle cx="1950" cy="810" r="7" fill="white" stroke="#ca4239" stroke-width="3"/>
+<circle cx="1240" cy="865" r="7" fill="white" stroke="#25323a" stroke-width="3"/>
+<circle cx="1950" cy="865" r="7" fill="white" stroke="#25323a" stroke-width="3"/>
+<circle cx="1240" cy="920" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="1950" cy="920" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="1240" cy="975" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="1240" cy="1030" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="1950" cy="1030" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="1240" cy="1085" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="1950" cy="1085" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="1240" cy="1140" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="1950" cy="1140" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="1240" cy="1195" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="1950" cy="1195" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="1240" cy="1250" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="1950" cy="1250" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="1240" cy="1305" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="1950" cy="1305" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="1240" cy="1360" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="1950" cy="1360" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="1950" cy="1415" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="1950" cy="1470" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="1240" cy="1525" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="1240" cy="1580" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="3080" cy="910" r="7" fill="#ca4239"/>
+<circle cx="3140" cy="1090" r="7" fill="#25323a"/>
+<circle cx="2560" cy="600" r="7" fill="#ca4239"/>
+<circle cx="2663" cy="780" r="7" fill="#25323a"/>
+<circle cx="2810" cy="600" r="7" fill="#ca4239"/>
+<circle cx="2883" cy="780" r="7" fill="#25323a"/>
+<circle cx="3080" cy="600" r="7" fill="#ca4239"/>
+<circle cx="3140" cy="780" r="7" fill="#25323a"/>
+<circle cx="2560" cy="910" r="7" fill="#ca4239"/>
+<circle cx="2663" cy="1090" r="7" fill="#25323a"/>
+<circle cx="2810" cy="910" r="7" fill="#ca4239"/>
+<circle cx="2883" cy="1090" r="7" fill="#25323a"/>
+<circle cx="2480" cy="910" r="7" fill="#ca4239"/>
+<circle cx="1200" cy="690" r="7" fill="#25323a"/>
+<circle cx="430" cy="870" r="7" fill="white" stroke="#9e3655" stroke-width="3"/>
+<circle cx="430" cy="920" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="430" cy="970" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="430" cy="1020" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="100" cy="870" r="7" fill="white" stroke="#25323a" stroke-width="3"/>
+<circle cx="65" cy="870" r="7" fill="#25323a"/>
+<circle cx="170" cy="1090" r="7" fill="white" stroke="#267751" stroke-width="3"/>
+<circle cx="350" cy="1090" r="7" fill="white" stroke="#267751" stroke-width="3"/>
+<circle cx="193" cy="1327" r="7" fill="white" stroke="#267751" stroke-width="3"/>
+<circle cx="277" cy="1327" r="7" fill="white" stroke="#267751" stroke-width="3"/>
+<circle cx="715" cy="1010" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="785" cy="1010" r="7" fill="white" stroke="#9e3655" stroke-width="3"/>
+<circle cx="855" cy="1010" r="7" fill="white" stroke="#ca4239" stroke-width="3"/>
+<circle cx="520" cy="760" r="7" fill="#ca4239"/>
+<circle cx="640" cy="760" r="7" fill="#ca4239"/>
+<circle cx="690" cy="1090" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="850" cy="1160" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="690" cy="1270" r="7" fill="white" stroke="#25323a" stroke-width="3"/>
+<circle cx="715" cy="1010" r="7" fill="#226db5"/>
+<circle cx="865" cy="1160" r="7" fill="#226db5"/>
+<circle cx="65" cy="2150" r="7" fill="#25323a"/>
+<circle cx="65" cy="1300" r="7" fill="#25323a"/>
+<circle cx="430" cy="1500" r="7" fill="white" stroke="#ca4239" stroke-width="3"/>
+<circle cx="430" cy="1570" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="430" cy="1640" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="100" cy="1500" r="7" fill="white" stroke="#25323a" stroke-width="3"/>
+<circle cx="65" cy="1500" r="7" fill="#25323a"/>
+<circle cx="520" cy="1500" r="7" fill="#ca4239"/>
+<circle cx="580" cy="1570" r="7" fill="#226db5"/>
+<circle cx="65" cy="1910" r="7" fill="#25323a"/>
+<circle cx="900" cy="1640" r="7" fill="#226db5"/>
+<circle cx="65" cy="2120" r="7" fill="#25323a"/>
+<circle cx="150" cy="1850" r="7" fill="white" stroke="#ca4239" stroke-width="3"/>
+<circle cx="150" cy="1960" r="7" fill="white" stroke="#ca4239" stroke-width="3"/>
+<circle cx="240" cy="1850" r="7" fill="white" stroke="#25323a" stroke-width="3"/>
+<circle cx="240" cy="1960" r="7" fill="white" stroke="#25323a" stroke-width="3"/>
+<circle cx="330" cy="1850" r="7" fill="white" stroke="#267751" stroke-width="3"/>
+<circle cx="330" cy="1960" r="7" fill="white" stroke="#267751" stroke-width="3"/>
+<circle cx="400" cy="1850" r="7" fill="white" stroke="#89959f" stroke-width="3"/>
+<circle cx="400" cy="1960" r="7" fill="white" stroke="#89959f" stroke-width="3"/>
+<circle cx="2710" cy="1310" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="2710" cy="1380" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="2710" cy="1450" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="2710" cy="1520" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="2710" cy="1590" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="3040" cy="1660" r="7" fill="white" stroke="#c57a12" stroke-width="3"/>
+<circle cx="3040" cy="1730" r="7" fill="white" stroke="#25323a" stroke-width="3"/>
+<circle cx="3140" cy="1730" r="7" fill="#25323a"/>
+<circle cx="1300" cy="1940" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="1430" cy="1940" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="1560" cy="1940" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="1690" cy="1940" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="1820" cy="1940" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="1950" cy="1940" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="2290" cy="2050" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="2360" cy="2120" r="7" fill="white" stroke="#25323a" stroke-width="3"/>
+<circle cx="3140" cy="2120" r="7" fill="#25323a"/>
+</svg>

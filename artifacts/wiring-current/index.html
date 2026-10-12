@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Minù · Guida al cablaggio attuale</title>
+  <style>
+    :root { color-scheme: light; font-family: system-ui, sans-serif; color: #25323a; background: #f4f7f8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    main { max-width: 1600px; margin: auto; padding: 28px; }
+    .eyebrow { color: #267751; font-size: 13px; font-weight: 700; letter-spacing: .08em; }
+    h1 { font-size: clamp(26px, 3vw, 38px); margin: 8px 0 12px; }
+    p { line-height: 1.6; margin: 10px 0; max-width: 100ch; }
+    a { color: #226db5; text-underline-offset: 3px; }
+    nav, .tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 18px 0; }
+    button, select { font: inherit; padding: 11px 15px; min-height: 44px; color: #25323a; border: 1px solid #cbd6dd; border-radius: 8px; background: white; }
+    button { cursor: pointer; }
+    button[aria-pressed="true"] { background: #267751; color: white; border-color: #267751; }
+    button:focus-visible, a:focus-visible, select:focus-visible { outline: 3px solid #c57a12; outline-offset: 3px; }
+    .tools { justify-content: space-between; }
+    .tools label { display: flex; align-items: center; gap: 10px; }
+    .links { display: flex; flex-wrap: wrap; gap: 18px; }
+    .viewer { background: white; border: 1px solid #cbd6dd; border-radius: 10px; overflow: auto; max-height: 80vh; }
+    .viewer img { display: block; width: 100%; max-width: none; height: auto; }
+    .caption { font-weight: 600; }
+    aside { margin-top: 20px; padding: 16px 20px; background: #fff7e8; border-radius: 10px; }
+    aside p { margin: 0; }
+    .help { color: #596a76; font-size: 14px; }
+    @media (max-width: 600px) { main { padding: 18px 12px; } nav button { flex: 1 1 45%; text-align: left; } .tools { gap: 14px; } }
+  </style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">MINÙ · NASTIMA + MINI360</div>
+  <h1>Il cablaggio della bilancia attuale</h1>
+  <p><strong>Riferimenti: schemi forniti da Andrea; per l’HX711, documentazione del progetto.</strong> OLED e INA219 ricevono VCC dal 3V3 ESP32. HX711 e ramo audio ricevono la linea VIN/5V del Mini360. Per la replica prevedere una <strong>100 kΩ fra SCK e GND</strong>, dopo la 220 Ω sul lato HX711 e vicino al modulo. Mantiene il clock basso quando il GPIO16 non è pilotato durante avvio/reset. La presenza sulla bilancia attuale resta da confermare.</p>
+  <p>Una tavola generale con tutti i fili e sei dettagli. La generale segue la posizione dei 30 pin ESP32 nella mappa di Andrea; sugli altri moduli segui le sigle dei terminali.</p>
+  <nav aria-label="Scegli la tavola">
+    <button type="button" data-sheet="0" aria-pressed="true">Generale · Tutti i fili</button>
+    <button type="button" data-sheet="1" aria-pressed="false">01 · Panoramica</button>
+    <button type="button" data-sheet="2" aria-pressed="false">02 · Alimentazione</button>
+    <button type="button" data-sheet="3" aria-pressed="false">03 · HX711 e cella</button>
+    <button type="button" data-sheet="4" aria-pressed="false">04 · Audio</button>
+    <button type="button" data-sheet="5" aria-pressed="false">05 · Tastiera e LED</button>
+    <button type="button" data-sheet="6" aria-pressed="false">06 · OLED e INA219</button>
+  </nav>
+  <div class="tools">
+    <label for="zoom">Ingrandimento <select id="zoom"><option value="100">Adatta alla finestra</option><option value="150">150%</option><option value="200">200%</option><option value="300">300%</option></select></label>
+    <div class="links"><a id="vector-link" href="00-wiring-complete.svg" target="_blank">Apri tavola ingrandibile</a><a href="cablaggio-generale.pdf" target="_blank">PDF generale A2</a><a href="guida-illustrata.pdf" target="_blank">PDF dei dettagli A3</a><a href="README.md">Tabella dei fili</a></div>
+  </div>
+  <div class="viewer" id="viewer"><img id="plate" src="00-wiring-complete.svg" alt="Tutti i fili della bilancia, con i 30 pin ESP32 nella posizione della mappa fornita da Andrea."></div>
+  <p id="caption" class="caption" aria-live="polite">Generale · Tutti i fili, con la disposizione dei 30 pin ESP32 della mappa fornita.</p>
+  <p class="help">Per vedere i pin piccoli aumenta l’ingrandimento e scorri la tavola. Un pallino pieno indica unione dei fili; un incrocio senza pallino resta separato. I colori delle resistenze disegnate sono illustrativi: conta il valore scritto.</p>
+  <aside><p><strong>NPN: 2N3904 H331. LED: 1 kΩ. Audio: 470 µF / 16 V + 104 = 100 nF.</strong> La PCB custom fra Mini360 ed ESP32 ha una coppia <strong>aggiuntiva e identificata: 47 µF / 16 V + 104</strong>. La coppia presso l’ESP32 è distinta: i valori fisici restano da leggere e quelli mostrati, <strong>47 µF / 16 V + 100 nF (104)</strong>, sono consigliati per la replica. Restano da verificare l’ordine fisico dei piedini del NPN, i collegamenti e la collocazione dei condensatori audio e il fusibile F1. I tratteggi audio mostrano collegamenti di riferimento. La <strong>100 kΩ SCK–GND è disegnata con fili continui ed è prevista per la replica</strong>; resta da confermare soltanto se sia già montata sulla bilancia attuale. Firmware e LED sleep sono invariati.</p></aside>
+</main>
+<script>
+  const sheets = [
+    ['00-wiring-complete', 'Generale · Tutti i fili, con la disposizione dei 30 pin ESP32 della mappa fornita.'],
+    ['01-wiring-overview', '01 · Tutta la bilancia: gruppi di collegamenti e rimandi ai dettagli.'],
+    ['02-power', '02 · Alimentazione: Mini360, coppia PCB custom aggiuntiva e coppia ESP32 distinta; audio nella tavola 04.'],
+    ['03-hx711', '03 · HX711: GPIO16 con 220 Ω; partitore DOUT da 10 kΩ e 20 kΩ sul punto GPIO35.'],
+    ['04-audio', '04 · Audio: IRF9540, 2N3904 H331, UART, resistenze, condensatori audio e altoparlante.'],
+    ['05-controls', '05 · Comandi: i sei fili della tastiera, buzzer su GPIO22 e LED rosso su GPIO15.'],
+    ['06-display-ina', '06 · Display e INA219: segnali SPI/I²C e alimentazioni 5 V / 3,3 V separate.']
+  ];
+  const plate = document.getElementById('plate');
+  const viewer = document.getElementById('viewer');
+  const caption = document.getElementById('caption');
+  const vectorLink = document.getElementById('vector-link');
+  const controls = [...document.querySelectorAll('[data-sheet]')];
+  controls.forEach(button => button.addEventListener('click', () => {
+    const [file, label] = sheets[Number(button.dataset.sheet)];
+    plate.src = file + '.svg';
+    plate.alt = label;
+    vectorLink.href = file + '.svg';
+    caption.textContent = label;
+    controls.forEach(control => control.setAttribute('aria-pressed', String(control === button)));
+    viewer.scrollTo(0, 0);
+  }));
+  document.getElementById('zoom').addEventListener('change', event => {
+    plate.style.width = event.target.value + '%';
+  });
+</script>
+</body>
+</html>

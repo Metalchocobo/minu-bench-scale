@@ -109,10 +109,8 @@
 <polyline points="627.5,1135 627.5,1195" fill="none" stroke="#f4f7fa" stroke-width="12" stroke-linejoin="round"/>
 <polyline points="627.5,1135 627.5,1195" fill="none" stroke="#26333d" stroke-width="5" stroke-linejoin="round"/>
 <rect x="810" y="1010" width="245" height="125" rx="14" fill="white" stroke="#cbd6df" stroke-width="2"/>
-<polyline points="932.5,950 932.5,1010" fill="none" stroke="#f4f7fa" stroke-width="12" stroke-linejoin="round"/>
-<polyline points="932.5,950 932.5,1010" fill="none" stroke="#c63d36" stroke-width="5" stroke-linejoin="round"/>
 <text x="932.5" y="1051" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" text-anchor="middle">OLED</text>
-<text x="932.5" y="1087" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" text-anchor="middle">VCC compatibile 5 V</text>
+<text x="932.5" y="1087" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" text-anchor="middle">VCC da 3V3 ESP32</text>
 <text x="932.5" y="1116" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="400" text-anchor="middle">GND in basso</text>
 <polyline points="932.5,1135 932.5,1195" fill="none" stroke="#f4f7fa" stroke-width="12" stroke-linejoin="round"/>
 <polyline points="932.5,1135 932.5,1195" fill="none" stroke="#26333d" stroke-width="5" stroke-linejoin="round"/>
@@ -120,10 +118,13 @@
 <polyline points="1270.0,950 1270.0,1010" fill="none" stroke="#f4f7fa" stroke-width="12" stroke-linejoin="round"/>
 <polyline points="1270.0,950 1270.0,1010" fill="none" stroke="#c63d36" stroke-width="5" stroke-linejoin="round"/>
 <text x="1270.0" y="1051" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" text-anchor="middle">AUDIO ESISTENTE</text>
-<text x="1270.0" y="1087" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" text-anchor="middle">Power-gate → DFPlayer</text>
+<text x="1270.0" y="1087" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" text-anchor="middle">IRF9540 → DFPlayer</text>
 <text x="1270.0" y="1116" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="400" text-anchor="middle">GND in basso</text>
 <polyline points="1270.0,1135 1270.0,1195" fill="none" stroke="#f4f7fa" stroke-width="12" stroke-linejoin="round"/>
 <polyline points="1270.0,1135 1270.0,1195" fill="none" stroke="#26333d" stroke-width="5" stroke-linejoin="round"/>
+<polyline points="445,1087 475,1087 475,990 932.5,990 932.5,1010" fill="none" stroke="#f4f7fa" stroke-width="12" stroke-linejoin="round"/>
+<polyline points="445,1087 475,1087 475,990 932.5,990 932.5,1010" fill="none" stroke="#236bb5" stroke-width="5" stroke-linejoin="round"/>
+<text x="438" y="1072" fill="#236bb5" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="700" text-anchor="end">3V3</text>
 <polyline points="1485,950 1485,1063.5" fill="none" stroke="#f4f7fa" stroke-width="12" stroke-linejoin="round"/>
 <polyline points="1485,950 1485,1063.5" fill="none" stroke="#c63d36" stroke-width="5" stroke-linejoin="round"/>
 <polyline points="1467,1063.5 1503,1063.5" fill="none" stroke="#f4f7fa" stroke-width="11" stroke-linejoin="round"/>
@@ -180,14 +181,14 @@
 <circle cx="627.5" cy="1010" r="6" fill="white" stroke="#c63d36" stroke-width="3"/>
 <circle cx="627.5" cy="1195" r="6" fill="#26333d"/>
 <circle cx="627.5" cy="1135" r="6" fill="white" stroke="#26333d" stroke-width="3"/>
-<circle cx="932.5" cy="950" r="6" fill="#c63d36"/>
-<circle cx="932.5" cy="1010" r="6" fill="white" stroke="#c63d36" stroke-width="3"/>
 <circle cx="932.5" cy="1195" r="6" fill="#26333d"/>
 <circle cx="932.5" cy="1135" r="6" fill="white" stroke="#26333d" stroke-width="3"/>
 <circle cx="1270.0" cy="950" r="6" fill="#c63d36"/>
 <circle cx="1270.0" cy="1010" r="6" fill="white" stroke="#c63d36" stroke-width="3"/>
 <circle cx="1270.0" cy="1195" r="6" fill="#26333d"/>
 <circle cx="1270.0" cy="1135" r="6" fill="white" stroke="#26333d" stroke-width="3"/>
+<circle cx="445" cy="1087" r="6" fill="white" stroke="#236bb5" stroke-width="3"/>
+<circle cx="932.5" cy="1010" r="6" fill="white" stroke="#236bb5" stroke-width="3"/>
 <circle cx="1485" cy="950" r="6" fill="#c63d36"/>
 <circle cx="1485" cy="1195" r="6" fill="#26333d"/>
 <circle cx="1640" cy="950" r="6" fill="#c63d36"/>

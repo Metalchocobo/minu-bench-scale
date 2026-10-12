@@ -1,17 +1,23 @@
-# Minù Bench Scale — ESP32 + HX711 + OLED SSD1322 + INA219 (LiFePO4 USB-C + Mini360) · v2026-09-18
+# Minù Bench Scale — ESP32 + HX711 + OLED SSD1322 + INA219 (LiFePO4 USB-C + Mini360) · v2026-10-02
+
+Il cablaggio di riferimento segue la documentazione HX711 confermata da Andrea e i due ritagli di schema forniti per gli altri moduli: **OLED e INA219 sono alimentati da ESP32 3V3; HX711 e source dell'IRF9540 dalla linea Mini360 VIN/5V**. I dettagli fisici ancora da completare sono distinti dai collegamenti indicati nelle fonti, in [WIRING](docs/WIRING.md) e nella [guida illustrata](artifacts/wiring-current/README.md).
 
 Bilancia da banco per uso interno in laboratorio (gelato/pasticceria), pensata per guidare e rendere affidabili le pesate ingredienti (non “pesatura legale”).
 
 Progetto meccanico separato: la [soluzione economica proposta per un solo prototipo](docs/mechanical/prototype-affordability/README.md) prevede cella e supporti commerciali T130, con scocca, fondo e piatto FDM personalizzati; costo completo e innesti sono ancora da verificare. Il [CAD della Proposta 02](docs/mechanical/concept-02/README.md) contiene invece quattro parti in alluminio su misura e non è il pacchetto da ordinare per questa soluzione. L'obiettivo resta 20 kg utili, otto tasti, display posseduto e ricarica USB; portata e accoppiamenti richiedono collaudo. Le varianti meccaniche non definiscono l'alimentazione montata, descritta nella sezione 2 e in [WIRING](docs/WIRING.md).
 
 Hardware di riferimento:
-- **ESP32 DevKit**
+- **ESP32 DevKit a 30 pin**, due file da 15 terminali, nell'orientamento fornito da Andrea
 - **HX711** (ADC 24 bit) per cella di carico con eccitazione a **5 V**
-- **OLED SSD1322** 256×64 (3,12", SPI)
+- **OLED SSD1322** 256×64 (3,12", SPI), VCC collegato a **3V3 ESP32**
 - **Batteria NASTIMA BK06-LF60-NATC**, LiFePO4 **6,4 V nominali / 6 Ah**, con BMS e ricarica USB-C integrati
 - **Mini360 DAOKAI B0B82GL5XN**, chip **MP1482DS**, uscita regolata a **5,11 V** (valore riferito sul montaggio)
-- **INA219** (CJMCU-219) per tensione/corrente batteria (high-side)
+- **INA219** (CJMCU-219) per tensione/corrente batteria (high-side), VCC collegato a **3V3 ESP32**
 - **Tastierino 4×2** + **buzzer**
+- **DFPlayer Mini**, alimentato tramite **IRF9540 P-MOSFET + NPN 2N3904**, con marcatura **H331** riferita da Andrea
+- **LED rosso di standby** del kit Arduino su GPIO15 con **1 kΩ in serie**, come indicato nello schema
+
+La [guida illustrata del cablaggio corrente](artifacts/wiring-current/README.md) raccoglie panoramica, collegamenti e componenti dello schema. Le tavole descrivono lo stato montato riferito e distinguono le raccomandazioni non confermate sul montaggio.
 
 ---
 
@@ -63,7 +69,7 @@ Scopo: gestire errori runtime dell’HX711 **senza blocchi in loop** (logica sol
 
 ## 1) Perché HX711 (e perché non NAU7802)
 
-Vincolo emerso sul campo: la cella di carico è stabile/precisa solo se eccitata a **~5 V**.  
+Vincolo emerso sul campo: la cella di carico usata richiede un'eccitazione di **circa 5 V** per mantenere stabilità e precisione. Per questo il **modulo HX711 è alimentato dalla linea nominale 5 V del Mini360**, regolato a **5,11 V**. La cella è collegata ai morsetti **E+ / E− del modulo HX711** e tutte le masse sono comuni. La tensione effettiva fra E+ ed E− dipende dal breakout e non è stata misurata: il valore di alimentazione del modulo non è una misura dell'eccitazione della cella.
 Con NAU7802 si è provato a lavorare a 5 V, ma in un setup reale si è verificato **backfeed verso GPIO ESP32** (tensione logica troppo alta) con danni hardware.
 
 Scelta attuale:
@@ -86,20 +92,26 @@ Schema logico:
 1. Alimentatore USB esterno → passaggio USB-C nella scocca → ingresso USB-C del caricatore **interno alla batteria**; ingresso dichiarato **5 V / 1,5 A**.
 2. Batteria **+ → F1 → INA219 VIN+ → VIN− → S1 → Mini360 IN+**.
 3. Batteria **− → GND comune / Mini360 IN−**; Mini360 **OUT− → GND comune**.
-4. Mini360 **OUT+ → linea nominale 5 V**: ESP32 **VIN/5V**, HX711, OLED compatibile e circuito audio con power-gate esistente.
+4. Mini360 **OUT+ → linea nominale 5 V**: ESP32 **VIN/5V**, HX711 **VCC** e IRF9540 **S** del circuito audio.
+5. ESP32 **3V3 → OLED VCC e INA219 VCC**, come indicato nel primo ritaglio di schema; il source dell'IRF9540 resta sulla linea **VIN/5V**, come indicato nel ritaglio audio.
 
 **S1 è un interruttore semplice sul positivo dopo VIN− dell'INA219. VIN− non è massa.** In OFF stacca il Mini360 dalla batteria; la ricarica interna del pacco rimane indipendente. CTK3S e batteria al piombo non fanno parte dell'alimentazione montata. L'uscita del buck resta collegata all'ESP32: S1 non isola l'eventuale alimentazione proveniente dall'USB del PC. Il ritorno USB non è stato caratterizzato sull'esemplare e non è documentato come guasto.
 
 Condensatori esterni, tutti **in parallelo** e con collegamenti corti vicino ai rispettivi pad del Mini360:
 - **IN+ ↔ IN−**, dopo S1: **220 µF / 16 V elettrolitico + 100 nF ceramico**.
 - **OUT+ ↔ OUT−**: **470 µF / 10 V elettrolitico + 100 nF ceramico**; sul montaggio il ceramico è più vicino al Mini360.
-- Vicino all'ESP32 restano previsti **10–47 µF + 100 nF** fra VIN/5V e GND; non sostituiscono quelli del buck.
 
-Cablaggio completo e polarità: [docs/WIRING.md](docs/WIRING.md). Tavole e dati del convertitore: [Mini360](artifacts/mini360/README.md). Le tacche usano fasce indicative LiFePO4 e l'icona `charging` stima la ricarica dalla tensione; avvisi sonori, countdown e protezioni conservano soglie e tempi, indipendenti dall'icona (sezioni 8–9). La combinazione **TOTAL + WIFI** permette di leggere tensione e corrente INA sul display.
+Sulla **PCB custom fra Mini360 ed ESP32** è montata una **coppia aggiuntiva 47 µF / 16 V elettrolitico + ceramico 104 = 100 nF**, in parallelo fra linea 5 V e GND. Questa coppia è identificata e distinta dai condensatori Mini360 e dalla coppia presso l'ESP32.
+
+**Sono montati anche condensatori esterni presso l'ESP32 fra VIN/5V e GND**, distinti dalla coppia PCB custom e dai componenti integrati nella scheda. I valori fisici di questa coppia presso l'ESP32 non sono stati letti. **Per la sua replica sono consigliati 47 µF / 16 V elettrolitico + 100 nF ceramico (104)**, entrambi in parallelo fra VIN/5V e GND, vicino alla scheda; il + dell'elettrolitico va a VIN/5V e il − a GND. Questi valori consigliati non identificano quelli presenti presso l'ESP32. I gruppi rimangono separati: ingresso Mini360 **220 µF / 16 V + 104**; uscita Mini360 **470 µF / 10 V + 104**; PCB custom **47 µF / 16 V + 104**; coppia presso ESP32 **con valori fisici ignoti**; audio **470 µF / 16 V + 104**.
+
+Cablaggio completo e polarità: [docs/WIRING.md](docs/WIRING.md). Lo **schema generale con tutti i fili** è disponibile in [PDF A2, pagina singola](artifacts/wiring-current/cablaggio-generale.pdf), [PNG](artifacts/wiring-current/00-wiring-complete.png) e [SVG](artifacts/wiring-current/00-wiring-complete.svg); la [guida illustrata](artifacts/wiring-current/README.md) raccoglie anche le tavole di dettaglio. Tavole e dati del convertitore: [Mini360](artifacts/mini360/README.md). Le tacche usano fasce indicative LiFePO4 e l'icona `charging` stima la ricarica dalla tensione; avvisi sonori, countdown e protezioni conservano soglie e tempi, indipendenti dall'icona (sezioni 8–9). La combinazione **TOTAL + WIFI** permette di leggere tensione e corrente INA sul display.
 
 ---
 
 ## 3) Pinout (firmware HX711)
+
+La scheda montata usa **30 terminali, 15 per fila**. Nella vista di riferimento **3V3 è in alto a sinistra e VIN in alto a destra**. L'ordine fisico completo è in [WIRING, orientamento ESP32](docs/WIRING.md#esp32-montato-orientamento-e-terminali) e nella tavola generale. **RX2 = GPIO16**, **TX2 = GPIO17**, **VN = GPIO39**, **VP = GPIO36**. Le eventuali scritte SDA su GPIO21 e SCL su GPIO22 sono alias della scheda: nel firmware corrente l'INA219 usa invece **SDA GPIO32 / SCL GPIO33**.
 
 | Funzione | Modulo | GPIO ESP32 | Note |
 |---|---|---:|---|
@@ -119,10 +131,10 @@ Cablaggio completo e polarità: [docs/WIRING.md](docs/WIRING.md). Tavole e dati 
 | Tastiera C1 | Keypad | 19 | |
 | Tastiera C2 | Keypad | 21 | |
 | Buzzer | buzzer passivo | 22 | LEDC |
-| DFPlayer TX | DFPlayer RX | 4 | resistenza 1 kΩ in serie consigliata |
-| DFPlayer RX | DFPlayer TX | 34 | opzionale, input-only |
+| DFPlayer TX | DFPlayer RX | 4 | resistenza 1 kΩ in serie nello schema corrente |
+| DFPlayer RX | DFPlayer TX | 34 | collegato nello schema; input-only, opzionale per il firmware |
 | DFPlayer power-gate | high-side esterno | 2 | HIGH = ON; non alimenta direttamente il modulo |
-| DFPlayer BUSY | DFPlayer | 39 | input-only; pull-up esterna consigliata |
+| DFPlayer BUSY | DFPlayer | 39 | collegamento diretto nello schema; pull-up esterna solo condizionale |
 | LED standby | LED esterno | 15 | active-high, con resistenza in serie |
 
 ---
@@ -139,24 +151,23 @@ Collega i 4 fili della cella su **E+, E-, A+, A-** (colori variabili: verifica l
 - HX711 **GND → GND comune**
 
 **SCK (clock)**
-- ESP32 GPIO16 → HX711 SCK **diretto (3,3 V va bene)**  
-- Consigli pratici:
-  - **220 Ω in serie** sul filo SCK vicino all’ESP32 (anti-ringing/spike)
-  - **100 kΩ pulldown** tra SCK e GND vicino al modulo HX711 (tiene SCK LOW durante boot/reset)
+- ESP32 **GPIO16 → 220 Ω in serie → SCK HX711**, senza level shifter.
+- **100 kΩ pull-down da prevedere nella replica** fra **SCK e GND**, dopo la 220 Ω sul lato HX711 e vicino al modulo. Mantiene SCK LOW quando GPIO16 non è pilotato durante avvio/reset: è una scelta di robustezza, non un obbligo del datasheet AVIA né un level shifter.
+- La presenza della 100 kΩ sulla bilancia attuale è **probabile, da confermare**; questo riguarda il rilievo fisico, non la decisione di includerla nella replica.
+- Il collegamento HX711 confermato usa il segnale del GPIO16 a 3,3 V attraverso la resistenza da 220 Ω.
 
 > Non usare i classici level shifter bidirezionali “I2C-style” (BSS138) su **SCK**: possono tenere la linea alta e mandare HX711 in **power-down**.
 
 **DOUT (data)**
 Se HX711 è a 5 V, **DOUT può andare a 5 V**: va reso “3,3 V safe”.
 
-Soluzione consigliata: **partitore resistivo**
+Cablaggio corrente: **partitore resistivo**
 - DOUT (HX711) → **10 kΩ** → GPIO35 (ESP32)
 - GPIO35 (ESP32) → **20 kΩ** → GND
 
-(Altri valori equivalenti vanno bene, l’obiettivo è restare ~≤3,3 V sul pin ESP32).
+Il rapporto ideale è 2/3: circa **3,33 V** con DOUT a 5 V, circa **3,41 V** con DOUT a 5,11 V, prima delle tolleranze. Questi sono calcoli del partitore, non misure del livello reale del breakout.
 
-Nota pratica:
-- Se colleghi DOUT diretto, prima **misura** con multimetro: se HIGH >3,6 V, è rischioso (nel tempo può rovinare l’ESP32).
+Non collegare DOUT a 5 V direttamente al GPIO35. La guida mantiene il partitore corrente; una replica richiede la verifica dei livelli effettivi del modulo e del divisore.
 
 ---
 
@@ -339,7 +350,9 @@ Caratteristiche:
 
 ### Indicatore esterno sleep (LED)
 Quando il display è spento, per capire che la bilancia è in sleep, usa un LED su:
-- **GPIO15** → **resistenza 330–2.2kΩ** → **anodo LED** → catodo a **GND** (HIGH = LED acceso).
+- **GPIO15** → **resistenza 1 kΩ** → **anodo LED** → catodo a **GND** (HIGH = LED acceso).
+
+Il LED montato è un normale LED rosso del kit Arduino. La resistenza da **1 kΩ** è identificata nel ritaglio di schema fornito da Andrea; collegamenti e comportamento sleep restano quelli correnti.
 
 ## 11) WiFi + OTA (opzionale)
 
@@ -630,7 +643,7 @@ Stack pesate in RAM (LIFO, max 50 elementi). Ogni voce conserva grammi, offset e
 
 **DOUT sempre HIGH / letture 0 fisse**
 - spesso SCK resta HIGH → HX711 in power-down
-- verifica pulldown 100 kΩ su SCK e che non ci sia un level shifter “I2C” su SCK
+- verifica la pull-down da 100 kΩ prevista fra SCK e GND, dopo la 220 Ω sul lato HX711, e che non ci sia un level shifter “I2C” su SCK
 
 **INA219 “non trovato”**
 - SDA/SCL invertiti (errore più comune)
@@ -721,17 +734,26 @@ Diagnostica audio:
 
 Nota: il firmware mantiene comunque il percorso “cold-start” sul primo `mp3` (utile se in futuro vuoi tornare all’accensione on-demand).
 
-### Collegamenti minimi
-- **ESP32 GPIO4 (TX1)** → **1kΩ in serie** → **DFPlayer RX**
-- **DFPlayer TX** → **ESP32 GPIO34 (RX1)** (opzionale, ma consigliato)
-- **DFPlayer BUSY** → **ESP32 GPIO39**
-  - BUSY è tipicamente **3.3V** (ok per ESP32)
-  - GPIO39 non ha pull interni: se a riposo il segnale risulta instabile/flottante, aggiungi **pull-up 10k..47k a 3V3**
-  - evita il pulldown a GND (rischi di leggere "busy" fisso)
-- **Altoparlante**: usa **SPK1/SPK2** (8Ω ok)
+### Collegamenti correnti
 
-### Power-gating (high-side) consigliato
-- **ESP32 GPIO2** comanda l'alimentazione DFPlayer (HIGH=ON) tramite **NPN + P-MOSFET high-side**.
+- **ESP32 GPIO4 (TX)** → **1 kΩ in serie** → **DFPlayer RX**.
+- **DFPlayer TX** → **ESP32 GPIO34 (RX)**, collegato nello schema; il firmware può funzionare anche senza questo collegamento.
+- **DFPlayer BUSY** → **ESP32 GPIO39**, diretto nello schema. GPIO39 è INPUT senza pull interno: una **pull-up 10–47 kΩ a 3,3 V** resta una raccomandazione condizionale se il segnale è instabile, non un componente confermato sul montaggio.
+- **Altoparlante** → **SPK1 / SPK2**; non usare GND al posto di uno dei due terminali SPK.
+- **DFPlayer GND** → **GND comune**.
+- Presso il DFPlayer sono confermati un **elettrolitico da 470 µF / 16 V** e un **ceramico marcato 104, cioè 100 nF**. Quantità complessiva, collegamenti, polarità e collocazione esatta vanno rilevati sul circuito prima di una replica. Nelle tavole i collegamenti tratteggiati dei condensatori fra VCC audio e GND sono un riferimento **da confermare**, non la verifica del montaggio. Il 470 µF / 16 V audio è distinto dal **470 µF / 10 V del Mini360**.
+
+### Power-gating montato (high-side)
+
+Il circuito corrente usa **IRF9540 P-MOSFET + NPN 2N3904** e mantiene `GPIO2 HIGH = ON`:
+
+- **IRF9540 S** → linea **VIN/5V del Mini360 (5,11 V riferiti)**; **D** → **DFPlayer VCC**. Questa alimentazione è indicata nel ritaglio audio e non proviene da 3V3.
+- **IRF9540 G** → **collettore NPN**; **100 kΩ** fra **G e S**.
+- **GPIO2 → 10 kΩ → base NPN**; **100 kΩ** fra **base e GND**; **emettitore NPN → GND**.
+
+Andrea identifica il NPN montato dalla marcatura **2N3904 H331**. Il 2N3904 è adatto al comando del gate dell'IRF9540; **H331** è riportato senza attribuirgli produttore o data. L'orientamento fisico dei piedini dell'esemplare resta da verificare prima della replica; le lettere B/C/E nello schema indicano le funzioni. La topologia è coerente con il firmware; caduta di tensione e temperatura dell'IRF9540 al carico audio non sono state misurate. Prima di tagliare VCC il firmware chiude UART e mette GPIO4/GPIO34 in INPUT.
+
+Schema dettagliato e distinta del collegamento: [guida illustrata](artifacts/wiring-current/README.md) e [WIRING](docs/WIRING.md#7-dfplayer-mini--esp32).
 
 > Nota: evitiamo di usare il comando "sleep" interno del DFPlayer (0x0A) perché su molti cloni non si risveglia in modo affidabile; per risparmio batteria serio è meglio tagliare VCC.
 

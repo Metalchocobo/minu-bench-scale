@@ -1,15 +1,22 @@
 # esp32_hx711_serial — Firmware HX711 (ESP32)
 
+Le fonti hardware correnti sono la documentazione HX711 confermata da Andrea e i due ritagli di schema forniti: **OLED VCC e INA219 VCC → ESP32 3V3; HX711 VCC e IRF9540 S → linea Mini360 VIN/5V**. La resistenza LED su GPIO15 è **1 kΩ** nello schema. La **100 kΩ pull-down SCK–GND è da prevedere nella replica**, dopo la 220 Ω sul lato HX711 e vicino al modulo: mantiene SCK LOW quando GPIO16 non è pilotato durante avvio/reset. È una scelta di robustezza, non un obbligo del datasheet AVIA né un level shifter; soltanto la presenza sulla bilancia attuale resta probabile, da confermare. I dettagli fisici incerti sono distinti dai collegamenti in [WIRING](../../docs/WIRING.md).
+
 Le fonti canoniche sono mantenute nella root del repository:
 
 - `../../README.md` — comportamento firmware, comandi, MQTT, build e diagnostica.
 - `../../docs/WIRING.md` — pinout e cablaggio fisico.
+- [Guida illustrata del cablaggio corrente](../../artifacts/wiring-current/README.md) — panoramica, tavole dei collegamenti e componenti identificati.
 
 ## Alimentazione montata e configurazione firmware
 
 La bilancia usa la batteria USB-C NASTIMA LiFePO4 e il Mini360 MP1482DS, con uscita regolata a **5,11 V** e primo funzionamento positivo riferito da Andrea. Le tacche usano fasce indicative LiFePO4 definite in `config/config_battery.h`. L'icona `charging` usa la tensione filtrata: ON a **≥ 6,70 V per 5 s**, OFF a **≤ 6,68 V per 10 s**, stato conservato nella banda intermedia, senza un tempo minimo acceso aggiuntivo. Campioni invalidi/scaduti azzerano indicazione e timer. La corrente INA219 è quella del carico: la ricarica interna USB non attraversa lo shunt esterno. Queste soglie, scelte dalle letture riferite, non provano la presenza USB o la carica residua; a batteria bassa la ricarica può essere attiva senza raggiungerle. Avvisi sonori, countdown e protezioni conservano soglie e tempi e restano attivi anche con `charging` acceso. Soglie effettive e limiti sono nel [README principale](../../README.md#8-monitoraggio-batteria-ina219); percorso elettrico in [WIRING](../../docs/WIRING.md#9-alimentazione-e-masse).
 
 **Lettura batteria:** tenere premuti **TOTAL + WIFI** per visualizzare tensione e corrente INA aggiornate; rilasciare per chiudere. I tasti singoli WIFI/TOTAL agiscono al rilascio e vengono consumati dalla combinazione. Campioni invalidi/scaduti non vengono mostrati; safety, TARE, ENTER e calibrazione hanno priorità. La schermata è diagnostica e non modifica soglie o rilevamento ricarica. Dettagli nella [sezione INA219](../../README.md#81-collegamenti-ina219).
+
+Il power-gate audio montato usa **IRF9540 + NPN 2N3904**, con marcatura **H331** riferita da Andrea e comando **GPIO2 HIGH = ON**. Il ritaglio audio indica **IRF9540 S → VIN/5V**, **D → VCC DFPlayer**, **100 kΩ G–S**, **GPIO2 → 10 kΩ → base NPN**, **100 kΩ base–GND** ed **emettitore → GND**. H331 non identifica qui produttore o data; il pinout fisico dell'esemplare resta da verificare. Presso il DFPlayer sono confermati un **elettrolitico da 470 µF / 16 V** e un **ceramico 104 = 100 nF**; quantità, collegamenti, polarità e posizione restano da rilevare.
+
+I condensatori restano in gruppi distinti: ingresso Mini360 **220 µF / 16 V + 104**; uscita Mini360 **470 µF / 10 V + 104**; coppia **aggiuntiva sulla PCB custom fra Mini360 ed ESP32, 47 µF / 16 V + 104**, fra 5 V e GND; coppia **presso ESP32**, presente fra VIN/5V e GND con valori fisici ancora ignoti; audio **470 µF / 16 V + 104**. Per la sola coppia presso ESP32 sono consigliati per la replica **47 µF / 16 V + 100 nF (104)**, in parallelo vicino alla scheda, con + dell'elettrolitico a VIN/5V e − a GND. Questi valori consigliati non identificano quelli montati presso ESP32 e non sostituiscono la coppia PCB custom. Pin funzionali, resistenze e riferimenti da confermare sono descritti in [WIRING](../../docs/WIRING.md#7-dfplayer-mini--esp32). L'HX711 resta sulla linea nominale 5 V del Mini360 per il requisito della cella usata. I collegamenti documentati non richiedono una modifica del firmware.
 
 ## Riferimento rapido MQTT firmware 1.5.2
 

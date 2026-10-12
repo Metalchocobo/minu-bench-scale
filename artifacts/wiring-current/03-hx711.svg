@@ -1,0 +1,122 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1250" viewBox="0 0 1800 1250" role="img">
+<title>Minù: tavola 3 del cablaggio corrente</title>
+<desc>Illustrazione di montaggio. I valori ignoti sono marcati da confermare. I terminali dei moduli seguono le sigle, non una posizione fisica universale.</desc>
+<rect x="0" y="0" width="1800" height="1250" rx="0" fill="#ffffff" stroke="#ffffff" stroke-width="2"/>
+<polyline points="440,400 625,400" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="440,400 625,400" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="775,400 1070,400" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="775,400 1070,400" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="970,400 970,410" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="970,400 970,410" fill="none" stroke="#226db5" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="970,560 970,820" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="970,560 970,820" fill="none" stroke="#25323a" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1070,580 925,580" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1070,580 925,580" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="775,580 440,580" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="775,580 440,580" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="650,580 650,590" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="650,580 650,590" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="650,740 650,820" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="650,740 650,820" fill="none" stroke="#25323a" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="440,750 1070,750" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="440,750 1070,750" fill="none" stroke="#ca4239" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="440,820 1070,820" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="440,820 1070,820" fill="none" stroke="#25323a" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1375,300 1520,300" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1375,300 1520,300" fill="none" stroke="#ca4239" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1375,370 1520,370" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1375,370 1520,370" fill="none" stroke="#25323a" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1375,440 1520,440" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1375,440 1520,440" fill="none" stroke="#267751" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1375,510 1520,510" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1375,510 1520,510" fill="none" stroke="#8a96a0" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="65,1177 117,1177" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="65,1177 117,1177" fill="none" stroke="#ca4239" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="380,1177 432,1177" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="380,1177 432,1177" fill="none" stroke="#25323a" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="715,1177 767,1177" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="715,1177 767,1177" fill="none" stroke="#c57a12" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="950,1177 1002,1177" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="950,1177 1002,1177" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="65" y="47" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="700" fill="#267751" text-anchor="start">MINÙ / CABLAGGIO · SCHEMI FORNITI + DOCUMENTAZIONE HX711</text>
+<text x="65" y="102" font-family="Arial,Helvetica,sans-serif" font-size="38" font-weight="700" fill="#25323a" text-anchor="start">03   HX711 e cella di carico</text>
+<text x="65" y="143" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#596a76" text-anchor="start">HX711 alimentato dalla linea 5 V; il partitore è sul solo filo DOUT diretto a GPIO35.</text>
+<rect x="65" y="230" width="375" height="660" rx="18" fill="#edf2f7" stroke="#8cab9b" stroke-width="2"/>
+<circle cx="83" cy="248" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
+<circle cx="422" cy="248" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
+<text x="252.5" y="275" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700" fill="#25323a" text-anchor="middle">ESP32 DevKit</text>
+<text x="252.5" y="305" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" fill="#596a76" text-anchor="middle">Usa le sigle GPIO sulla scheda</text>
+<rect x="110" y="325" width="285" height="75" rx="5" fill="#aab4bc" stroke="#87939c" stroke-width="2"/>
+<text x="252.5" y="370" font-family="Arial,Helvetica,sans-serif" font-size="25" font-weight="700" fill="#25323a" text-anchor="middle">ESP32</text>
+<text x="423" y="408" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#226db5" text-anchor="end">GPIO16 / RX2</text>
+<text x="423" y="588" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#226db5" text-anchor="end">GPIO35</text>
+<text x="423" y="758" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#ca4239" text-anchor="end">Linea 5 V</text>
+<text x="423" y="828" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#25323a" text-anchor="end">GND</text>
+<rect x="1070" y="230" width="305" height="660" rx="18" fill="#e8f3ee" stroke="#8cab9b" stroke-width="2"/>
+<circle cx="1088" cy="248" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
+<circle cx="1357" cy="248" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
+<text x="1222.5" y="275" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700" fill="#25323a" text-anchor="middle">HX711</text>
+<text x="1222.5" y="305" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" fill="#596a76" text-anchor="middle">Breakout HX711</text>
+<rect x="1138" y="455" width="130" height="70" rx="5" fill="#304b3e" stroke="#304b3e" stroke-width="2"/>
+<text x="1203" y="500" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="white" text-anchor="middle">HX711</text>
+<text x="1087" y="408" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#226db5" text-anchor="start">SCK / CLK</text>
+<text x="1087" y="588" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#226db5" text-anchor="start">DOUT / DT</text>
+<text x="1087" y="758" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#ca4239" text-anchor="start">VCC</text>
+<text x="1087" y="828" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#25323a" text-anchor="start">GND</text>
+<g transform="translate(700 400)"><path d="M-75 0H-42 M42 0H75" stroke="#226db5" stroke-width="6"/><rect x="-42" y="-15" width="84" height="30" rx="11" fill="#edd8ac" stroke="#a99169" stroke-width="2"/><path d="M-24 -13V13 M0 -13V13 M24 -13V13" stroke="#b69c74" stroke-width="6"/></g>
+<text x="700" y="372" font-family="Arial,Helvetica,sans-serif" font-size="25" font-weight="700" fill="#25323a" text-anchor="middle">220 Ω</text>
+<g transform="translate(970 485) rotate(90)"><path d="M-75 0H-42 M42 0H75" stroke="#25323a" stroke-width="6"/><rect x="-42" y="-15" width="84" height="30" rx="11" fill="#edd8ac" stroke="#a99169" stroke-width="2"/><path d="M-24 -13V13 M0 -13V13 M24 -13V13" stroke="#b69c74" stroke-width="6"/></g>
+<text x="942" y="493" font-family="Arial,Helvetica,sans-serif" font-size="25" font-weight="700" fill="#25323a" text-anchor="end">100 kΩ</text>
+<g transform="translate(850 580)"><path d="M-75 0H-42 M42 0H75" stroke="#226db5" stroke-width="6"/><rect x="-42" y="-15" width="84" height="30" rx="11" fill="#edd8ac" stroke="#a99169" stroke-width="2"/><path d="M-24 -13V13 M0 -13V13 M24 -13V13" stroke="#b69c74" stroke-width="6"/></g>
+<text x="850" y="552" font-family="Arial,Helvetica,sans-serif" font-size="25" font-weight="700" fill="#25323a" text-anchor="middle">10 kΩ</text>
+<g transform="translate(650 665) rotate(90)"><path d="M-75 0H-42 M42 0H75" stroke="#25323a" stroke-width="6"/><rect x="-42" y="-15" width="84" height="30" rx="11" fill="#edd8ac" stroke="#a99169" stroke-width="2"/><path d="M-24 -13V13 M0 -13V13 M24 -13V13" stroke="#b69c74" stroke-width="6"/></g>
+<text x="678" y="673" font-family="Arial,Helvetica,sans-serif" font-size="25" font-weight="700" fill="#25323a" text-anchor="start">20 kΩ</text>
+<text x="485" y="510" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#25323a" text-anchor="start">Punto comune GPIO35</text>
+<text x="770" y="873" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#25323a" text-anchor="middle">20 kΩ scende a GND; non va in fila su DOUT.</text>
+<rect x="1520" y="260" width="210" height="420" rx="8" fill="#bdc8cf" stroke="#899ba6" stroke-width="2"/>
+<rect x="1558" y="363" width="134" height="170" rx="7" fill="#ffffff" stroke="#8ea0ab" stroke-width="2"/>
+<circle cx="1565" cy="300" r="13" fill="#8399a6" stroke="#647e8c" stroke-width="2"/>
+<circle cx="1685" cy="300" r="13" fill="#8399a6" stroke="#647e8c" stroke-width="2"/>
+<circle cx="1565" cy="638" r="13" fill="#8399a6" stroke="#647e8c" stroke-width="2"/>
+<circle cx="1685" cy="638" r="13" fill="#8399a6" stroke="#647e8c" stroke-width="2"/>
+<text x="1625" y="726" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#25323a" text-anchor="middle">CELLA DI CARICO</text>
+<text x="1358" y="308" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#ca4239" text-anchor="end">E+</text>
+<text x="1445" y="282" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="middle">Rosso</text>
+<text x="1358" y="378" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#25323a" text-anchor="end">E−</text>
+<text x="1445" y="352" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="middle">Nero</text>
+<text x="1358" y="448" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#267751" text-anchor="end">A+</text>
+<text x="1445" y="422" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="middle">Verde</text>
+<text x="1358" y="518" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#8a96a0" text-anchor="end">A−</text>
+<text x="1445" y="492" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="middle">Bianco</text>
+<rect x="65" y="950" width="1670" height="167" rx="16" fill="#fff7e8" stroke="#dfc79a" stroke-width="2"/>
+<text x="87" y="986" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" fill="#98651a" text-anchor="start">Prima di replicare</text>
+<text x="87" y="1020" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">I colori della cella sono la convenzione documentata: controlla E+ / E− / A+ / A− della cella che usi.</text>
+<text x="87" y="1051" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">Replica: prevedere 100 kΩ fra SCK e GND, dopo la 220 Ω lato HX711, vicino al modulo.</text>
+<text x="87" y="1082" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">VCC a 5 V ed E+/E− verso la cella non significano 5 V sui GPIO dell’ESP32.</text>
+<text x="133" y="1185" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">Positivo 5 V</text>
+<text x="448" y="1185" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">GND comune</text>
+<text x="783" y="1185" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">3,3 V</text>
+<text x="1018" y="1185" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">Segnali</text>
+<text x="1235" y="1185" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">● = unione dei fili</text>
+<text x="65" y="1224" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" fill="#596a76" text-anchor="start">I terminali sono disposti per leggibilità: segui le sigle, non la posizione nel disegno.</text>
+<circle cx="440" cy="400" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="440" cy="580" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="440" cy="750" r="7" fill="white" stroke="#ca4239" stroke-width="3"/>
+<circle cx="440" cy="820" r="7" fill="white" stroke="#25323a" stroke-width="3"/>
+<circle cx="1070" cy="400" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="1070" cy="580" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="1070" cy="750" r="7" fill="white" stroke="#ca4239" stroke-width="3"/>
+<circle cx="1070" cy="820" r="7" fill="white" stroke="#25323a" stroke-width="3"/>
+<circle cx="970" cy="400" r="7" fill="#226db5"/>
+<circle cx="970" cy="820" r="7" fill="#25323a"/>
+<circle cx="650" cy="580" r="7" fill="#226db5"/>
+<circle cx="650" cy="820" r="7" fill="#25323a"/>
+<circle cx="1375" cy="300" r="7" fill="white" stroke="#ca4239" stroke-width="3"/>
+<circle cx="1520" cy="300" r="7" fill="white" stroke="#ca4239" stroke-width="3"/>
+<circle cx="1375" cy="370" r="7" fill="white" stroke="#25323a" stroke-width="3"/>
+<circle cx="1520" cy="370" r="7" fill="white" stroke="#25323a" stroke-width="3"/>
+<circle cx="1375" cy="440" r="7" fill="white" stroke="#267751" stroke-width="3"/>
+<circle cx="1520" cy="440" r="7" fill="white" stroke="#267751" stroke-width="3"/>
+<circle cx="1375" cy="510" r="7" fill="white" stroke="#8a96a0" stroke-width="3"/>
+<circle cx="1520" cy="510" r="7" fill="white" stroke="#8a96a0" stroke-width="3"/>
+</svg>

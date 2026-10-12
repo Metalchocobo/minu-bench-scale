@@ -1,8 +1,12 @@
 # Alimentazione montata: batteria USB-C e Mini360 DAOKAI
 
+La distribuzione segue la documentazione HX711 confermata da Andrea e i due ritagli di schema forniti: **Mini360 OUT+ alimenta ESP32 VIN/5V, HX711 VCC e IRF9540 S; ESP32 3V3 alimenta OLED VCC e INA219 VCC**. La [guida completa](../wiring-current/README.md) distingue i collegamenti indicati nelle fonti dai dettagli fisici ancora da completare.
+
 Configurazione montata con batteria USB-C NASTIMA e convertitore DAOKAI, Amazon ASIN **B0B82GL5XN**, con integrato **MP1482DS identificato nella foto dell'esemplare**. Andrea conferma cablaggio completato e primo funzionamento apparentemente regolare il **18 settembre 2026**. Uscita regolata a **5,11 V**, valore ottenuto e riferito da Andrea; il riferimento nominale resta una linea a 5 V. Nessuna modifica o caricamento del firmware eseguiti per questo montaggio.
 
-Il task di cablaggio e documentazione è completato. La conferma di funzionamento è una prova pratica iniziale; non sono riportate misure di autonomia, stabilità con Wi-Fi/audio, temperatura, transitori USB o recupero dopo intervento del BMS.
+La conferma di funzionamento è una prova pratica iniziale; non sono riportate misure di autonomia, stabilità con Wi-Fi/audio, temperatura, transitori USB o recupero dopo intervento del BMS.
+
+Per riprodurre anche i collegamenti dei segnali e il circuito audio montato, usare la [guida completa al cablaggio corrente](../wiring-current/README.md). Queste tre tavole approfondiscono il solo ramo di alimentazione e i pad del Mini360.
 
 ## Tavole
 
@@ -25,15 +29,15 @@ La ricarica usa l'ingresso USB-C del pacco attraverso il collegamento femmina da
 | Morsetto positivo batteria | F1 vicino alla batteria → VIN+ INA219 |
 | VIN− INA219 | Interruttore semplice S1 → IN+ Mini360 e positivo di C1/C2 |
 | Morsetto negativo batteria | IN− Mini360 e negativo comune |
-| OUT+ Mini360 | Linea 5 V di tutti i carichi |
+| OUT+ Mini360 | Linea nominale 5 V verso ESP32 VIN/5V, HX711 VCC e IRF9540 S |
 | OUT− Mini360 | Negativo comune/GND |
-| Linea 5 V | ESP32 VIN/5V, HX711 VCC, OLED compatibile 5 V e circuito audio esistente |
+| Linea VIN/5V | ESP32 VIN/5V, HX711 VCC e source IRF9540 del circuito audio |
 | GND comune | ESP32, HX711, OLED, INA219 e circuito audio |
-| VCC INA219 | 3V3 ESP32 |
+| 3V3 ESP32 | OLED VCC e INA219 VCC, come indicato nel primo ritaglio di schema |
 | SDA INA219 | GPIO32 ESP32 |
 | SCL INA219 | GPIO33 ESP32 |
 
-**VIN− dell'INA219 è ancora sul positivo; non è GND.** Il suo shunt è prima del buck, così la tensione misurata resta quella del ramo batteria. Il circuito audio conserva il power-gate esistente: GPIO2 non alimenta direttamente il DFPlayer.
+**VIN− dell'INA219 è ancora sul positivo; non è GND.** Il suo shunt è prima del buck, così la tensione misurata resta quella del ramo batteria. Il circuito audio usa il **P-MOSFET IRF9540** high-side comandato tramite **NPN 2N3904**, marcatura aggiuntiva **H331** riferita da Andrea. Il ritaglio audio indica **S → VIN/5V**, **D → VCC DFPlayer**; il source non va a 3V3. GPIO2 è HIGH=ON e non alimenta direttamente il DFPlayer. La rete di comando montata è descritta nella [guida completa](../wiring-current/README.md), insieme al LED con **1 kΩ** in serie e alla **100 kΩ SCK–GND probabile, da confermare**.
 
 **S1 è l'interruttore semplice ON/OFF, posto sul positivo dopo VIN− dell'INA219 e prima di IN+ del Mini360 e di C1/C2.** In OFF interrompe l'alimentazione del buck dalla batteria. OUT+ rimane collegato alla linea 5 V dell'ESP32 e delle periferiche; la massa resta comune. Gli ingressi di misura dell'INA219 restano sul ramo batteria anche quando il suo VCC è spento: il datasheet TI ammette questa condizione (§8.3.1). La ricarica USB interna del pacco rimane indipendente da S1. I contatti di S1 devono avere una portata DC adatta alla corrente del ramo batteria.
 
@@ -65,7 +69,13 @@ Condensatori ripresi dalle indicazioni già presenti nel README del progetto:
 
 Sul montaggio Andrea ha posizionato **prima il ceramico di uscita, più vicino al Mini360, poi l'elettrolitico**. È coerente con lo schema: entrambi sono collegati agli stessi OUT+ e OUT−, in parallelo.
 
-Vicino all'ESP32 rimangono i condensatori locali già previsti: **10–47 µF + 100 nF** fra VIN/5V e GND. Servono nel punto di alimentazione dell'ESP32 e non sono ripetuti come nuovi componenti nelle tavole.
+Sulla **PCB custom fra Mini360 ed ESP32** è montata una coppia **aggiuntiva 47 µF / 16 V elettrolitico + ceramico 104 = 100 nF**, in parallelo fra linea 5 V e GND. È identificata e distinta dalle coppie Mini360 e presso l'ESP32: + dell'elettrolitico alla linea 5 V, − a GND, ceramico fra gli stessi due punti.
+
+Sul montaggio **sono presenti anche condensatori esterni presso l'ESP32 fra VIN/5V e GND**, distinti dalla coppia PCB custom e dai componenti integrati nella scheda. I terminali sono confermati, mentre i valori fisici di questa coppia presso l'ESP32 non sono stati letti. **Per la sua replica sono consigliati 47 µF / 16 V elettrolitico + 100 nF ceramico (104)**, entrambi in parallelo fra VIN/5V e GND vicino alla scheda, con + dell'elettrolitico a VIN/5V e − a GND. Questi valori sono scelti per questa coppia, non identificati sul montaggio e non sostituiscono la coppia PCB custom.
+
+Presso il DFPlayer sono presenti un **elettrolitico da 470 µF / 16 V** e un **ceramico marcato 104 = 100 nF**, distinti dalle coppie Mini360; collegamenti, polarità, quantità complessiva e posizione esatta restano da verificare. I collegamenti tratteggiati dei condensatori audio nelle tavole sono un riferimento da confermare, non la verifica del montaggio.
+
+I cinque gruppi della guida completa restano distinti: **ingresso Mini360 220 µF / 16 V + 104**, **uscita Mini360 470 µF / 10 V + 104**, **PCB custom 47 µF / 16 V + 104**, **coppia presso ESP32 con valori fisici ignoti** e **audio 470 µF / 16 V + 104**. Le tre tavole Mini360 approfondiscono solo le coppie d'ingresso e d'uscita del convertitore; le altre sono descritte nella [guida completa](../wiring-current/README.md).
 
 ## Regolazione del convertitore
 

@@ -1,0 +1,226 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1250" viewBox="0 0 1800 1250" role="img">
+<title>Minù: tavola 2 del cablaggio corrente</title>
+<desc>Illustrazione di montaggio. I valori ignoti sono marcati da confermare. I terminali dei moduli seguono le sigle, non una posizione fisica universale.</desc>
+<rect x="0" y="0" width="1800" height="1250" rx="0" fill="#ffffff" stroke="#ffffff" stroke-width="2"/>
+<rect x="65" y="710" width="400" height="405" rx="16" fill="#f5f8fa" stroke="#cbd6dd" stroke-width="2"/>
+<rect x="495" y="710" width="400" height="405" rx="16" fill="#f5f8fa" stroke="#cbd6dd" stroke-width="2"/>
+<rect x="925" y="710" width="400" height="405" rx="16" fill="#f5f8fa" stroke="#cbd6dd" stroke-width="2"/>
+<rect x="1355" y="710" width="400" height="405" rx="16" fill="#f5f8fa" stroke="#cbd6dd" stroke-width="2"/>
+<polyline points="300,435 365,435" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="300,435 365,435" fill="none" stroke="#ca4239" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="505,435 610,435" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="505,435 610,435" fill="none" stroke="#ca4239" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="910,435 1020,435" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="910,435 1020,435" fill="none" stroke="#ca4239" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1190,435 1325,435" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1190,435 1325,435" fill="none" stroke="#ca4239" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="300,505 330,505 330,650 1740,650" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="300,505 330,505 330,650 1740,650" fill="none" stroke="#25323a" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1325,505 1270,505 1270,650" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1325,505 1270,505 1270,650" fill="none" stroke="#25323a" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1685,505 1740,505 1740,650" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1685,505 1740,505 1740,650" fill="none" stroke="#25323a" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1685,435 1770,435 1770,600" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1685,435 1770,435 1770,600" fill="none" stroke="#ca4239" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="80,820 425,820" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="80,820 425,820" fill="none" stroke="#ca4239" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="80,1000 425,1000" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="80,1000 425,1000" fill="none" stroke="#25323a" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="125,820 125,983 172,983 172,965" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="125,820 125,983 172,983 172,965" fill="none" stroke="#ca4239" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="228,965 228,1000" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="228,965 228,1000" fill="none" stroke="#25323a" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="315,820 315,983 352,983 352,942" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="315,820 315,983 352,983 352,942" fill="none" stroke="#ca4239" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="388,942 388,1000" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="388,942 388,1000" fill="none" stroke="#25323a" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="525,820 870,820" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="525,820 870,820" fill="none" stroke="#ca4239" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="525,1000 870,1000" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="525,1000 870,1000" fill="none" stroke="#25323a" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="570,820 570,983 617,983 617,965" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="570,820 570,983 617,983 617,965" fill="none" stroke="#ca4239" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="673,965 673,1000" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="673,965 673,1000" fill="none" stroke="#25323a" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="760,820 760,983 797,983 797,942" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="760,820 760,983 797,983 797,942" fill="none" stroke="#ca4239" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="833,942 833,1000" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="833,942 833,1000" fill="none" stroke="#25323a" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="940,820 1285,820" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="940,820 1285,820" fill="none" stroke="#ca4239" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="940,1000 1285,1000" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="940,1000 1285,1000" fill="none" stroke="#25323a" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="985,820 985,983 1032,983 1032,965" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="985,820 985,983 1032,983 1032,965" fill="none" stroke="#ca4239" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1088,965 1088,1000" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1088,965 1088,1000" fill="none" stroke="#25323a" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1175,820 1175,983 1212,983 1212,942" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1175,820 1175,983 1212,983 1212,942" fill="none" stroke="#ca4239" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1248,942 1248,1000" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1248,942 1248,1000" fill="none" stroke="#25323a" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1370,820 1715,820" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1370,820 1715,820" fill="none" stroke="#ca4239" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1370,1000 1715,1000" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1370,1000 1715,1000" fill="none" stroke="#25323a" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1415,820 1415,983 1462,983 1462,965" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1415,820 1415,983 1462,983 1462,965" fill="none" stroke="#ca4239" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1518,965 1518,1000" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1518,965 1518,1000" fill="none" stroke="#25323a" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1605,820 1605,983 1642,983 1642,942" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1605,820 1605,983 1642,983 1642,942" fill="none" stroke="#ca4239" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1678,942 1678,1000" fill="none" stroke="white" stroke-width="12" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1678,942 1678,1000" fill="none" stroke="#25323a" stroke-width="4" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="65,1177 117,1177" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="65,1177 117,1177" fill="none" stroke="#ca4239" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="380,1177 432,1177" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="380,1177 432,1177" fill="none" stroke="#25323a" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="715,1177 767,1177" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="715,1177 767,1177" fill="none" stroke="#c57a12" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="950,1177 1002,1177" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="950,1177 1002,1177" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="65" y="47" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="700" fill="#267751" text-anchor="start">MINÙ / CABLAGGIO · SCHEMI FORNITI + DOCUMENTAZIONE HX711</text>
+<text x="65" y="102" font-family="Arial,Helvetica,sans-serif" font-size="38" font-weight="700" fill="#25323a" text-anchor="start">02   Batteria, alimentazione e condensatori</text>
+<text x="65" y="143" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#596a76" text-anchor="start">Mini360: 5 V a VIN ESP32, HX711 e audio. VCC OLED e INA219 provengono dall’ESP32 a 3,3 V.</text>
+<rect x="65" y="180" width="1670" height="108" rx="16" fill="#fff7e8" stroke="#dfc79a" stroke-width="2"/>
+<text x="87" y="216" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" fill="#98651a" text-anchor="start">Ricarica del pacco</text>
+<text x="87" y="250" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">USB esterna → prolunga USB-C di scocca → USB-C NASTIMA. Il caricatore/BMS è interno al pacco.</text>
+<rect x="65" y="330" width="235" height="220" rx="18" fill="#dce7ed" stroke="#8cab9b" stroke-width="2"/>
+<circle cx="83" cy="348" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
+<circle cx="282" cy="348" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
+<text x="182.5" y="375" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700" fill="#25323a" text-anchor="middle">NASTIMA</text>
+<text x="182.5" y="405" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" fill="#596a76" text-anchor="middle">6,4 V / 6 Ah</text>
+<text x="283" y="443" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#ca4239" text-anchor="end">+</text>
+<text x="283" y="513" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#25323a" text-anchor="end">−</text>
+<rect x="365" y="413" width="140" height="44" rx="8" fill="#e9d8bc" stroke="#b4a17e" stroke-width="2"/>
+<text x="435" y="444" font-family="Arial,Helvetica,sans-serif" font-size="26" font-weight="700" fill="#25323a" text-anchor="middle">F1</text>
+<text x="435" y="388" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="400" fill="#25323a" text-anchor="middle">Fusibile vicino al +</text>
+<text x="435" y="490" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="700" fill="#98651a" text-anchor="middle">Valore da confermare</text>
+<rect x="610" y="330" width="300" height="220" rx="18" fill="#e8f3ee" stroke="#8cab9b" stroke-width="2"/>
+<circle cx="628" cy="348" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
+<circle cx="892" cy="348" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
+<text x="760.0" y="375" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700" fill="#25323a" text-anchor="middle">INA219</text>
+<text x="760.0" y="405" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" fill="#596a76" text-anchor="middle">Il positivo attraversa lo shunt</text>
+<text x="627" y="443" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#ca4239" text-anchor="start">VIN+</text>
+<text x="893" y="443" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#ca4239" text-anchor="end">VIN−</text>
+<text x="760" y="505" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" fill="#ca4239" text-anchor="middle">VIN− NON è GND</text>
+<rect x="1020" y="390" width="170" height="95" rx="10" fill="#f1f3f5" stroke="#9eabb5" stroke-width="2"/>
+<rect x="1090" y="410" width="40" height="43" rx="5" fill="#35434c" stroke="#35434c" stroke-width="2"/>
+<text x="1105" y="365" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" fill="#25323a" text-anchor="middle">S1 · ON/OFF</text>
+<rect x="1325" y="330" width="360" height="220" rx="18" fill="#e8f3ee" stroke="#8cab9b" stroke-width="2"/>
+<circle cx="1343" cy="348" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
+<circle cx="1667" cy="348" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
+<text x="1505.0" y="375" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700" fill="#25323a" text-anchor="middle">Mini360</text>
+<text x="1505.0" y="405" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" fill="#596a76" text-anchor="middle">Morsetti per sigla, non vista PCB</text>
+<text x="1342" y="443" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#ca4239" text-anchor="start">IN+</text>
+<text x="1342" y="513" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#25323a" text-anchor="start">IN−</text>
+<text x="1668" y="443" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#ca4239" text-anchor="end">OUT+</text>
+<text x="1668" y="513" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#25323a" text-anchor="end">OUT−</text>
+<text x="1505" y="590" font-family="Arial,Helvetica,sans-serif" font-size="27" font-weight="700" fill="#ca4239" text-anchor="middle">Montato: 5,11 V</text>
+<text x="355" y="638" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" fill="#25323a" text-anchor="start">GND comune → ESP32, HX711, OLED, INA219, DFPlayer, LED e buzzer</text>
+<text x="65" y="690" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#ca4239" text-anchor="start">5 V → VIN ESP32 / HX711 / audio · ESP32 3V3 → OLED / VCC INA219</text>
+<text x="90" y="749" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" fill="#25323a" text-anchor="start">Mini360 IN · dopo S1</text>
+<rect x="150" y="855" width="100" height="110" rx="8" fill="#354b5a" stroke="#263b48" stroke-width="2"/>
+<rect x="220" y="859" width="16" height="102" rx="0" fill="#ced9de" stroke="#ced9de" stroke-width="2"/>
+<ellipse cx="200" cy="855" rx="50" ry="12" fill="#bdc9d0" stroke="#728895" stroke-width="2"/>
+<text x="188" y="897" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="700" fill="white" text-anchor="middle">220 µF</text>
+<text x="192" y="928" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="700" fill="white" text-anchor="middle">16 V</text>
+<text x="228" y="956" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#25323a" text-anchor="middle">−</text>
+<text x="172" y="981" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="700" fill="#ca4239" text-anchor="middle">+</text>
+<text x="200" y="800" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#25323a" text-anchor="middle">Elettrolitico</text>
+<circle cx="370" cy="915" r="32" fill="#c88839" stroke="#9d672b" stroke-width="2"/>
+<text x="370" y="923" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="white" text-anchor="middle">104</text>
+<text x="370" y="800" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#25323a" text-anchor="middle">Ceramico</text>
+<text x="90" y="808" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="700" fill="#ca4239" text-anchor="start">IN+</text>
+<text x="90" y="1031" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="700" fill="#25323a" text-anchor="start">IN−</text>
+<text x="90" y="1062" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="400" fill="#25323a" text-anchor="start">Parallelo · 104 = 100 nF.</text>
+<text x="90" y="1093" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="400" fill="#25323a" text-anchor="start">Vicino ai pad, con fili corti.</text>
+<text x="520" y="749" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" fill="#25323a" text-anchor="start">Mini360 OUT</text>
+<rect x="595" y="855" width="100" height="110" rx="8" fill="#354b5a" stroke="#263b48" stroke-width="2"/>
+<rect x="665" y="859" width="16" height="102" rx="0" fill="#ced9de" stroke="#ced9de" stroke-width="2"/>
+<ellipse cx="645" cy="855" rx="50" ry="12" fill="#bdc9d0" stroke="#728895" stroke-width="2"/>
+<text x="633" y="897" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="700" fill="white" text-anchor="middle">470 µF</text>
+<text x="637" y="928" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="700" fill="white" text-anchor="middle">10 V</text>
+<text x="673" y="956" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#25323a" text-anchor="middle">−</text>
+<text x="617" y="981" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="700" fill="#ca4239" text-anchor="middle">+</text>
+<text x="645" y="800" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#25323a" text-anchor="middle">Elettrolitico</text>
+<circle cx="815" cy="915" r="32" fill="#c88839" stroke="#9d672b" stroke-width="2"/>
+<text x="815" y="923" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="white" text-anchor="middle">104</text>
+<text x="815" y="800" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#25323a" text-anchor="middle">Ceramico</text>
+<text x="520" y="808" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="700" fill="#ca4239" text-anchor="start">OUT+</text>
+<text x="520" y="1031" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="700" fill="#25323a" text-anchor="start">OUT−</text>
+<text x="520" y="1062" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="400" fill="#25323a" text-anchor="start">Parallelo · 104 = 100 nF.</text>
+<text x="520" y="1093" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="400" fill="#25323a" text-anchor="start">Vicino ai pad, con fili corti.</text>
+<text x="950" y="749" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" fill="#25323a" text-anchor="start">PCB custom · 5 V/GND</text>
+<rect x="1010" y="855" width="100" height="110" rx="8" fill="#354b5a" stroke="#263b48" stroke-width="2"/>
+<rect x="1080" y="859" width="16" height="102" rx="0" fill="#ced9de" stroke="#ced9de" stroke-width="2"/>
+<ellipse cx="1060" cy="855" rx="50" ry="12" fill="#bdc9d0" stroke="#728895" stroke-width="2"/>
+<text x="1048" y="897" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="700" fill="white" text-anchor="middle">47 µF</text>
+<text x="1052" y="928" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="700" fill="white" text-anchor="middle">16 V</text>
+<text x="1088" y="956" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#25323a" text-anchor="middle">−</text>
+<text x="1032" y="981" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="700" fill="#ca4239" text-anchor="middle">+</text>
+<text x="1060" y="800" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#25323a" text-anchor="middle">Elettrolitico</text>
+<circle cx="1230" cy="915" r="32" fill="#c88839" stroke="#9d672b" stroke-width="2"/>
+<text x="1230" y="923" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="white" text-anchor="middle">104</text>
+<text x="1230" y="800" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#25323a" text-anchor="middle">Ceramico</text>
+<text x="950" y="808" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="700" fill="#ca4239" text-anchor="start">5 V</text>
+<text x="950" y="1031" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="700" fill="#25323a" text-anchor="start">GND</text>
+<text x="950" y="1062" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="400" fill="#25323a" text-anchor="start">Parallelo · 104 = 100 nF.</text>
+<text x="950" y="1093" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="700" fill="#25323a" text-anchor="start">Coppia aggiuntiva confermata.</text>
+<text x="1380" y="749" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" fill="#25323a" text-anchor="start">Presso ESP32 · VIN/GND</text>
+<rect x="1440" y="855" width="100" height="110" rx="8" fill="#354b5a" stroke="#263b48" stroke-width="2"/>
+<rect x="1510" y="859" width="16" height="102" rx="0" fill="#ced9de" stroke="#ced9de" stroke-width="2"/>
+<ellipse cx="1490" cy="855" rx="50" ry="12" fill="#bdc9d0" stroke="#728895" stroke-width="2"/>
+<text x="1478" y="897" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="700" fill="white" text-anchor="middle">47 µF</text>
+<text x="1482" y="928" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="700" fill="white" text-anchor="middle">16 V</text>
+<text x="1518" y="956" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#25323a" text-anchor="middle">−</text>
+<text x="1462" y="981" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="700" fill="#ca4239" text-anchor="middle">+</text>
+<text x="1490" y="800" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#25323a" text-anchor="middle">Elettrolitico</text>
+<circle cx="1660" cy="915" r="32" fill="#c88839" stroke="#9d672b" stroke-width="2"/>
+<text x="1660" y="923" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="white" text-anchor="middle">104</text>
+<text x="1660" y="800" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#25323a" text-anchor="middle">Ceramico</text>
+<text x="1380" y="808" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="700" fill="#ca4239" text-anchor="start">VIN</text>
+<text x="1380" y="1031" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="700" fill="#25323a" text-anchor="start">GND</text>
+<text x="1380" y="1062" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="400" fill="#25323a" text-anchor="start">Parallelo · 104 = 100 nF.</text>
+<text x="1380" y="1093" font-family="Arial,Helvetica,sans-serif" font-size="18" font-weight="700" fill="#98651a" text-anchor="start">Valori per replica; montati da leggere.</text>
+<text x="133" y="1185" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">Positivo 5 V</text>
+<text x="448" y="1185" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">GND comune</text>
+<text x="783" y="1185" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">3,3 V</text>
+<text x="1018" y="1185" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">Segnali</text>
+<text x="1235" y="1185" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">● = unione dei fili</text>
+<text x="65" y="1224" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" fill="#596a76" text-anchor="start">Banda − del condensatore al negativo; ceramico senza polarità. Retro Mini360: vedi tavola pad dedicata.</text>
+<circle cx="300" cy="435" r="7" fill="white" stroke="#ca4239" stroke-width="3"/>
+<circle cx="300" cy="505" r="7" fill="white" stroke="#25323a" stroke-width="3"/>
+<circle cx="610" cy="435" r="7" fill="white" stroke="#ca4239" stroke-width="3"/>
+<circle cx="910" cy="435" r="7" fill="white" stroke="#ca4239" stroke-width="3"/>
+<circle cx="1325" cy="435" r="7" fill="white" stroke="#ca4239" stroke-width="3"/>
+<circle cx="1325" cy="505" r="7" fill="white" stroke="#25323a" stroke-width="3"/>
+<circle cx="1685" cy="435" r="7" fill="white" stroke="#ca4239" stroke-width="3"/>
+<circle cx="1685" cy="505" r="7" fill="white" stroke="#25323a" stroke-width="3"/>
+<circle cx="1270" cy="650" r="7" fill="#25323a"/>
+<circle cx="1740" cy="650" r="7" fill="#25323a"/>
+<circle cx="1770" cy="600" r="7" fill="white" stroke="#ca4239" stroke-width="3"/>
+<circle cx="125" cy="820" r="7" fill="#ca4239"/>
+<circle cx="228" cy="1000" r="7" fill="#25323a"/>
+<circle cx="315" cy="820" r="7" fill="#ca4239"/>
+<circle cx="388" cy="1000" r="7" fill="#25323a"/>
+<circle cx="80" cy="820" r="7" fill="white" stroke="#ca4239" stroke-width="3"/>
+<circle cx="80" cy="1000" r="7" fill="white" stroke="#25323a" stroke-width="3"/>
+<circle cx="570" cy="820" r="7" fill="#ca4239"/>
+<circle cx="673" cy="1000" r="7" fill="#25323a"/>
+<circle cx="760" cy="820" r="7" fill="#ca4239"/>
+<circle cx="833" cy="1000" r="7" fill="#25323a"/>
+<circle cx="525" cy="820" r="7" fill="white" stroke="#ca4239" stroke-width="3"/>
+<circle cx="525" cy="1000" r="7" fill="white" stroke="#25323a" stroke-width="3"/>
+<circle cx="985" cy="820" r="7" fill="#ca4239"/>
+<circle cx="1088" cy="1000" r="7" fill="#25323a"/>
+<circle cx="1175" cy="820" r="7" fill="#ca4239"/>
+<circle cx="1248" cy="1000" r="7" fill="#25323a"/>
+<circle cx="940" cy="820" r="7" fill="white" stroke="#ca4239" stroke-width="3"/>
+<circle cx="940" cy="1000" r="7" fill="white" stroke="#25323a" stroke-width="3"/>
+<circle cx="1415" cy="820" r="7" fill="#ca4239"/>
+<circle cx="1518" cy="1000" r="7" fill="#25323a"/>
+<circle cx="1605" cy="820" r="7" fill="#ca4239"/>
+<circle cx="1678" cy="1000" r="7" fill="#25323a"/>
+<circle cx="1370" cy="820" r="7" fill="white" stroke="#ca4239" stroke-width="3"/>
+<circle cx="1370" cy="1000" r="7" fill="white" stroke="#25323a" stroke-width="3"/>
+</svg>
