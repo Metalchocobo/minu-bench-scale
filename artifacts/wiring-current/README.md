@@ -1,10 +1,10 @@
 # Guida illustrata al cablaggio della bilancia montata
 
-Le fonti della guida sono la documentazione HX711 confermata da Andrea e i due ritagli di schema forniti per gli altri moduli. **OLED e INA219 VCC arrivano da ESP32 3V3; HX711 VCC e IRF9540 S dalla linea Mini360 VIN/5V**. La resistenza LED è **1 kΩ** nello schema; la **100 kΩ SCK–GND è da prevedere nella replica**, mentre soltanto la sua presenza sulla bilancia attuale resta probabile, da confermare. I dettagli fisici ancora da completare sono elencati in fondo.
+Le fonti della guida sono la documentazione HX711 confermata da Andrea, le coppie GPIO rilevate per la tastiera montata e i due ritagli di schema forniti per gli altri moduli. **OLED e INA219 VCC arrivano da ESP32 3V3; HX711 VCC e IRF9540 S dalla linea Mini360 VIN/5V**. La resistenza LED è **1 kΩ** nello schema; la **100 kΩ SCK–GND è da prevedere nella replica**, mentre soltanto la sua presenza sulla bilancia attuale resta probabile, da confermare. I dettagli fisici ancora da completare sono elencati in fondo.
 
 Questa guida raccoglie i collegamenti della bilancia **NASTIMA + Mini360**, con ESP32, HX711, OLED SSD1322, INA219, tastiera, buzzer, DFPlayer Mini e LED di standby. Serve a riconoscere i fili e preparare una replica seguendo le fonti indicate; i dettagli che richiedono la bilancia sotto mano sono indicati esplicitamente.
 
-Il **MOSFET IRF9540 resta il componente scelto**. Il firmware, il cablaggio della tastiera e il funzionamento di sleep e LED restano invariati. Questa guida non prescrive una nuova variante di alimentazione.
+Il **MOSFET IRF9540 resta il componente scelto**. La tastiera usa la mappa firmware ricavata dalle coppie GPIO rilevate sul cablaggio montato. Sleep e LED conservano il loro funzionamento. Questa guida non prescrive una nuova variante di alimentazione.
 
 **Per una replica identica occorre completare i dettagli fisici elencati in fondo**, soprattutto orientamento dei piedini del NPN 2N3904, collegamenti dei condensatori audio e valore del fusibile. Le illustrazioni mostrano dove collegare i fili; sui moduli di cui manca il modello esatto conta la scritta del terminale, non la sua posizione nel disegno.
 
@@ -60,7 +60,7 @@ Usare la vista fornita da Andrea: **3V3 in alto a sinistra, VIN in alto a destra
 | 14 | **GPIO22** | **GPIO36 / VP** |
 | 15 | **GPIO23** | **EN** |
 
-Nell'immagine GPIO21 porta anche l'etichetta SDA e GPIO22 l'etichetta SCL. **Per l'INA219 della bilancia usare GPIO32 SDA e GPIO33 SCL**: GPIO21 è la colonna C2 della tastiera e GPIO22 pilota il buzzer. RX2/TX2 sono qui GPIO16/GPIO17, usati per HX711 SCK e tastiera R1, non per l'audio. GPIO12, GPIO36/VP ed EN non hanno fili esterni assegnati; RX0/TX0 restano alla seriale.
+Nell'immagine GPIO21 porta anche l'etichetta SDA e GPIO22 l'etichetta SCL. **Per l'INA219 della bilancia usare GPIO32 SDA e GPIO33 SCL**: GPIO21 è la riga R4 della tastiera e GPIO22 pilota il buzzer. RX2/TX2 sono qui GPIO16/GPIO17, usati per HX711 SCK e tastiera C1, non per l'audio. GPIO12, GPIO36/VP ed EN non hanno fili esterni assegnati; RX0/TX0 restano alla seriale.
 
 ## 3. Alimentazione: dal pacco batteria ai moduli
 
@@ -192,18 +192,25 @@ Prima di saldare, identificare i piedini dei componenti effettivamente usati. Le
 
 ### Tastiera 4 × 2
 
-La tastiera è una matrice con sei collegamenti. I numeri dei fili qui riportati seguono la mappa del firmware; se si usa un modello diverso, identificare prima quali contatti del suo connettore siano righe e colonne.
+La tastiera è una matrice con sei collegamenti. Le coppie GPIO sono state rilevate premendo i singoli tasti sul cablaggio montato. **R1-R4 e C1-C2 indicano la matrice logica corrente del firmware**, non l'ordine fisico del connettore né la posizione dei tasti sul frontale.
 
-| Collegamento tastiera | ESP32 | Tasti sulla riga |
+| Collegamento tastiera | ESP32 | Tasti collegati |
 |---|---|---|
-| **R1 / filo 1** | **GPIO17** | SKIP, ENTER |
-| **R2 / filo 2** | **GPIO5** | WIFI, TOTAL |
-| **R3 / filo 3** | **GPIO13** | SLEEP, MODE |
-| **R4 / filo 4** | **GPIO14** | CLEAR, TARE |
-| **R5 / C1 / filo 5** | **GPIO19** | Colonna SKIP, WIFI, SLEEP, CLEAR |
-| **R6 / C2 / filo 6** | **GPIO21** | Colonna ENTER, TOTAL, MODE, TARE |
+| **R1** | **GPIO13** | SKIP, SLEEP |
+| **R2** | **GPIO14** | ENTER, CLEAR |
+| **R3** | **GPIO19** | WIFI, TOTAL |
+| **R4** | **GPIO21** | MODE, TARE |
+| **C1** | **GPIO17** | SKIP, ENTER, WIFI, MODE |
+| **C2** | **GPIO5** | SLEEP, CLEAR, TOTAL, TARE |
 
-Nel ritaglio di schema le etichette fisiche sono **R1–R6**. Le prime quattro sono righe; **R5 è C1** e **R6 è C2** nella mappa firmware. Non sono altre due righe della matrice.
+| Riga logica | C1 (GPIO17) | C2 (GPIO5) |
+|---|---|---|
+| R1 (GPIO13) | SKIP | SLEEP |
+| R2 (GPIO14) | ENTER | CLEAR |
+| R3 (GPIO19) | WIFI | TOTAL |
+| R4 (GPIO21) | MODE | TARE |
+
+Le etichette **R1-R6 del ritaglio di schema precedente non definiscono la mappa corrente**. Non numerare i pin del connettore come fili 1-6 senza un orientamento verificato. Per una replica, usare le coppie GPIO della tabella o rilevare la continuità a tastiera scollegata.
 
 Non collegare 5 V, 3V3 o GND alle sei linee della tastiera: ciascuna arriva soltanto al GPIO assegnato.
 

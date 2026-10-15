@@ -480,13 +480,14 @@
 <circle cx="1992" cy="1958" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
 <text x="1630.0" y="1985" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700" fill="#25323a" text-anchor="middle">Tastiera 4 × 2</text>
 <text x="1630.0" y="2015" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" fill="#596a76" text-anchor="middle">Nessun filo a VCC o GND</text>
-<text x="1300" y="1920" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">C2 / filo6</text>
-<text x="1430" y="1920" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">C1 / filo5</text>
-<text x="1560" y="1920" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">R2 / filo2</text>
-<text x="1690" y="1920" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">R1 / filo1</text>
-<text x="1820" y="1920" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">R3 / filo3</text>
-<text x="1950" y="1920" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">R4 / filo4</text>
-<text x="1630" y="2071" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#25323a" text-anchor="middle">SKIP / ENTER · WIFI / TOTAL · SLEEP / MODE · CLEAR / TARE</text>
+<text x="1300" y="1920" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">R4 / 21</text>
+<text x="1430" y="1920" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">R3 / 19</text>
+<text x="1560" y="1920" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">C2 / 5</text>
+<text x="1690" y="1920" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">C1 / 17</text>
+<text x="1820" y="1920" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">R1 / 13</text>
+<text x="1950" y="1920" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">R2 / 14</text>
+<text x="1630" y="2057" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="700" fill="#25323a" text-anchor="middle">R1: SKIP / SLEEP · R2: ENTER / CLEAR</text>
+<text x="1630" y="2091" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="700" fill="#25323a" text-anchor="middle">R3: WIFI / TOTAL · R4: MODE / TARE</text>
 <circle cx="2360" cy="2050" r="70" fill="#293b46" stroke="#1c2b33" stroke-width="2"/>
 <circle cx="2360" cy="2050" r="17" fill="#14222a" stroke="#14222a" stroke-width="2"/>
 <text x="2310" y="2041" font-family="Arial,Helvetica,sans-serif" font-size="26" font-weight="700" fill="white" text-anchor="start">+</text>
@@ -501,7 +502,7 @@
 <text x="2552" y="2004" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">Audio: fili e polarità da verificare.</text>
 <text x="2552" y="2035" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">Fusibile F1: valore da leggere.</text>
 <text x="2552" y="2066" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">SCK: replica 100 kΩ; montata da verificare.</text>
-<text x="70" y="2223" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="400" fill="#596a76" text-anchor="start">Solo ESP32: posizione dei pin come nella mappa fornita. Gli altri terminali sono per sigla. Bande resistori illustrative. Firmware e LEDsleep invariati.</text>
+<text x="70" y="2223" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="400" fill="#596a76" text-anchor="start">Solo ESP32: posizione pin dalla mappa fornita. Tastiera: matrice logica misurata, ordine connettore da verificare. LED sleep invariato.</text>
 <circle cx="520" cy="230" r="7" fill="#ca4239"/>
 <circle cx="3080" cy="230" r="7" fill="#ca4239"/>
 <circle cx="1210" cy="590" r="7" fill="#c57a12"/>

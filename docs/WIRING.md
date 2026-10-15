@@ -88,25 +88,29 @@ L'INA219 misura la tensione ai morsetti batteria e la corrente diretta al Mini36
 
 ## 5) Tastiera 4x2 → ESP32
 
-- **R1 → GPIO17**
-- **R2 → GPIO5**
-- **R3 → GPIO13**
-- **R4 → GPIO14**
-- **R5 / C1 → GPIO19**
-- **R6 / C2 → GPIO21**
+La mappa corrente è stata rilevata dagli otto tasti del montaggio e definisce il firmware operativo `esp32_hx711_serial`. I sei fili restano sui GPIO indicati; **TX2 è GPIO17**, distinto da TX0/GPIO1 della seriale USB. Le sigle **R1–R6** del ritaglio di schema non definiscono l'ordine fisico dei contatti sul connettore: identificare le linee tramite le coppie GPIO dei tasti.
 
-Nel ritaglio di schema le sei linee della tastiera sono etichettate **R1–R6**: R1–R4 sono le righe; **R5 corrisponde alla colonna C1** e **R6 alla colonna C2** del firmware. Non sono due righe aggiuntive.
-
-La matrice è gestita direttamente dal firmware; non collegare tensioni esterne alle righe o alle colonne.
-
-| Riga | C1 (GPIO19) | C2 (GPIO21) |
+| Linea GPIO | Tasti collegati | Ruolo nella scansione |
 |---|---|---|
-| R1 (GPIO17) | SKIP | ENTER |
-| R2 (GPIO5) | WIFI | TOTAL |
-| R3 (GPIO13) | SLEEP | MODE |
-| R4 (GPIO14) | CLEAR | TARE |
+| **GPIO13** | SKIP, SLEEP | riga / uscita |
+| **GPIO14** | ENTER, CLEAR | riga / uscita |
+| **GPIO19** | WIFI, TOTAL | riga / uscita |
+| **GPIO21** | MODE, TARE | riga / uscita |
+| **TX2 / GPIO17** | SKIP, ENTER, WIFI, MODE | colonna / ingresso pull-up |
+| **GPIO5** | SLEEP, CLEAR, TOTAL, TARE | colonna / ingresso pull-up |
 
-Il firmware attuale pilota la riga selezionata LOW e le altre HIGH; diodi o resistenze serie non sono documentati nella matrice. Con contatti diretti, due tasti della stessa colonna su righe diverse mettono in contesa le uscite. La combinazione prevista WIFI + TOTAL è sulla stessa riga. La guida riproduce questo cablaggio senza modificare la scansione firmware.
+Righe e colonne sono il raggruppamento logico usato dalla scansione, non la posizione del connettore o dei tasti sul pannello. La matrice è gestita direttamente dal firmware; non collegare le sei linee direttamente a 3V3, 5 V o GND.
+
+| Riga scansione | Colonna GPIO17 | Colonna GPIO5 |
+|---|---|---|
+| GPIO13 | SKIP | SLEEP |
+| GPIO14 | ENTER | CLEAR |
+| GPIO19 | WIFI | TOTAL |
+| GPIO21 | MODE | TARE |
+
+Il firmware attuale pilota la riga selezionata LOW e le altre HIGH; diodi o resistenze serie non sono documentati nella matrice. Con contatti diretti, due tasti della stessa colonna su righe diverse mettono in contesa le uscite. La combinazione prevista WIFI + TOTAL condivide la riga GPIO19. In light-sleep tutte le righe GPIO13, 14, 19 e 21 sono LOW e le colonne GPIO17 e 5 rilevano il wake; il tasto di risveglio viene consumato fino al rilascio.
+
+Per verificare una replica, lo [sketch di test tastiera](../firmware/keypad_wiring_test/README.md) rileva tutte le coppie GPIO senza assegnare preventivamente righe o colonne. Raccogliere gli otto risultati prima di modificare la mappa operativa.
 
 ## 6) Buzzer → ESP32
 

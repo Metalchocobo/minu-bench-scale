@@ -20,8 +20,9 @@ static const int OLED_DC_PIN   = 26;
 static const int OLED_RST_PIN  = 27;
 
 // ========================= TASTIERA 4x2 =========================
-static const int KEYPAD_ROW_PINS[4] = { 17, 5, 13, 14 };  // R1-R4
-static const int KEYPAD_COL_PINS[2] = { 19, 21 };         // C1-C2
+// Measured contact groups: SKIP/SLEEP, ENTER/CLEAR, WIFI/TOTAL, MODE/TARE.
+static const int KEYPAD_ROW_PINS[4] = { 13, 14, 19, 21 };
+static const int KEYPAD_COL_PINS[2] = { 17, 5 };  // TX2/GPIO17 and GPIO5
 
 // ========================= BUZZER =========================
 static const int BUZZER_PIN = 22;       // LEDC PWM

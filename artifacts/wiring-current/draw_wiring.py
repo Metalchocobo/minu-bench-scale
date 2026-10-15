@@ -187,7 +187,7 @@ def overview():
     d.wire([(530,970),(600,970),(600,790),(710,790)])
     d.port(530,970);d.port(710,790)
     d.board(635,960,570,150,'Tastiera 4 × 2','Tavola 5 · soltanto 6 fili, senza VCC / GND')
-    d.text(660,1076,'R1/2/3/4 → 17/5/13/14 · C1/2 → 19/21',22)
+    d.text(660,1076,'R1/2/3/4 → 13/14/19/21 · C1/2 → 17/5',22)
     d.wire([(890,895),(890,960)])
     d.port(890,895);d.port(890,960)
     d.text(635,1147,'PCB custom e ESP32: due coppie distinte; dettagli nella tavola 2.',20,MUTED)
@@ -380,18 +380,21 @@ def audio():
 
 
 def controls():
-    d=Plate(5,'Tastiera, LED rosso e buzzer','Il cablaggio e il comportamento sleep restano quelli attuali. Resistenza LED: 1 kΩ nello schema fornito.')
+    d=Plate(5,'Tastiera, LED rosso e buzzer','Mappa tastiera dalle coppie GPIO misurate. Sleep e LED invariati; resistenza LED: 1 kΩ.')
     d.esp(65,220,325,890)
-    d.board(1270,220,465,555,'Tastiera 4 × 2','6 fili · nessun VCC / GND')
-    rows=[(355,'GPIO17','Filo 1 · R1'),(425,'GPIO5','Filo 2 · R2'),(495,'GPIO13','Filo 3 · R3'),(565,'GPIO14','Filo 4 · R4'),(635,'GPIO19','Filo 5 · C1'),(705,'GPIO21','Filo 6 · C2')]
+    d.board(1270,220,465,555,'Tastiera 4 × 2','Matrice logica firmware · 6 GPIO')
+    rows=[(365,'GPIO13','R1'),(457,'GPIO14','R2'),(549,'GPIO19','R3'),(641,'GPIO21','R4'),(705,'GPIO17','C1'),(745,'GPIO5','C2')]
     for y,pin,label in rows:
         d.port(390,y,pin);d.port(1270,y,label,BLUE,'left',21)
         d.wire([(390,y),(1270,y)])
-    for row,labels in enumerate([('SKIP','ENTER'),('WIFI','TOTAL'),('SLEEP','MODE'),('CLEAR','TARE')]):
+    d.text(1531,319,'C1 / 17',18,BLUE,True,'middle')
+    d.text(1644,319,'C2 / 5',18,BLUE,True,'middle')
+    for row,labels in enumerate([('SKIP','SLEEP'),('ENTER','CLEAR'),('WIFI','TOTAL'),('MODE','TARE')]):
         for col,label in enumerate(labels):
             d.rect(1482+col*113,330+row*92,98,70,'#f7f9fa','#9baaaf',8)
             d.text(1531+col*113,373+row*92,label,21,INK,True,'middle')
-    d.text(600,766,'R1–R4 e C1–C2: verificare l’ordine del connettore della tastiera.',22)
+    d.text(600,790,'Matrice logica, non vista frontale.',22)
+    d.text(600,825,'Ordine connettore da verificare; nessun VCC / GND.',22)
     d.port(390,875,'GPIO22')
     d.wire([(390,875),(1325,875)])
     d.circle(1400,875,72,'#2b3b45','#1c2b33')

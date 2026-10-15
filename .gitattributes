@@ -1,3 +1,5 @@
 # Auto detect text files and perform LF normalization
 * text=auto
 *.ino eol=lf
+# Preserve PDF byte offsets when regenerating the wiring diagrams.
+artifacts/wiring-current/*.pdf binary

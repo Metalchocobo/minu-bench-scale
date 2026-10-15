@@ -124,18 +124,20 @@ La scheda montata usa **30 terminali, 15 per fila**. Nella vista di riferimento 
 | SPI CS | OLED SSD1322 | 25 | |
 | SPI DC | OLED SSD1322 | 26 | |
 | SPI RST | OLED SSD1322 | 27 | |
-| Tastiera R1 | Keypad | 17 | |
-| Tastiera R2 | Keypad | 5 | |
-| Tastiera R3 | Keypad | 13 | |
-| Tastiera R4 | Keypad | 14 | |
-| Tastiera C1 | Keypad | 19 | |
-| Tastiera C2 | Keypad | 21 | |
+| Tastiera riga SKIP / SLEEP | Keypad | 13 | uscita scansione |
+| Tastiera riga ENTER / CLEAR | Keypad | 14 | uscita scansione |
+| Tastiera riga WIFI / TOTAL | Keypad | 19 | uscita scansione |
+| Tastiera riga MODE / TARE | Keypad | 21 | uscita scansione |
+| Tastiera colonna SKIP / ENTER / WIFI / MODE | Keypad | 17 | ingresso pull-up; terminale TX2 |
+| Tastiera colonna SLEEP / CLEAR / TOTAL / TARE | Keypad | 5 | ingresso pull-up |
 | Buzzer | buzzer passivo | 22 | LEDC |
 | DFPlayer TX | DFPlayer RX | 4 | resistenza 1 kΩ in serie nello schema corrente |
 | DFPlayer RX | DFPlayer TX | 34 | collegato nello schema; input-only, opzionale per il firmware |
 | DFPlayer power-gate | high-side esterno | 2 | HIGH = ON; non alimenta direttamente il modulo |
 | DFPlayer BUSY | DFPlayer | 39 | collegamento diretto nello schema; pull-up esterna solo condizionale |
 | LED standby | LED esterno | 15 | active-high, con resistenza in serie |
+
+La mappa tastiera segue le coppie GPIO rilevate sul montaggio, riportate in [WIRING](docs/WIRING.md#5-tastiera-4x2--esp32). Righe e colonne sono il raggruppamento logico della scansione; le sigle R1–R6 del ritaglio non definiscono l'ordine fisico dei sei pin sul connettore. La configurazione è in `config/config_pins.h`, la mappa delle funzioni in `keypad.cpp`.
 
 ---
 
@@ -338,7 +340,7 @@ Comportamento:
 Se per **5 minuti** non viene premuto alcun tasto, il peso visualizzato resta fermo entro ±5 g e non esistono comando MQTT operativo o response outbox ancora agganciato al Manager, la bilancia entra in **LIGHT-SLEEP**. Un outbox già passato alla modalità locale continua a vivere in RAM e riprende i retry al wake senza tenere acceso il display.
 
 Caratteristiche:
-- Wake: **qualsiasi tasto**.
+- Wake: **qualsiasi tasto**. In sleep le righe GPIO13, 14, 19 e 21 sono LOW; le colonne GPIO17 e 5 sono ingressi pull-up con risveglio su livello LOW. Il setup di wake usa la stessa configurazione della scansione.
 - L'inattività viene azzerata anche da una variazione del peso visualizzato **> 5 g** (in LIVE o WORK).
 - Ogni `weigh`/clear MQTT accettato azzera il timer; un comando operativo o una response ancora agganciata al Manager bloccano l'auto-sleep, mentre dopo il fallback locale non lo bloccano più.
 - Prima della sospensione MQTT viene pubblicato retained `state=sleeping`; il LWT `offline` resta riservato alle disconnessioni impreviste.
@@ -659,6 +661,9 @@ Stack pesate in RAM (LIFO, max 50 elementi). Ogni voce conserva grammi, offset e
 Firmware corrente (HX711):
 - `firmware/esp32_hx711_serial/`
 
+Diagnostica cablaggio tastiera:
+- [`firmware/keypad_wiring_test/`](firmware/keypad_wiring_test/README.md) — sketch separato, seriale 115200; identifica le coppie di GPIO dei tasti senza assumere righe o colonne. Il test usa TX2/GPIO17, 5, 13, 14, 19 e 21 e non modifica la NVS. Durante il test le funzioni della bilancia sono sospese; al termine si ricarica il firmware operativo.
+
 Archivio (legacy, non mantenuto):
 - `archive/esp32_nau7802_serial/`
 
@@ -868,6 +873,8 @@ Comandi:
 
 ### Tastiera: debounce + one-shot + long press
 La tastiera ha un debounce software (40 ms) e genera eventi **one-shot**: una pressione produce **un solo evento**, anche se tieni premuto il tasto. **WIFI e TOTAL agiscono al rilascio**, così possono essere premuti insieme per la lettura batteria senza attivare le rispettive azioni singole.
+
+La coppia WIFI + TOTAL condivide GPIO19 ed è rilevata dalla mappa dei tasti, senza dipendere dall'indice della riga. Le funzioni singole e le long press seguono le etichette fisiche riportate nella mappa GPIO verificata.
 
 Se un tasto o una linea resta chiusa per almeno 15 secondi, quel tasto viene soppresso fino al rilascio elettrico: il loop continua a girare e gli altri tasti restano leggibili.
 

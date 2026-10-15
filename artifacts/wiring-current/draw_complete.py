@@ -271,9 +271,10 @@ def draw():
 
     # Matrix terminal positions here are functional; all six nets are visible.
     d.board(1250,1940,760,180,'Tastiera 4 × 2','Nessun filo a VCC o GND')
-    for x,label in [(1300,'C2 / filo6'),(1430,'C1 / filo5'),(1560,'R2 / filo2'),(1690,'R1 / filo1'),(1820,'R3 / filo3'),(1950,'R4 / filo4')]:
+    for x,label in [(1300,'R4 / 21'),(1430,'R3 / 19'),(1560,'C2 / 5'),(1690,'C1 / 17'),(1820,'R1 / 13'),(1950,'R2 / 14')]:
         d.port(x,1940,color=BLUE);d.text(x,1920,label,22,BLUE,True,'middle')
-    d.text(1630,2071,'SKIP / ENTER · WIFI / TOTAL · SLEEP / MODE · CLEAR / TARE',22,INK,True,'middle')
+    d.text(1630,2057,'R1: SKIP / SLEEP · R2: ENTER / CLEAR',21,INK,True,'middle')
+    d.text(1630,2091,'R3: WIFI / TOTAL · R4: MODE / TARE',21,INK,True,'middle')
     d.wire([ports['TX2 / 17'],(1140,1140),(1140,1720),(1690,1720),(1690,1940)])
     d.wire([ports['GPIO5'],(1110,1195),(1110,1750),(1560,1750),(1560,1940)])
     d.wire([ports['GPIO19'],(1180,1305),(1180,1840),(1430,1840),(1430,1940)])
@@ -301,7 +302,7 @@ def draw():
         'Fusibile F1: valore da leggere.',
         'SCK: replica 100 kΩ; montata da verificare.'
     ],280)
-    d.text(70,2223,'Solo ESP32: posizione dei pin come nella mappa fornita. Gli altri terminali sono per sigla. Bande resistori illustrative. Firmware e LEDsleep invariati.',24,MUTED)
+    d.text(70,2223,'Solo ESP32: posizione pin dalla mappa fornita. Tastiera: matrice logica misurata, ordine connettore da verificare. LED sleep invariato.',24,MUTED)
     d.save('00-wiring-complete')
 
 

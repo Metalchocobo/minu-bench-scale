@@ -1,26 +1,17 @@
 #include "keypad.h"
+#include "config/config_pins.h"
 
-// Righe (filo 1..4) - come da README
-static const int rowPins[4] = {
-  17,  // R1 = filo 1
-  5,   // R2 = filo 2
-  13,  // R3 = filo 3
-  14   // R4 = filo 4
-};
+// Keep scanning and sleep wakeup on the same configured GPIO assignments.
+static const int* const rowPins = KEYPAD_ROW_PINS;
+static const int* const colPins = KEYPAD_COL_PINS;
 
-// Colonne (filo 5..6) - come da README
-static const int colPins[2] = {
-  19,  // C1 = filo 5
-  21   // C2 = filo 6
-};
-
-// Mappa riga/colonna -> tasto
-static KeyCode keyMap[4][2] = {
-  // C1 (filo 5)     C2 (filo 6)
-  {KEY_SKIP,   KEY_ENTER}, // R1 (filo 1)
-  {KEY_WIFI,   KEY_TOTAL},    // R2 (filo 2)
-  {KEY_SLEEP, KEY_MODE},   // R3 (filo 3)
-  {KEY_CLEAR,   KEY_TARE}   // R4 (filo 4)
+// Physical contacts measured with keypad_wiring_test; connector order is unknown.
+static const KeyCode keyMap[4][2] = {
+  // GPIO17        GPIO5
+  {KEY_SKIP,  KEY_SLEEP}, // GPIO13
+  {KEY_ENTER, KEY_CLEAR}, // GPIO14
+  {KEY_WIFI,  KEY_TOTAL}, // GPIO19
+  {KEY_MODE,  KEY_TARE}   // GPIO21
 };
 
 // Stato interno tastiera.
@@ -90,7 +81,8 @@ static KeyCode keypad_scan_once() {
       digitalRead(colPins[1]) == LOW
     };
     // Both keys share one row, so no cross-row combination is needed.
-    if (r == 1 && pressed[0] && pressed[1] &&
+    if (isBatteryChordKey(keyMap[r][0]) && isBatteryChordKey(keyMap[r][1]) &&
+        pressed[0] && pressed[1] &&
         !isSuppressed(KEY_WIFI) && !isSuppressed(KEY_TOTAL)) {
       return KEY_BATTERY;
     }

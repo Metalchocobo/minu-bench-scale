@@ -8,6 +8,11 @@
 
 static uint32_t nowMs = 100;
 static int levels[40] = {};
+static int modes[40] = {};
+// Independent physical layout measured with the contact-pair diagnostic sketch.
+// These values must not be derived from the production configuration under test.
+static const int physicalRows[4] = {13, 14, 19, 21};
+static const int physicalColumns[2] = {17, 5};
 static bool contacts[4][2] = {};
 static std::vector<KeyCode> events;
 static const char* scenario = "initialization";
@@ -20,19 +25,29 @@ static void require(bool condition, const char* message) {
   }
 }
 
-void pinMode(int, int) {}
-void digitalWrite(int pin, int value) { levels[pin] = value; }
+void pinMode(int pin, int mode) {
+  const bool row = pin == 13 || pin == 14 || pin == 19 || pin == 21;
+  const bool column = pin == 17 || pin == 5;
+  require((row && mode == OUTPUT) || (column && mode == INPUT_PULLUP),
+          "GPIO role must match the measured physical matrix");
+  modes[pin] = mode;
+}
+void digitalWrite(int pin, int value) {
+  require(pin >= 0 && pin < 40 && modes[pin] == OUTPUT,
+          "scanner must only drive configured row outputs");
+  levels[pin] = value;
+}
 void delayMicroseconds(unsigned int) {}
 unsigned long millis() { return nowMs; }
 
 int digitalRead(int pin) {
   // Real electrical row/column layout; a pressed switch pulls a column low
   // only while the scanner drives its row low.
-  const int rows[4] = {17, 5, 13, 14};
-  const int column = pin == 19 ? 0 : (pin == 21 ? 1 : -1);
+  const int column = pin == 17 ? 0 : (pin == 5 ? 1 : -1);
   require(column >= 0, "unexpected input pin");
+  require(modes[pin] == INPUT_PULLUP, "scanner must sense a pulled-up column");
   for (int row = 0; row < 4; ++row) {
-    if (levels[rows[row]] == LOW && contacts[row][column]) return LOW;
+    if (levels[physicalRows[row]] == LOW && contacts[row][column]) return LOW;
   }
   return HIGH;
 }
@@ -42,12 +57,12 @@ static void setKeys(std::initializer_list<KeyCode> keys) {
   for (KeyCode key : keys) {
     switch (key) {
       case KEY_SKIP: contacts[0][0] = true; break;
-      case KEY_ENTER: contacts[0][1] = true; break;
-      case KEY_WIFI: contacts[1][0] = true; break;
-      case KEY_TOTAL: contacts[1][1] = true; break;
-      case KEY_SLEEP: contacts[2][0] = true; break;
-      case KEY_MODE: contacts[2][1] = true; break;
-      case KEY_CLEAR: contacts[3][0] = true; break;
+      case KEY_SLEEP: contacts[0][1] = true; break;
+      case KEY_ENTER: contacts[1][0] = true; break;
+      case KEY_CLEAR: contacts[1][1] = true; break;
+      case KEY_WIFI: contacts[2][0] = true; break;
+      case KEY_TOTAL: contacts[2][1] = true; break;
+      case KEY_MODE: contacts[3][0] = true; break;
       case KEY_TARE: contacts[3][1] = true; break;
       default: require(false, "only physical keys may close matrix contacts");
     }
@@ -76,6 +91,26 @@ static void reset(const char* name) {
   setKeys({});
   events.clear();
   keypad_init();
+}
+
+static void testExportedPins() {
+  reset("exported sleep/wake GPIOs and initialization");
+  const int* rows = nullptr;
+  const int* columns = nullptr;
+  int rowCount = 0;
+  int columnCount = 0;
+  keypad_get_pins(&rows, &rowCount, &columns, &columnCount);
+  require(rows != nullptr && columns != nullptr, "pin arrays must be exported for sleep");
+  require(rowCount == 4 && columnCount == 2, "sleep must use four rows and two columns");
+  for (int index = 0; index < rowCount; ++index) {
+    require(rows[index] == physicalRows[index], "exported row differs from measured wiring");
+    require(modes[rows[index]] == OUTPUT && levels[rows[index]] == HIGH,
+            "initialization must leave every row output inactive");
+  }
+  for (int index = 0; index < columnCount; ++index) {
+    require(columns[index] == physicalColumns[index], "exported wake column differs from measured wiring");
+    require(modes[columns[index]] == INPUT_PULLUP, "wake columns must use pull-ups");
+  }
 }
 
 static void testSingleRelease(KeyCode key) {
@@ -191,6 +226,44 @@ static void testWake(bool bothHeld) {
   expectEvents({KEY_BATTERY});
 }
 
+static void testSingleWake(KeyCode key) {
+  reset("single wake key suppressed through release bounce");
+  setKeys({key});
+  keypad_suppress_wake_key();
+  advance(200);
+  require(!keypad_is_pressed(key), "held wake key must not become an application press");
+  expectEvents({});
+  setKeys({});
+  advance(20);
+  setKeys({key});
+  advance(45);
+  expectEvents({});
+  setKeys({});
+  advance(45);
+  expectEvents({});
+
+  setKeys({key});
+  advance(45);
+  require(keypad_is_pressed(key), "fresh press after wake release must be recognized");
+  if (key == KEY_WIFI || key == KEY_TOTAL) expectEvents({});
+  else expectEvents({key});
+  setKeys({});
+  advance(45);
+  if (key == KEY_WIFI || key == KEY_TOTAL) expectEvents({key});
+  else expectEvents({});
+}
+
+static void testOrdinaryRowPair(KeyCode first, KeyCode second) {
+  reset("ordinary row pair must not become the WIFI/TOTAL chord");
+  setKeys({first, second});
+  advance(45);
+  require(!keypad_is_pressed(KEY_BATTERY), "only physical WIFI/TOTAL may activate diagnostics");
+  expectEvents({first});
+  setKeys({});
+  advance(45);
+  expectEvents({});
+}
+
 static void testStuckCombo() {
   reset("stuck combo");
   setKeys({KEY_WIFI, KEY_TOTAL});
@@ -265,6 +338,7 @@ static void testOtherKeyDuringSuppression() {
 }
 
 int main() {
+  testExportedPins();
   testSingleRelease(KEY_WIFI);
   testSingleRelease(KEY_TOTAL);
   for (KeyCode first : {KEY_NONE, KEY_WIFI, KEY_TOTAL}) {
@@ -272,6 +346,13 @@ int main() {
   }
   testWake(false);
   testWake(true);
+  // WIFI is already covered by testWake(false); cover each other physical key.
+  for (KeyCode key : {KEY_TARE, KEY_ENTER, KEY_TOTAL, KEY_SLEEP, KEY_SKIP, KEY_CLEAR, KEY_MODE}) {
+    testSingleWake(key);
+  }
+  testOrdinaryRowPair(KEY_SKIP, KEY_SLEEP);
+  testOrdinaryRowPair(KEY_ENTER, KEY_CLEAR);
+  testOrdinaryRowPair(KEY_MODE, KEY_TARE);
   testStuckCombo();
   testStuckSingle(KEY_WIFI);
   testStuckSingle(KEY_TOTAL);
