@@ -30,7 +30,7 @@
 <polyline points="950,1177 1002,1177" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
 <text x="65" y="47" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="700" fill="#267751" text-anchor="start">MINÙ / CABLAGGIO · SCHEMI FORNITI + DOCUMENTAZIONE HX711</text>
 <text x="65" y="102" font-family="Arial,Helvetica,sans-serif" font-size="38" font-weight="700" fill="#25323a" text-anchor="start">01   Tutta la bilancia, a colpo d’occhio</text>
-<text x="65" y="143" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#596a76" text-anchor="start">Le tavole 2–6 mostrano ogni filo e resistenza; i valori ancora ignoti restano da confermare.</text>
+<text x="65" y="143" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#596a76" text-anchor="start">Le tavole 2–7 mostrano ogni filo e resistenza; la tavola 7 aggiunge il rilevamento USB con PC817.</text>
 <rect x="65" y="220" width="280" height="160" rx="18" fill="#e8f3ee" stroke="#8cab9b" stroke-width="2"/>
 <circle cx="83" cy="238" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
 <circle cx="327" cy="238" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
@@ -55,7 +55,7 @@
 <text x="1450" y="277" font-family="Arial,Helvetica,sans-serif" font-size="25" font-weight="700" fill="#ca4239" text-anchor="start">Linea 5 V</text>
 <text x="1450" y="312" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">VIN ESP32 · HX711</text>
 <text x="1450" y="344" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">Audio attraverso IRF9540</text>
-<text x="65" y="195" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="400" fill="#25323a" text-anchor="start">Ricarica USB-C direttamente sul pacco NASTIMA. GND comune a ESP32 e moduli.</text>
+<text x="65" y="195" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="400" fill="#25323a" text-anchor="start">Ricarica USB-C sul pacco NASTIMA; PC817 in parallelo all’ingresso USB, dettaglio tavola 7.</text>
 <rect x="710" y="505" width="365" height="390" rx="18" fill="#edf2f7" stroke="#8cab9b" stroke-width="2"/>
 <circle cx="728" cy="523" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
 <circle cx="1057" cy="523" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
@@ -65,7 +65,7 @@
 <text x="892.5" y="645" font-family="Arial,Helvetica,sans-serif" font-size="25" font-weight="700" fill="#25323a" text-anchor="middle">ESP32</text>
 <text x="892" y="730" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#25323a" text-anchor="middle">GPIO = sigla del pin</text>
 <text x="892" y="771" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="400" fill="#25323a" text-anchor="middle">Nessun 5 V sui GPIO</text>
-<text x="892" y="823" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#c57a12" text-anchor="middle">OLED + INA219 da 3V3</text>
+<text x="892" y="823" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#c57a12" text-anchor="middle">3V3: OLED / INA / buzzer</text>
 <rect x="65" y="495" width="465" height="285" rx="18" fill="#e8f3ee" stroke="#8cab9b" stroke-width="2"/>
 <circle cx="83" cy="513" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
 <circle cx="512" cy="513" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
@@ -101,17 +101,17 @@
 <circle cx="512" cy="848" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
 <text x="297.5" y="875" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700" fill="#25323a" text-anchor="middle">LED rosso + buzzer</text>
 <text x="297.5" y="905" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" fill="#596a76" text-anchor="middle">Tavola 5</text>
-<text x="92" y="947" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="400" fill="#25323a" text-anchor="start">GPIO15 → 1 kΩ → LED +</text>
-<text x="92" y="981" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="400" fill="#25323a" text-anchor="start">LED − → GND</text>
-<text x="92" y="1015" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="400" fill="#25323a" text-anchor="start">GPIO22 → segnale buzzer</text>
-<text x="92" y="1049" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="400" fill="#25323a" text-anchor="start">Buzzer − → GND</text>
+<text x="87" y="947" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">GPIO15 → 1 kΩ → LED + · − → GND</text>
+<text x="87" y="981" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">GPIO22 → 220 Ω → B BC337-40</text>
+<text x="87" y="1015" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">Buzzer + → 3V3 · − → C · E → GND</text>
+<text x="87" y="1049" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">1N5819 ai capi · fascetta verso +</text>
 <rect x="635" y="960" width="570" height="150" rx="18" fill="#e8f3ee" stroke="#8cab9b" stroke-width="2"/>
 <circle cx="653" cy="978" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
 <circle cx="1187" cy="978" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
 <text x="920.0" y="1005" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700" fill="#25323a" text-anchor="middle">Tastiera 4 × 2</text>
 <text x="920.0" y="1035" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" fill="#596a76" text-anchor="middle">Tavola 5 · soltanto 6 fili, senza VCC / GND</text>
 <text x="660" y="1076" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="400" fill="#25323a" text-anchor="start">R1/2/3/4 → 13/14/19/21 · C1/2 → 17/5</text>
-<text x="635" y="1147" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="400" fill="#596a76" text-anchor="start">PCB custom e ESP32: due coppie distinte; dettagli nella tavola 2.</text>
+<text x="635" y="1147" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="400" fill="#596a76" text-anchor="start">PC817: USB con 560 Ω; GPIO36 con pull-up 10 kΩ a 3V3. Tavola 7.</text>
 <text x="133" y="1185" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">Positivo 5 V</text>
 <text x="448" y="1185" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">GND comune</text>
 <text x="783" y="1185" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">3,3 V</text>

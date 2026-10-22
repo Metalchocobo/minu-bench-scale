@@ -151,8 +151,42 @@ def supply_capacitors(d, x, y, spacing=200, labels_below_rail=False,
     return (left,top),(right,bottom)
 
 
+def buzzer_driver(d, x, y):
+    """Draw functional B/C/E terminals; this is not a TO-92 pin-order view."""
+    d.wire([(x, y+170), (x+85, y+170)])
+    d.resistor(x+160, y+170, '220 Ω · base')
+    d.wire([(x+235, y+170), (x+320, y+170)])
+    d.rect(x+320, y+120, 190, 100, '#e8f3ee', '#8cab9b', 12)
+    d.text(x+415, y+160, 'BC337-40', 24, INK, True, 'middle')
+    d.text(x+415, y+195, 'NPN', 22, INK, False, 'middle')
+    for px, py, label in [(x+320,y+170,'B'), (x+415,y+120,'C'), (x+415,y+220,'E')]:
+        d.port(px, py, color=BLUE if label == 'B' else INK)
+        d.text(px-18 if label == 'B' else px+18, py-23 if label == 'C' else py-12 if label == 'B' else py+25,
+               label, 22, INK, True, 'end' if label == 'B' else 'start')
+    d.wire([(x+500,y+10), (x+810,y+10), (x+810,y+43)], ORANGE)
+    d.wire([(x+620,y+10), (x+620,y+30)], ORANGE)
+    d.circle(x+620, y+80, 50, '#293b46', '#1c2b33')
+    d.circle(x+620, y+80, 13, '#14222a', '#14222a')
+    d.port(x+620, y+30, color=ORANGE)
+    d.port(x+620, y+130, color=INK)
+    d.text(x+640, y+45, '+', 24, ORANGE, True)
+    d.text(x+640, y+137, '−', 24, INK, True)
+    d.text(x+650, y+190, 'Buzzer passivo', 24, INK, True, 'middle')
+    d.wire([(x+415,y+120), (x+415,y+105), (x+540,y+105), (x+540,y+145), (x+810,y+145), (x+810,y+97)], INK)
+    d.wire([(x+620,y+130), (x+620,y+145)], INK)
+    d.rect(x+794, y+43, 32, 54, '#293b46', '#1c2b33', 7)
+    d.rect(x+796, y+50, 28, 6, '#ced9de', '#ced9de', 0)
+    d.text(x+855, y+65, '1N5819', 24, INK, True)
+    d.text(x+855, y+97, 'Fascetta ↑', 21, INK)
+    d.text(x+855, y+125, 'verso 3V3', 21, ORANGE)
+    d.wire([(x+415,y+220), (x+415,y+270)], INK)
+    for px, py, color in [(x,y+170,BLUE), (x+620,y+10,ORANGE), (x+620,y+145,INK)]:
+        d.dot(px, py, color)
+    return {'signal': (x,y+170), 'supply': (x+500,y+10), 'ground': (x+415,y+270)}
+
+
 def overview():
-    d = Plate(1, 'Tutta la bilancia, a colpo d’occhio', 'Le tavole 2–6 mostrano ogni filo e resistenza; i valori ancora ignoti restano da confermare.')
+    d = Plate(1, 'Tutta la bilancia, a colpo d’occhio', 'Le tavole 2–7 mostrano ogni filo e resistenza; la tavola 7 aggiunge il rilevamento USB con PC817.')
     # The power path is visible above the signal hub.
     for x, w, title, sub in [(65,280,'NASTIMA','6,4 V · 6 Ah · USB-C'), (440,250,'INA219','Positivo VIN+ → VIN−'), (795,190,'S1','Interruttore'), (1090,270,'Mini360','OUT+ regolato a 5,11 V')]:
         d.board(x,220,w,160,title,sub)
@@ -165,11 +199,11 @@ def overview():
     d.wire([(985,330),(1090,330)],RED)
     d.wire([(1360,330),(1420,330),(1420,416),(880,416),(880,505)],RED)
     for x in (345,440,690,795,985,1090,1360): d.port(x,330,color=RED)
-    d.text(65,195,'Ricarica USB-C direttamente sul pacco NASTIMA. GND comune a ESP32 e moduli.',22)
+    d.text(65,195,'Ricarica USB-C sul pacco NASTIMA; PC817 in parallelo all’ingresso USB, dettaglio tavola 7.',22)
     d.esp(710,505,365,390)
     d.text(892,730,'GPIO = sigla del pin',23,INK,True,'middle')
     d.text(892,771,'Nessun 5 V sui GPIO',22,INK,False,'middle')
-    d.text(892,823,'OLED + INA219 da 3V3',22,ORANGE,True,'middle')
+    d.text(892,823,'3V3: OLED / INA / buzzer',22,ORANGE,True,'middle')
     d.board(65,495,465,285,'Cella + HX711','Tavola 3')
     for i,line in enumerate(['E+ / E− / A+ / A− → cella', 'GPIO16 → 220 Ω → SCK', 'DOUT → 10 kΩ → GPIO35', 'GPIO35 → 20 kΩ → GND', 'VCC 5 V · GND comune']): d.text(92,612+i*32,line,23)
     d.wire([(530,660),(620,660),(620,620),(710,620)])
@@ -183,21 +217,24 @@ def overview():
     d.wire([(1075,790),(1200,790),(1200,980),(1325,980)])
     d.port(1075,790);d.port(1325,980)
     d.board(65,830,465,280,'LED rosso + buzzer','Tavola 5')
-    for i,line in enumerate(['GPIO15 → 1 kΩ → LED +','LED − → GND','GPIO22 → segnale buzzer','Buzzer − → GND']):d.text(92,947+i*34,line,23)
+    for i,line in enumerate(['GPIO15 → 1 kΩ → LED + · − → GND',
+                             'GPIO22 → 220 Ω → B BC337-40',
+                             'Buzzer + → 3V3 · − → C · E → GND',
+                             '1N5819 ai capi · fascetta verso +']):d.text(87,947+i*34,line,21)
     d.wire([(530,970),(600,970),(600,790),(710,790)])
     d.port(530,970);d.port(710,790)
     d.board(635,960,570,150,'Tastiera 4 × 2','Tavola 5 · soltanto 6 fili, senza VCC / GND')
     d.text(660,1076,'R1/2/3/4 → 13/14/19/21 · C1/2 → 17/5',22)
     d.wire([(890,895),(890,960)])
     d.port(890,895);d.port(890,960)
-    d.text(635,1147,'PCB custom e ESP32: due coppie distinte; dettagli nella tavola 2.',20,MUTED)
+    d.text(635,1147,'PC817: USB con 560 Ω; GPIO36 con pull-up 10 kΩ a 3V3. Tavola 7.',20,MUTED)
     d.footer('Questa panoramica raggruppa i fili. Per saldare usa le tavole di dettaglio e le sigle reali sui moduli.')
     d.save('01-wiring-overview')
 
 
 def power():
-    d=Plate(2,'Batteria, alimentazione e condensatori','Mini360: 5 V a VIN ESP32, HX711 e audio. VCC OLED e INA219 provengono dall’ESP32 a 3,3 V.')
-    d.note(65,180,1670,'Ricarica del pacco', ['USB esterna → prolunga USB-C di scocca → USB-C NASTIMA. Il caricatore/BMS è interno al pacco.'],108)
+    d=Plate(2,'Batteria, alimentazione e condensatori','Mini360: 5 V a VIN ESP32, HX711 e audio. ESP32 3V3 alimenta OLED, INA219 e buzzer passivo.')
+    d.note(65,180,1670,'Ricarica del pacco + rilevamento USB', ['USB esterna → USB-C NASTIMA. PC817 in parallelo: 560 Ω lato USB, GPIO36 + 10 kΩ lato ESP32; tavola 7.'],108)
     d.board(65,330,235,220,'NASTIMA','6,4 V / 6 Ah','#dce7ed')
     d.port(300,435,'+',RED);d.port(300,505,'−',INK)
     d.wire([(300,435),(365,435)],RED)
@@ -222,10 +259,10 @@ def power():
     d.wire([(1325,505),(1270,505),(1270,650)],INK)
     d.wire([(1685,505),(1740,505),(1740,650)],INK)
     d.dot(1270,650,INK);d.dot(1740,650,INK)
-    d.text(355,638,'GND comune → ESP32, HX711, OLED, INA219, DFPlayer, LED e buzzer',24,INK,True)
+    d.text(355,638,'GND comune → ESP32, HX711, OLED, INA219, DFPlayer, LED e NPN buzzer',24,INK,True)
     d.wire([(1685,435),(1770,435),(1770,600)],RED)
     d.port(1770,600,color=RED)
-    d.text(65,690,'5 V → VIN ESP32 / HX711 / audio · ESP32 3V3 → OLED / VCC INA219',23,RED,True)
+    d.text(65,690,'5 V → VIN ESP32 / HX711 / audio · ESP32 3V3 → OLED / VCC INA219 / buzzer +',23,RED,True)
     for x,w,title,plus,minus,el,voltage,spacing in [(65,400,'Mini360 IN · dopo S1','IN+','IN−','220 µF','16 V',170),(495,400,'Mini360 OUT','OUT+','OUT−','470 µF','10 V',170),(925,400,'PCB custom · 5 V/GND','5 V','GND','47 µF','16 V',170),(1355,400,'Presso ESP32 · VIN/GND','VIN','GND','47 µF','16 V',170)]:
         d.rect(x,710,w,405,'#f5f8fa','#cbd6dd',background=True)
         d.text(x+25,749,title,24,INK,True)
@@ -381,7 +418,7 @@ def audio():
 
 def controls():
     d=Plate(5,'Tastiera, LED rosso e buzzer','Mappa tastiera dalle coppie GPIO misurate. Sleep e LED invariati; resistenza LED: 1 kΩ.')
-    d.esp(65,220,325,890)
+    d.esp(65,220,325,930)
     d.board(1270,220,465,555,'Tastiera 4 × 2','Matrice logica firmware · 6 GPIO')
     rows=[(365,'GPIO13','R1'),(457,'GPIO14','R2'),(549,'GPIO19','R3'),(641,'GPIO21','R4'),(705,'GPIO17','C1'),(745,'GPIO5','C2')]
     for y,pin,label in rows:
@@ -393,39 +430,31 @@ def controls():
         for col,label in enumerate(labels):
             d.rect(1482+col*113,330+row*92,98,70,'#f7f9fa','#9baaaf',8)
             d.text(1531+col*113,373+row*92,label,21,INK,True,'middle')
-    d.text(600,790,'Matrice logica, non vista frontale.',22)
-    d.text(600,825,'Ordine connettore da verificare; nessun VCC / GND.',22)
-    d.port(390,875,'GPIO22')
-    d.wire([(390,875),(1325,875)])
-    d.circle(1400,875,72,'#2b3b45','#1c2b33')
-    d.circle(1400,875,18,'#152129','#152129')
-    d.port(1325,875,color=BLUE)
-    d.text(1350,862,'+',26,'white',True)
-    d.port(1400,948,color=INK)
-    d.text(1420,941,'−',26,INK,True)
-    d.text(1530,869,'Buzzer passivo',26,INK,True)
-    d.text(1530,905,'Segnale → GPIO22',22)
-    d.text(1530,941,'Negativo → GND',22)
-    d.port(390,1010,'GPIO15')
-    d.wire([(390,1010),(565,1010)])
-    d.resistor(640,1010,'1 kΩ LED')
-    d.wire([(715,1010),(1130,1010)])
+    d.text(600,260,'Matrice logica, non vista frontale.',22)
+    d.text(600,295,'Ordine connettore da verificare; nessun VCC / GND.',22)
+    driver = buzzer_driver(d, 550, 870)
+    d.port(390,1040,'GPIO22')
+    d.wire([(390,1040),driver['signal']])
+    d.port(390,880,'3V3',ORANGE)
+    d.wire([(390,880),driver['supply']],ORANGE)
+    d.dot(*driver['supply'],ORANGE)
+    d.port(390,840,'GPIO15')
+    d.wire([(390,840),(565,840)])
+    d.resistor(640,840,'1 kΩ LED')
+    d.wire([(715,840),(1130,840)])
     # Red LED body and two physical leads.
-    d.parts.append('<path d="M1110 991V957 A47 47 0 0 1 1204 957V991Z" fill="#db534b" stroke="#a83230" stroke-width="3"/>')
-    d.rect(1102,985,110,13,'#bd3835','#bd3835',4)
-    d.port(1130,1010,'',BLUE);d.port(1190,1010,'',INK)
-    d.parts.append('<path d="M1130 997V1010 M1190 997V1010" stroke="#8a979f" stroke-width="6"/>')
-    d.text(1119,1050,'Anodo +',22,BLUE,True,'end')
-    d.text(1215,1001,'LED rosso',25,INK,True)
-    d.text(1215,1040,'Catodo − → GND',22)
-    d.wire([(1190,1010),(1190,1090)],INK)
-    d.wire([(1400,948),(1488,948),(1488,1090)],INK)
-    d.port(390,1090,'GND',INK)
-    d.wire([(390,1090),(1735,1090)],INK)
-    d.dot(1190,1090,INK);d.dot(1488,1090,INK)
-    d.text(1540,1074,'GND comune',22,INK,True)
-    d.text(65,1140,'LED: catodo = lato piatto del corpo; gambetta corta se non tagliata. Conservare la resistenza montata.',22)
-    d.footer()
+    d.parts.append('<path d="M1110 821V800 A47 40 0 0 1 1204 800V821Z" fill="#db534b" stroke="#a83230" stroke-width="3"/>')
+    d.rect(1102,815,110,13,'#bd3835','#bd3835',4)
+    d.port(1130,840,'',BLUE);d.port(1190,840,'',INK)
+    d.parts.append('<path d="M1130 828V840 M1190 828V840" stroke="#8a979f" stroke-width="6"/>')
+    d.text(1020,805,'Anodo +',21,BLUE,True,'end')
+    d.text(1280,805,'LED rosso · catodo − a GND',23,INK,True)
+    d.wire([(1190,840),(1735,840),(1735,1140)],INK)
+    d.port(390,1140,'GND',INK)
+    d.wire([(390,1140),(1735,1140)],INK)
+    d.dot(*driver['ground'],INK);d.dot(1735,1140,INK)
+    d.text(1430,1122,'GND comune',22,INK,True)
+    d.footer('B/C/E sono terminali funzionali: verifica il pinout del BC337-40. Firmware invariato: PWM GPIO22, silenzio LOW.')
     d.save('05-controls')
 
 

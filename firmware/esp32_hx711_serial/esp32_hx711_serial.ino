@@ -1880,7 +1880,7 @@ static bool maybeEnterSafeShutdown(uint32_t nowMs) {
     return false;
   }
 
-  // The voltage-based charging icon is not evidence of a usable external supply.
+  // USB presence does not guarantee that battery voltage can sustain the load.
   if (st.voltage_V <= V_HARD_SLEEP_MIN_V) {
     if (g_hardLowSinceMs == 0) g_hardLowSinceMs = nowMs;
   } else {

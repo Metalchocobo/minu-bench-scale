@@ -35,24 +35,27 @@
   <div class="eyebrow">MINÙ · NASTIMA + MINI360</div>
   <h1>Il cablaggio della bilancia attuale</h1>
   <p><strong>Riferimenti: schemi forniti da Andrea; per l’HX711, documentazione del progetto.</strong> OLED e INA219 ricevono VCC dal 3V3 ESP32. HX711 e ramo audio ricevono la linea VIN/5V del Mini360. Per la replica prevedere una <strong>100 kΩ fra SCK e GND</strong>, dopo la 220 Ω sul lato HX711 e vicino al modulo. Mantiene il clock basso quando il GPIO16 non è pilotato durante avvio/reset. La presenza sulla bilancia attuale resta da confermare.</p>
-  <p>Una tavola generale con tutti i fili e sei dettagli. La generale segue la posizione dei 30 pin ESP32 nella mappa di Andrea; sugli altri moduli segui le sigle dei terminali. La tastiera usa le coppie GPIO misurate sul cablaggio montato: righe 13/14/19/21, colonne 17/5. La matrice logica del firmware non indica l'ordine fisico del connettore o la disposizione frontale dei tasti.</p>
+  <p>Una tavola generale con tutti i fili e sette dettagli. La generale segue la posizione dei 30 pin ESP32 nella mappa di Andrea; sugli altri moduli segui le sigle dei terminali. La tastiera usa le coppie GPIO misurate sul cablaggio montato: righe 13/14/19/21, colonne 17/5. La matrice logica del firmware non indica l'ordine fisico del connettore o la disposizione frontale dei tasti.</p>
+  <p><strong>Presenza alimentatore USB: PC817 su GPIO36 / VP.</strong> Il ramo <strong>USB +5 V → 560 Ω → pin 1</strong> e <strong>pin 2 → USB−</strong> è in parallelo al cavo di ricarica della NASTIMA. Sul lato ESP32, <strong>pin 3 → GND</strong>, <strong>pin 4 → GPIO36</strong> e <strong>10 kΩ fra GPIO36 e 3V3</strong>. USB alimentata = LOW; assente = HIGH. Il rilevatore non aggiunge un ponte fra USB− e GND ESP32 e non misura la corrente o la fine della carica.</p>
+  <p>Il <strong>buzzer passivo</strong> riceve alimentazione da ESP32 <strong>3V3</strong>: GPIO22 comanda la base del <strong>BC337-40 tramite 220 Ω</strong>, il collettore va al − del buzzer e l’emettitore a GND. Il <strong>1N5819</strong> collega i due terminali del buzzer, con <strong>fascetta verso il + / 3V3</strong>. Il pilotaggio del buzzer conserva gli stessi toni PWM.</p>
   <nav aria-label="Scegli la tavola">
     <button type="button" data-sheet="0" aria-pressed="true">Generale · Tutti i fili</button>
     <button type="button" data-sheet="1" aria-pressed="false">01 · Panoramica</button>
     <button type="button" data-sheet="2" aria-pressed="false">02 · Alimentazione</button>
     <button type="button" data-sheet="3" aria-pressed="false">03 · HX711 e cella</button>
     <button type="button" data-sheet="4" aria-pressed="false">04 · Audio</button>
-    <button type="button" data-sheet="5" aria-pressed="false">05 · Tastiera e LED</button>
+    <button type="button" data-sheet="5" aria-pressed="false">05 · Tastiera, buzzer e LED</button>
     <button type="button" data-sheet="6" aria-pressed="false">06 · OLED e INA219</button>
+    <button type="button" data-sheet="7" aria-pressed="false">07 · USB e PC817</button>
   </nav>
   <div class="tools">
     <label for="zoom">Ingrandimento <select id="zoom"><option value="100">Adatta alla finestra</option><option value="150">150%</option><option value="200">200%</option><option value="300">300%</option></select></label>
-    <div class="links"><a id="vector-link" href="00-wiring-complete.svg" target="_blank">Apri tavola ingrandibile</a><a href="cablaggio-generale.pdf" target="_blank">PDF generale A2</a><a href="guida-illustrata.pdf" target="_blank">PDF dei dettagli A3</a><a href="README.md">Tabella dei fili</a></div>
+    <div class="links"><a id="vector-link" href="00-wiring-complete.svg" target="_blank">Apri tavola ingrandibile</a><a href="cablaggio-generale-pc817.pdf" target="_blank">PDF generale A2</a><a href="guida-illustrata.pdf" target="_blank">PDF dei dettagli A3</a><a href="README.md">Tabella dei fili</a></div>
   </div>
   <div class="viewer" id="viewer"><img id="plate" src="00-wiring-complete.svg" alt="Tutti i fili della bilancia, con i 30 pin ESP32 nella posizione della mappa fornita da Andrea."></div>
   <p id="caption" class="caption" aria-live="polite">Generale · Tutti i fili, con la disposizione dei 30 pin ESP32 della mappa fornita.</p>
   <p class="help">Per vedere i pin piccoli aumenta l’ingrandimento e scorri la tavola. Un pallino pieno indica unione dei fili; un incrocio senza pallino resta separato. I colori delle resistenze disegnate sono illustrativi: conta il valore scritto.</p>
-  <aside><p><strong>NPN: 2N3904 H331. LED: 1 kΩ. Audio: 470 µF / 16 V + 104 = 100 nF.</strong> La PCB custom fra Mini360 ed ESP32 ha una coppia <strong>aggiuntiva e identificata: 47 µF / 16 V + 104</strong>. La coppia presso l’ESP32 è distinta: i valori fisici restano da leggere e quelli mostrati, <strong>47 µF / 16 V + 100 nF (104)</strong>, sono consigliati per la replica. Restano da verificare l’ordine fisico dei piedini del NPN, i collegamenti e la collocazione dei condensatori audio e il fusibile F1. I tratteggi audio mostrano collegamenti di riferimento. La <strong>100 kΩ SCK–GND è disegnata con fili continui ed è prevista per la replica</strong>; resta da confermare soltanto se sia già montata sulla bilancia attuale. Sleep e LED conservano il loro funzionamento.</p></aside>
+  <aside><p><strong>NPN audio: 2N3904 H331. LED: 1 kΩ. Audio: 470 µF / 16 V + 104 = 100 nF.</strong> La PCB custom fra Mini360 ed ESP32 ha una coppia <strong>aggiuntiva e identificata: 47 µF / 16 V + 104</strong>. La coppia presso l’ESP32 è distinta: i valori fisici restano da leggere e quelli mostrati, <strong>47 µF / 16 V + 100 nF (104)</strong>, sono consigliati per la replica. Restano da verificare l’ordine fisico dei piedini del NPN audio, i collegamenti e la collocazione dei condensatori audio e il fusibile F1. I tratteggi audio mostrano collegamenti di riferimento. La <strong>100 kΩ SCK–GND è disegnata con fili continui ed è prevista per la replica</strong>; resta da confermare soltanto se sia già montata sulla bilancia attuale. Sleep e LED conservano il loro funzionamento.</p></aside>
 </main>
 <script>
   const sheets = [
@@ -61,8 +64,9 @@
     ['02-power', '02 · Alimentazione: Mini360, coppia PCB custom aggiuntiva e coppia ESP32 distinta; audio nella tavola 04.'],
     ['03-hx711', '03 · HX711: GPIO16 con 220 Ω; partitore DOUT da 10 kΩ e 20 kΩ sul punto GPIO35.'],
     ['04-audio', '04 · Audio: IRF9540, 2N3904 H331, UART, resistenze, condensatori audio e altoparlante.'],
-    ['05-controls', '05 · Comandi: matrice logica tastiera misurata (righe 13/14/19/21, colonne 17/5), buzzer su GPIO22 e LED su GPIO15.'],
-    ['06-display-ina', '06 · Display e INA219: segnali SPI/I²C e alimentazioni 5 V / 3,3 V separate.']
+    ['05-controls', '05 · Comandi: tastiera (righe 13/14/19/21, colonne 17/5), buzzer passivo su 3V3 con GPIO22 → 220 Ω → BC337-40 e 1N5819 con fascetta verso +; LED su GPIO15.'],
+    ['06-display-ina', '06 · Display e INA219: segnali SPI/I²C e alimentazioni 5 V / 3,3 V separate.'],
+    ['07-usb-pc817', '07 · USB e PC817: quattro piedini, 560 Ω nel ramo LED, GPIO36 / VP con pull-up 10 kΩ a 3V3; USB presente LOW.']
   ];
   const plate = document.getElementById('plate');
   const viewer = document.getElementById('viewer');

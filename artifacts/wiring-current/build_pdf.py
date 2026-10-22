@@ -1,4 +1,4 @@
-"""Build a six-page A3 landscape guide from the checked assembly illustrations."""
+"""Build a seven-page A3 landscape guide from the checked assembly illustrations."""
 from pathlib import Path
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A3, landscape
@@ -12,11 +12,11 @@ if __name__ == '__main__':
     document = canvas.Canvas(str(target), pagesize=(width, height), pageCompression=1)
     document.setTitle('Minù · Cablaggio corrente NASTIMA + Mini360')
     document.setAuthor('Minù')
-    document.setSubject('Guida di montaggio: sei tavole con pin, fili e resistenze; componenti ignoti da confermare.')
-    titles = ['Tutta la bilancia', 'Alimentazione', 'HX711 e cella', 'Audio', 'Tastiera, LED e buzzer', 'OLED e INA219']
-    plates = sorted(ROOT.glob('0[1-6]-*.png'))
-    if len(plates) != 6:
-        raise ValueError('Expected exactly six checked PNG plates.')
+    document.setSubject('Guida di montaggio: sette tavole con pin, fili, resistenze e rilevamento USB PC817.')
+    titles = ['Tutta la bilancia', 'Alimentazione', 'HX711 e cella', 'Audio', 'Tastiera, LED e buzzer', 'OLED e INA219', 'USB e PC817']
+    plates = sorted(ROOT.glob('0[1-7]-*.png'))
+    if len(plates) != 7:
+        raise ValueError('Expected exactly seven checked PNG plates.')
     for number, name in enumerate(plates):
         document.bookmarkPage(name.stem)
         document.addOutlineEntry(titles[number], name.stem)

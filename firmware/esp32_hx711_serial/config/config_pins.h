@@ -12,6 +12,10 @@ static const int HX711_DOUT_PIN = 35;   // GPIO35 (input-only)
 static const int I2C_SDA_PIN = 32;
 static const int I2C_SCL_PIN = 33;
 
+// ========================= USB PRESENCE (PC817) =========================
+static const int USB_PRESENT_PIN = 36;  // VP; external 10 kOhm pull-up to 3V3.
+static const bool USB_PRESENT_ACTIVE_LOW = true;
+
 // ========================= OLED SSD1322 (SPI) =========================
 static const int OLED_SCK_PIN  = 18;    // VSPI SCK
 static const int OLED_MOSI_PIN = 23;    // VSPI MOSI

@@ -2,11 +2,11 @@
 
 Fonti del cablaggio: documentazione HX711 confermata da Andrea e due ritagli di schema forniti per gli altri moduli. Il primo indica **OLED VCC e INA219 VCC da ESP32 3V3**; il secondo indica **source IRF9540 sulla linea VIN/5V**, il comando audio e la **resistenza LED da 1 kΩ**. I dettagli ancora da verificare sono elencati nella sezione finale.
 
-Stato corrente del cablaggio usato dal firmware `firmware/esp32_hx711_serial`. Alimentazione montata: batteria USB-C NASTIMA LiFePO4 e Mini360 MP1482DS regolato a **5,11 V**, valore riferito da Andrea. Cablaggio completato e primo funzionamento apparentemente regolare riferiti il 18 settembre 2026; le tacche firmware usano fasce indicative LiFePO4 e l'icona di ricarica usa la tensione filtrata, senza modificare soglie e tempi delle protezioni.
+Stato corrente del cablaggio usato dal firmware `firmware/esp32_hx711_serial`. Alimentazione montata: batteria USB-C NASTIMA LiFePO4 e Mini360 MP1482DS regolato a **5,11 V**, valore riferito da Andrea. Cablaggio completato e primo funzionamento apparentemente regolare riferiti il 18 settembre 2026; le tacche firmware usano fasce indicative LiFePO4 e l'icona `charging` indica la presenza USB rilevata dal PC817, con filtro di 250 ms su entrambi i fronti. Soglie e tempi delle protezioni della batteria restano invariati.
 
-Moduli: ESP32 DevKit, HX711 alimentato a 5 V, cella di carico a 4 fili, OLED SSD1322 SPI, INA219 I2C, tastiera 4x2, buzzer, DFPlayer Mini e LED di standby.
+Moduli: ESP32 DevKit, HX711 alimentato a 5 V, cella di carico a 4 fili, OLED SSD1322 SPI, INA219 I2C, tastiera 4x2, buzzer passivo con pilotaggio BC337-40, DFPlayer Mini, LED di standby e rilevatore presenza USB con PC817 DIP-4. Il PC817 fa parte del cablaggio per la replica; il suo montaggio fisico sull'esemplare attuale non è confermato.
 
-La [guida illustrata del cablaggio corrente](../artifacts/wiring-current/README.md) raccoglie tavole e istruzioni per ricostruire i collegamenti. **Schema generale con tutti i fili:** [PDF A2, pagina singola](../artifacts/wiring-current/cablaggio-generale.pdf), [PNG](../artifacts/wiring-current/00-wiring-complete.png) / [SVG](../artifacts/wiring-current/00-wiring-complete.svg). I componenti mostrati nello schema dell'audio e i valori riferiti da Andrea sono distinti dalle raccomandazioni non confermate sul montaggio.
+La [guida illustrata del cablaggio corrente](../artifacts/wiring-current/README.md) raccoglie tavole e istruzioni per ricostruire i collegamenti. **Schema generale con tutti i fili:** [PDF A2, pagina singola](../artifacts/wiring-current/cablaggio-generale-pc817.pdf), [PNG](../artifacts/wiring-current/00-wiring-complete.png) / [SVG](../artifacts/wiring-current/00-wiring-complete.svg). I componenti mostrati nello schema dell'audio e i valori riferiti da Andrea sono distinti dalle raccomandazioni non confermate sul montaggio.
 
 ### ESP32 montato: orientamento e terminali
 
@@ -30,7 +30,7 @@ La vista fornita da Andrea identifica una scheda **a 30 pin, con 15 terminali pe
 | 14 | **GPIO22** | **GPIO36 / VP** |
 | 15 | **GPIO23** | **EN** |
 
-L'immagine riporta anche SDA accanto a GPIO21 e SCL accanto a GPIO22: sono alias del pinout della scheda. Nel cablaggio corrente questi GPIO servono rispettivamente tastiera e buzzer; **INA219 SDA va a GPIO32 e SCL a GPIO33**. GPIO12, GPIO36/VP ed EN non hanno un collegamento esterno assegnato dal progetto; RX0/TX0 restano dedicati alla seriale. La vista identifica le posizioni dell'ESP32, non l'orientamento fisico dei piedini del NPN **2N3904 H331** né il modello dell'OLED o del breakout HX711.
+L'immagine riporta anche SDA accanto a GPIO21 e SCL accanto a GPIO22: sono alias del pinout della scheda. Nel cablaggio corrente questi GPIO servono rispettivamente tastiera e buzzer; **INA219 SDA va a GPIO32 e SCL a GPIO33**. **GPIO36 / VP è riservato all'ingresso presenza USB del PC817**, con pull-up esterna da 10 kΩ a 3V3. GPIO12 ed EN non hanno un collegamento esterno assegnato dal progetto; RX0/TX0 restano dedicati alla seriale. La vista identifica le posizioni dell'ESP32, non l'orientamento fisico dei piedini del NPN **2N3904 H331** né il modello dell'OLED o del breakout HX711.
 
 ## 1) Cella di carico → HX711
 
@@ -84,7 +84,7 @@ Il rapporto ideale del partitore è 2/3: **3,33 V** con DOUT a 5 V, **3,41 V** c
 - **VCC → ESP32 3V3**, come indicato nel primo ritaglio di schema
 - **GND → GND comune**
 
-L'INA219 misura la tensione ai morsetti batteria e la corrente diretta al Mini360. **VIN+ riceve il positivo dopo F1; VIN− va a S1 e poi a IN+ del Mini360. VIN− è ancora il positivo, non GND.** SDA/SCL non trasportano la corrente del carico. La ricarica USB interna del pacco non attraversa questo shunt: il sensore non misura la corrente netta delle celle. L'icona firmware `charging` è una stima dalla tensione e non certifica la ricarica USB.
+L'INA219 misura la tensione ai morsetti batteria e la corrente diretta al Mini360. **VIN+ riceve il positivo dopo F1; VIN− va a S1 e poi a IN+ del Mini360. VIN− è ancora il positivo, non GND.** SDA/SCL non trasportano la corrente del carico. La ricarica USB interna del pacco non attraversa questo shunt: il sensore non misura la corrente netta delle celle. L'icona firmware `charging` dipende dal PC817 e indica presenza USB, non corrente di ricarica o fine carica.
 
 ## 5) Tastiera 4x2 → ESP32
 
@@ -114,10 +114,20 @@ Per verificare una replica, lo [sketch di test tastiera](../firmware/keypad_wiri
 
 ## 6) Buzzer → ESP32
 
-- Segnale buzzer → **GPIO22**
-- Massa → **GND comune**
+Il buzzer è **passivo**, adatto all'alimentazione a **3,3 V** e al circuito di pilotaggio.
 
-GPIO22 è riservato al buzzer e non è disponibile come alternativa per DOUT HX711 nel cablaggio corrente. Se il buzzer richiede più corrente di quella ammessa dal GPIO, pilotarlo tramite transistor.
+| Collegamento | Destinazione |
+|---|---|
+| ESP32 **GPIO22 → resistenza 220 Ω / ¼ W** | **Base (B) BC337-40 NPN** |
+| BC337-40 **emettitore (E)** | **GND comune** |
+| BC337-40 **collettore (C)** | **− del buzzer** |
+| **+ del buzzer** | ESP32 **3V3** |
+| Diodo **1N5819, catodo con fascetta** | **+ del buzzer / 3V3** |
+| Diodo **1N5819, anodo senza fascetta** | **− del buzzer / collettore** |
+
+Il diodo è **in parallelo al buzzer**: i suoi due capi arrivano agli stessi due terminali del buzzer. Su ciascun terminale sono quindi collegati il filo del circuito e un capo del diodo. La **220 Ω è in serie alla base del transistor**, non al buzzer; è distinta dalla 220 Ω di SCK HX711.
+
+Il firmware resta invariato: GPIO22 genera il PWM LEDC; **HIGH accende il transistor, LOW lo spegne** e il silenzio mantiene il comando LOW. GPIO22 è riservato al buzzer e non è disponibile come alternativa per DOUT HX711 nel cablaggio corrente.
 
 ## 7) DFPlayer Mini → ESP32
 
@@ -165,10 +175,38 @@ Il firmware usa logica active-high: LED acceso durante standby/light sleep.
 - **Ricarica:** alimentatore USB esterno → collegamento USB-C da scocca → ingresso USB-C del pacco, dichiarato **5 V / 1,5 A**. Il caricatore è dentro il pacco; la prolunga non è un caricatore.
 - **Positivo di potenza:** batteria + → **F1 vicino alla batteria → INA219 VIN+ → VIN− → S1 → Mini360 IN+**.
 - **Negativo:** batteria −, Mini360 IN− e OUT−, ESP32 e periferiche condividono GND.
-- **Uscita:** Mini360 OUT+ → linea nominale 5 V, regolata sul montaggio a **5,11 V** → ESP32 **VIN/5V**, HX711 **VCC** e IRF9540 **S** del power-gate audio. ESP32 **3V3 → OLED VCC e INA219 VCC**. Non applicare la linea 5 V al pin 3V3.
+- **Uscita:** Mini360 OUT+ → linea nominale 5 V, regolata sul montaggio a **5,11 V** → ESP32 **VIN/5V**, HX711 **VCC** e IRF9540 **S** del power-gate audio. ESP32 **3V3 → OLED VCC, INA219 VCC e + del buzzer passivo**. Non applicare la linea 5 V al pin 3V3.
 - **S1:** interruttore semplice dopo VIN− dell'INA219 e prima di IN+ e dei condensatori d'ingresso. In OFF disalimenta il Mini360 dalla batteria; non interrompe la ricarica interna del pacco. Gli ingressi INA219 possono restare sul bus batteria con VCC spento, come ammesso dal [datasheet TI, §8.3.1](https://www.ti.com/lit/ds/symlink/ina219.pdf).
 
 F1 **T2 A** resta il valore proposto nello schema per fili corti in rame ≥ 0,5 mm²; non sono stati riferiti valore effettivamente montato o misure degli spunti. CTK3S e SLA non sono componenti del percorso corrente.
+
+### Rilevatore presenza USB: PC817 DIP-4
+
+Il rilevatore si collega **in parallelo all'ingresso USB del caricatore della batteria** e non interrompe il percorso di ricarica. Il **+5 V USB** va prelevato prima del caricatore: è distinto da **Mini360 OUT+ / VIN 5 V della bilancia**. Non usare il 5 V del Mini360 per questo rilevamento.
+
+| Da | A | Componente / dettaglio |
+|---|---|---|
+| **USB +5 V**, ramo parallelo al caricatore | PC817 **pin 1, anodo** | **560 Ω / ¼ W in serie** |
+| PC817 **pin 2, catodo** | **USB−** | Lato USB del rilevatore |
+| PC817 **pin 3, emettitore** | **GND ESP32** | Lato bilancia |
+| PC817 **pin 4, collettore** | **GPIO36 / VP** | Ingresso digitale presenza USB |
+| **GPIO36 / VP** | **ESP32 3V3** | **10 kΩ di pull-up esterna** |
+
+Con ESP32 alimentato, **USB presente = LOW**, **USB assente = HIGH**. GPIO36 è input-only e non ha pull-up/pull-down interni: usare la 10 kΩ esterna. **Non aggiungere un ponte USB− / GND bilancia nel rilevatore**; il PC817 trasferisce il segnale per via ottica. La corrente del LED calcolata a USB nominale 5 V è circa **6–7 mA**, non una lettura sul circuito.
+
+Componenti per la replica: **un PC817 DIP-4, una 560 Ω / ¼ W e una 10 kΩ**. Il pinout funzionale è **1 anodo, 2 catodo, 3 emettitore, 4 collettore**, secondo il [datasheet Sharp PC817](https://global.sharp/products/device/lineup/data/pdf/datasheet/PC817XxNSZ1B_e.pdf); verificare il riferimento del pin 1 sul componente prima di saldare. Vedi [tavola 07, PNG](../artifacts/wiring-current/07-usb-pc817.png) / [SVG](../artifacts/wiring-current/07-usb-pc817.svg).
+
+Il segnale indica la **presenza della tensione USB**, non la corrente di ricarica, la capacità residua o la fine carica. Il firmware conferma sia collegamento sia scollegamento dopo **250 ms di livello stabile**; l'indicatore resta indipendente dall'INA219 ed è attivo anche con batteria piena. Il PC817 fa parte del cablaggio per la replica; la sua installazione fisica sull'esemplare attuale non è confermata. Non sono documentate misure o prove hardware del rilevatore.
+
+### Due diodi presso il Mini360
+
+**La nuova bilancia deve ancora essere cablata. La replica NASTIMA non prevede la coppia di diodi per selezionare due sorgenti:** il Mini360 riceve alimentazione dal solo ramo batteria, mentre l'USB-C entra nel caricatore interno del pacco. I file Mini360 e le tavole indicano **S1 → IN+** e **OUT+ → linea 5 V dei carichi**, entrambi diretti.
+
+Andrea ricorda due diodi esterni presso il Mini360. La conversazione **«Valuta alimentazione Li-ion 2S»** prevedeva **due 1N5822 per selezionare la sorgente di alimentazione**: uno dal positivo dell'alimentatore 12 V e uno dal positivo del pacco 2S attraverso il BMS, con **entrambi i catodi (lato fascetta) riuniti verso IN+ del buck**. Quel circuito a due sorgenti non va trasferito alla replica NASTIMA; il ricordo non indica due componenti mancanti da aggiungere alle tavole attuali.
+
+La successiva proposta di **un singolo diodo sull'uscita del LM2596** e la [ricerca sull'alimentazione al piombo](../artifacts/ricerca-alimentazione-piombo.md) non identificano il cablaggio attuale della coppia. Il **1N5819 del buzzer** è un componente distinto, già documentato nella sezione 6.
+
+Il **DFPlayer non richiede un diodo aggiuntivo nel circuito base di alimentazione**: per la nuova replica usare il riferimento **5,00 V** della procedura Mini360 e verificare VCC dopo l'IRF9540. Il modulo DFRobot dichiara **3,2–5,0 V** ([specifiche ufficiali](https://wiki.dfrobot.com/dfr0299)); **5,11 V** è la regolazione riferita del buck sul montaggio precedente, non una misura su VCC del player. La possibile necessità di bloccare il ritorno dall'USB del PC verso il Mini360 è una questione separata, non caratterizzata sulla scheda specifica: resta valida la procedura di separazione di OUT+ descritta nella [guida Mini360](../artifacts/mini360/README.md#collegamenti-del-ramo-di-potenza).
 
 ### Condensatori e collocazione
 
@@ -195,7 +233,7 @@ Sulla **PCB custom fra Mini360 ed ESP32** è montata una **coppia aggiuntiva 47 
 
 Il montaggio risulta funzionante dalla prima prova riferita da Andrea. **5,11 V** è la regolazione comunicata, non una registrazione di stabilità su tutti i carichi. Autonomia, cadute con Wi-Fi/audio, temperatura, transitori USB e riavvio dopo stacco BMS non hanno misure riportate.
 
-Le tacche firmware usano fasce indicative LiFePO4. L'icona `charging` si accende a tensione filtrata ≥ **6,70 V per 5 s** e si spegne a ≤ **6,68 V per 10 s**; nella banda intermedia conserva lo stato. Sono soglie indicative ricavate dalle letture riferite, non un rilevamento della presenza USB: a batteria bassa la ricarica può non raggiungerle. Avvisi sonori e protezioni di sleep restano attivi indipendentemente dalle tacche e dall'icona; campioni invalidi/scaduti non alimentano il rilevamento. Dettagli nel [README, monitoraggio batteria](../README.md#8-monitoraggio-batteria-ina219). Il light-sleep non è uno stacco elettrico del pacco.
+Le tacche firmware usano fasce indicative LiFePO4. L'icona `charging` segue la **presenza USB del PC817**, con **250 ms di stabilità sia al collegamento sia allo scollegamento**, anche quando la batteria è piena. La lettura USB resta attiva con INA219 assente o campioni invalidi/scaduti e non misura corrente di ricarica o fine carica. Soltanto campioni INA219 validi e freschi alimentano le protezioni della batteria: avvisi sonori, countdown e sleep conservano soglie e tempi e restano attivi anche con USB presente. Dettagli nel [README, monitoraggio batteria](../README.md#8-monitoraggio-batteria-ina219). Il light-sleep non è uno stacco elettrico del pacco.
 
 L'USB del PC sull'ESP32 è distinta dall'USB di ricarica del pacco. OUT+ rimane collegato all'ESP32 anche con S1 OFF: se la scheda riporta la tensione USB su VIN/5V, può rialimentare il Mini360. La sola rialimentazione non dimostra un danno; questo caso non è stato caratterizzato sulla scheda specifica. Tavole, pinout del retro e dettagli: [Mini360](../artifacts/mini360/README.md).
 
@@ -212,6 +250,7 @@ L'USB del PC sull'ESP32 è distinta dall'USB di ricarica del pacco. OUT+ rimane 
 - Nessun collegamento diretto a 5 V su GPIO35.
 - Nessun DOUT HX711 su GPIO22 senza una modifica coordinata di buzzer, firmware e documentazione.
 - Nessun carico DFPlayer alimentato direttamente da GPIO2.
+- Nessun +5 V USB diretto su GPIO36 e nessun ponte aggiunto USB− / GND bilancia nel rilevatore PC817.
 
 ## 11) Dati da rilevare per una replica esatta
 

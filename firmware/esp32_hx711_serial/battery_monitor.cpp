@@ -1,5 +1,6 @@
 #include "battery_monitor.h"
 #include "config/config_battery.h"
+#include "config/config_pins.h"
 
 #include <Wire.h>
 #include <Adafruit_INA219.h>
@@ -35,9 +36,10 @@ static float g_iFilt = 0.0f;
 static uint32_t g_lastReadMs = 0;
 static bool g_invalidLogged = false;
 
-// Continuous valid-sample windows for the voltage-based charging indication.
-static uint32_t g_chargeCandidateSinceMs = 0;
-static uint32_t g_dischargeCandidateSinceMs = 0;
+static bool g_usbCandidateValid = false;
+static bool g_usbCandidatePresent = false;
+static uint32_t g_usbCandidateSinceMs = 0;
+static uint32_t g_usbLastReadMs = 0;
 
 // -----------------------------------------------------------------------------
 // FUNZIONI INTERNE
@@ -62,15 +64,31 @@ static BatteryLevel levelFromVoltage(float v) {
   }
 }
 
-static void resetChargeDetection() {
+static void resetUsbPresence() {
   g_status.charging = false;
-  g_chargeCandidateSinceMs = 0;
-  g_dischargeCandidateSinceMs = 0;
+  g_usbCandidateValid = false;
+  g_usbCandidateSinceMs = 0;
+  g_usbLastReadMs = 0;
+}
+
+static void updateUsbPresence(uint32_t nowMs) {
+  const bool present = digitalRead(USB_PRESENT_PIN) ==
+    (USB_PRESENT_ACTIVE_LOW ? LOW : HIGH);
+  // A pause, including light-sleep, is not evidence of continuous stability.
+  if (!g_usbCandidateValid || present != g_usbCandidatePresent ||
+      (nowMs - g_usbLastReadMs) > BatteryConfig::USB_PRESENCE_DEBOUNCE_MS) {
+    g_usbCandidatePresent = present;
+    g_usbCandidateSinceMs = nowMs;
+    g_usbCandidateValid = true;
+  }
+  g_usbLastReadMs = nowMs;
+  if ((nowMs - g_usbCandidateSinceMs) >= BatteryConfig::USB_PRESENCE_DEBOUNCE_MS) {
+    g_status.charging = g_usbCandidatePresent;
+  }
 }
 
 static void invalidateSample() {
   g_status.valid = false;
-  resetChargeDetection();
   if (!g_invalidLogged) {
     Serial.println(F("[BATT] Lettura INA219 non valida"));
     g_invalidLogged = true;
@@ -82,10 +100,12 @@ static void invalidateSample() {
 // -----------------------------------------------------------------------------
 
 void battery_init() {
-  resetChargeDetection();
+  // GPIO36 has no internal pull-up; the PC817 circuit provides it externally.
+  pinMode(USB_PRESENT_PIN, INPUT);
+  resetUsbPresence();
   // Si assume che Wire.begin(...) sia già stato chiamato nel setup
   if (!g_ina219.begin()) {
-    // Se fallisce l'init, lasciamo g_inited = false; la update non farà nulla.
+    // Keep USB-presence polling available even when the INA219 is missing.
     Serial.println(F("[BATT] ERRORE: INA219 non trovato su I2C"));
     g_status.voltage_V = 0.0f;
     g_status.current_mA = 0.0f;
@@ -120,12 +140,8 @@ bool battery_is_available() {
 }
 
 void battery_update(uint32_t nowMs) {
+  updateUsbPresence(nowMs);
   if (!g_inited) return;
-
-  // A missed sampling window cannot count towards either debounce period.
-  if (g_haveSample && !battery_has_fresh_sample(nowMs)) {
-    resetChargeDetection();
-  }
 
   if (nowMs - g_lastReadMs < READ_INTERVAL_MS) {
     return;  // ancora troppo presto per una nuova lettura
@@ -173,34 +189,6 @@ void battery_update(uint32_t nowMs) {
   g_status.level = levelFromVoltage(g_vFilt);
   g_status.valid = true;
   g_status.lastValidMs = nowMs;
-
-  // The internal USB charger bypasses the INA219 shunt: use voltage for the icon.
-  const bool wantsCharge   = (g_vFilt >= BatteryConfig::V_CHARGE_START_V);
-  const bool wantsNoCharge = (g_vFilt <= BatteryConfig::V_CHARGE_STOP_V);
-
-  if (g_status.charging) {
-    if (wantsNoCharge) {
-      if (g_dischargeCandidateSinceMs == 0) g_dischargeCandidateSinceMs = nowMs;
-      if (nowMs - g_dischargeCandidateSinceMs >= BatteryConfig::CHARGE_DEBOUNCE_OUT_MS) {
-        g_status.charging = false;
-        g_dischargeCandidateSinceMs = 0;
-      }
-    } else {
-      g_dischargeCandidateSinceMs = 0;
-    }
-    g_chargeCandidateSinceMs = 0;
-  } else {
-    if (wantsCharge) {
-      if (g_chargeCandidateSinceMs == 0) g_chargeCandidateSinceMs = nowMs;
-      if (nowMs - g_chargeCandidateSinceMs >= BatteryConfig::CHARGE_DEBOUNCE_IN_MS) {
-        g_status.charging = true;
-        g_chargeCandidateSinceMs = 0;
-      }
-    } else {
-      g_chargeCandidateSinceMs = 0;
-    }
-    g_dischargeCandidateSinceMs = 0;
-  }
 
 }
 

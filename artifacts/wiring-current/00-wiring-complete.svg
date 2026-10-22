@@ -1,9 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="3200" height="2250" viewBox="0 0 3200 2250" role="img">
+<svg xmlns="http://www.w3.org/2000/svg" width="4400" height="2450" viewBox="0 0 4400 2450" role="img">
 <title>Minù: tutti i collegamenti e disposizione ESP32 a 30 pin</title>
 <desc>Ogni collegamento documentato è disegnato. L’ordine fisico dei pin ESP32 segue la mappa fornita da Andrea; gli altri moduli sono disposti per funzione. Le incognite fisiche sono indicate.</desc>
-<rect x="0" y="0" width="3200" height="2250" rx="0" fill="#ffffff" stroke="#ffffff" stroke-width="2"/>
+<rect x="0" y="0" width="4400" height="2450" rx="0" fill="#ffffff" stroke="#ffffff" stroke-width="2"/>
 <rect x="2500" y="505" width="530" height="295" rx="16" fill="#edf5f1" stroke="#8cab9b" stroke-width="2"/>
 <rect x="2500" y="825" width="530" height="300" rx="16" fill="#fff7e8" stroke="#dfc79a" stroke-width="2"/>
+<rect x="3220" y="310" width="1110" height="1900" rx="16" fill="#f5f1f8" stroke="#b39ec3" stroke-width="2"/>
 <polyline points="520,230 3080,230" fill="none" stroke="white" stroke-width="15" stroke-linejoin="round" stroke-linecap="round"/>
 <polyline points="520,230 3080,230" fill="none" stroke="#ca4239" stroke-width="7" stroke-linejoin="round" stroke-linecap="round"/>
 <polyline points="520,230 520,2030" fill="none" stroke="white" stroke-width="15" stroke-linejoin="round" stroke-linecap="round"/>
@@ -206,15 +207,57 @@
 <polyline points="1950,920 2360,920 2360,1720 1820,1720 1820,1940" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
 <polyline points="1950,1030 2390,1030 2390,1750 1950,1750 1950,1940" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
 <polyline points="1950,1030 2390,1030 2390,1750 1950,1750 1950,1940" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
-<polyline points="1240,1525 1100,1525 1100,1830 2240,1830 2240,2050 2290,2050" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
-<polyline points="1240,1525 1100,1525 1100,1830 2240,1830 2240,2050 2290,2050" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
-<polyline points="2360,2120 3140,2120" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
-<polyline points="2360,2120 3140,2120" fill="none" stroke="#25323a" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2070,2020 2155,2020" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2070,2020 2155,2020" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2305,2020 2390,2020" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2305,2020 2390,2020" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2570,1860 2880,1860 2880,1893" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2570,1860 2880,1860 2880,1893" fill="none" stroke="#c57a12" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2690,1860 2690,1880" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2690,1860 2690,1880" fill="none" stroke="#c57a12" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2485,1970 2485,1955 2610,1955 2610,1995 2880,1995 2880,1947" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2485,1970 2485,1955 2610,1955 2610,1995 2880,1995 2880,1947" fill="none" stroke="#25323a" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2690,1980 2690,1995" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2690,1980 2690,1995" fill="none" stroke="#25323a" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2485,2070 2485,2120" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2485,2070 2485,2120" fill="none" stroke="#25323a" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1240,1525 1100,1525 1100,1830 2040,1830 2040,2020 2070,2020" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="1240,1525 1100,1525 1100,1830 2040,1830 2040,2020 2070,2020" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2570,1860 2570,1800 3120,1800 3120,1660" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2570,1860 2570,1800 3120,1800 3120,1660" fill="none" stroke="#c57a12" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2485,2120 2485,2180" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="2485,2120 2485,2180" fill="none" stroke="#25323a" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="3540,560 3980,560" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="3540,560 3980,560" fill="none" stroke="#ca4239" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="3540,625 3980,625" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="3540,625 3980,625" fill="none" stroke="#79518c" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="3660,560 3660,780 3350,780 3350,875" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="3660,560 3660,780 3350,780 3350,875" fill="none" stroke="#ca4239" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="3350,1025 3350,1180 3500,1180" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="3350,1025 3350,1180 3500,1180" fill="none" stroke="#ca4239" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="3800,625 3800,740 3290,740 3290,1380 3500,1380" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="3800,625 3800,740 3290,740 3290,1380 3500,1380" fill="none" stroke="#79518c" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="3500,1180 3570,1180" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="3500,1180 3570,1180" fill="none" stroke="#ca4239" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="3500,1380 3570,1380" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="3500,1380 3570,1380" fill="none" stroke="#79518c" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="4000,1180 3930,1180" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="4000,1180 3930,1180" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="4000,1380 3930,1380" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="4000,1380 3930,1380" fill="none" stroke="#25323a" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="3120,275 3170,275 3170,830 4150,830 4150,925" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="3120,275 3170,275 3170,830 4150,830 4150,925" fill="none" stroke="#c57a12" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="4150,1075 4150,1180" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="4150,1075 4150,1180" fill="none" stroke="#c57a12" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="4000,1180 4150,1180 4310,1180 4310,290 2015,290 2015,1525 1950,1525" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="4000,1180 4150,1180 4310,1180 4310,290 2015,290 2015,1525 1950,1525" fill="none" stroke="#226db5" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="4000,1380 4150,1380 4150,1800 3140,1800" fill="none" stroke="white" stroke-width="14" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="4000,1380 4150,1380 4150,1800 3140,1800" fill="none" stroke="#25323a" stroke-width="6" stroke-linejoin="round" stroke-linecap="round"/>
 <text x="70" y="58" font-family="Arial,Helvetica,sans-serif" font-size="26" font-weight="700" fill="#267751" text-anchor="start">MINÙ / CABLAGGIO · SCHEMI FORNITI + DOCUMENTAZIONE HX711</text>
 <text x="70" y="120" font-family="Arial,Helvetica,sans-serif" font-size="45" font-weight="700" fill="#25323a" text-anchor="start">Tutti i fili, con i pin dell’ESP32 nella posizione della tua mappa</text>
-<text x="70" y="171" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="400" fill="#596a76" text-anchor="start">Un solo foglio A2 · Leggi i valori delle resistenze · Incrocio senza pallino = fili separati</text>
+<text x="70" y="171" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="400" fill="#596a76" text-anchor="start">Un solo foglio A2 · PC817: dettaglio nel riquadro a destra e nella tavola 07 · Incrocio senza pallino = fili separati</text>
 <text x="540" y="214" font-family="Arial,Helvetica,sans-serif" font-size="27" font-weight="700" fill="#ca4239" text-anchor="start">5 V nominali · Mini360 regolato a 5,11 V sul montaggio</text>
-<text x="2620" y="326" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#c57a12" text-anchor="start">3V3 ESP32 → OLED + VCC INA219</text>
+<text x="2560" y="326" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#c57a12" text-anchor="start">3V3 ESP32 → OLED + INA219 + buzzer</text>
 <text x="2710" y="2161" font-family="Arial,Helvetica,sans-serif" font-size="26" font-weight="700" fill="#25323a" text-anchor="start">GND / negativo comune</text>
 <rect x="100" y="320" width="300" height="250" rx="18" fill="#dde8ef" stroke="#8cab9b" stroke-width="2"/>
 <circle cx="118" cy="338" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
@@ -222,7 +265,7 @@
 <text x="250.0" y="365" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700" fill="#25323a" text-anchor="middle">NASTIMA</text>
 <text x="250.0" y="395" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" fill="#596a76" text-anchor="middle">LiFePO4 · 6,4 V / 6 Ah</text>
 <text x="250" y="490" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#25323a" text-anchor="middle">USB-C sul pacco</text>
-<text x="250" y="530" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="middle">Ricarica esterna 5 V</text>
+<text x="250" y="530" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="400" fill="#25323a" text-anchor="middle">USB-C: riquadro PC817 →</text>
 <text x="383" y="438" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#ca4239" text-anchor="end">+</text>
 <text x="117" y="508" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#25323a" text-anchor="start">−</text>
 <rect x="540" y="406" width="130" height="48" rx="8" fill="#ecdabe" stroke="#b4a17e" stroke-width="2"/>
@@ -336,8 +379,8 @@
 <text x="1880" y="1478" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">GPIO39 / VN</text>
 <rect x="1240" y="1506" width="140" height="38" rx="2" fill="#fff2c9" stroke="#ccb980" stroke-width="2"/>
 <text x="1310" y="1533" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">GPIO22</text>
-<rect x="1810" y="1506" width="140" height="38" rx="2" fill="#e5e9ed" stroke="#bdc6cd" stroke-width="2"/>
-<text x="1880" y="1533" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#596a76" text-anchor="middle">GPIO36 / VP</text>
+<rect x="1810" y="1506" width="140" height="38" rx="2" fill="#fff2c9" stroke="#ccb980" stroke-width="2"/>
+<text x="1880" y="1533" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">GPIO36 / VP</text>
 <rect x="1240" y="1561" width="140" height="38" rx="2" fill="#fff2c9" stroke="#ccb980" stroke-width="2"/>
 <text x="1310" y="1588" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">GPIO23</text>
 <rect x="1810" y="1561" width="140" height="38" rx="2" fill="#e5e9ed" stroke="#bdc6cd" stroke-width="2"/>
@@ -488,21 +531,80 @@
 <text x="1950" y="1920" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">R2 / 14</text>
 <text x="1630" y="2057" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="700" fill="#25323a" text-anchor="middle">R1: SKIP / SLEEP · R2: ENTER / CLEAR</text>
 <text x="1630" y="2091" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="700" fill="#25323a" text-anchor="middle">R3: WIFI / TOTAL · R4: MODE / TARE</text>
-<circle cx="2360" cy="2050" r="70" fill="#293b46" stroke="#1c2b33" stroke-width="2"/>
-<circle cx="2360" cy="2050" r="17" fill="#14222a" stroke="#14222a" stroke-width="2"/>
-<text x="2310" y="2041" font-family="Arial,Helvetica,sans-serif" font-size="26" font-weight="700" fill="white" text-anchor="start">+</text>
-<text x="2400" y="2120" font-family="Arial,Helvetica,sans-serif" font-size="26" font-weight="700" fill="#25323a" text-anchor="start">−</text>
-<text x="2210" y="2160" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" fill="#25323a" text-anchor="start">Buzzer passivo · GPIO22 + GND</text>
-<rect x="2530" y="1810" width="500" height="280" rx="16" fill="#fff7e8" stroke="#dfc79a" stroke-width="2"/>
-<text x="2552" y="1846" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" fill="#98651a" text-anchor="start">Da rilevare sul circuito</text>
-<text x="2552" y="1880" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">2N3904: ordine fisico B/C/E.</text>
-<text x="2552" y="1911" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">ESP32: valori montati da leggere.</text>
-<text x="2552" y="1942" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">47 µF / 16 V + 104: consigliati ESP32.</text>
-<text x="2552" y="1973" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">Caps audio tratteggiati: riferimento.</text>
-<text x="2552" y="2004" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">Audio: fili e polarità da verificare.</text>
-<text x="2552" y="2035" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">Fusibile F1: valore da leggere.</text>
-<text x="2552" y="2066" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">SCK: replica 100 kΩ; montata da verificare.</text>
-<text x="70" y="2223" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="400" fill="#596a76" text-anchor="start">Solo ESP32: posizione pin dalla mappa fornita. Tastiera: matrice logica misurata, ordine connettore da verificare. LED sleep invariato.</text>
+<g transform="translate(2230 2020)"><path d="M-75 0H-42 M42 0H75" stroke="#226db5" stroke-width="6"/><rect x="-42" y="-15" width="84" height="30" rx="11" fill="#edd8ac" stroke="#a99169" stroke-width="2"/><path d="M-24 -13V13 M0 -13V13 M24 -13V13" stroke="#b69c74" stroke-width="6"/></g>
+<text x="2230" y="1992" font-family="Arial,Helvetica,sans-serif" font-size="25" font-weight="700" fill="#25323a" text-anchor="middle">220 Ω · base</text>
+<rect x="2390" y="1970" width="190" height="100" rx="12" fill="#e8f3ee" stroke="#8cab9b" stroke-width="2"/>
+<text x="2485" y="2010" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" fill="#25323a" text-anchor="middle">BC337-40</text>
+<text x="2485" y="2045" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="400" fill="#25323a" text-anchor="middle">NPN</text>
+<text x="2372" y="2008" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#25323a" text-anchor="end">B</text>
+<text x="2503" y="1947" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#25323a" text-anchor="start">C</text>
+<text x="2503" y="2095" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#25323a" text-anchor="start">E</text>
+<circle cx="2690" cy="1930" r="50" fill="#293b46" stroke="#1c2b33" stroke-width="2"/>
+<circle cx="2690" cy="1930" r="13" fill="#14222a" stroke="#14222a" stroke-width="2"/>
+<text x="2710" y="1895" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" fill="#c57a12" text-anchor="start">+</text>
+<text x="2710" y="1987" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" fill="#25323a" text-anchor="start">−</text>
+<text x="2720" y="2040" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" fill="#25323a" text-anchor="middle">Buzzer passivo</text>
+<rect x="2864" y="1893" width="32" height="54" rx="7" fill="#293b46" stroke="#1c2b33" stroke-width="2"/>
+<rect x="2866" y="1900" width="28" height="6" rx="0" fill="#ced9de" stroke="#ced9de" stroke-width="2"/>
+<text x="2925" y="1915" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" fill="#25323a" text-anchor="start">1N5819</text>
+<text x="2925" y="1947" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">Fascetta ↑</text>
+<text x="2925" y="1975" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#c57a12" text-anchor="start">verso 3V3</text>
+<text x="2070" y="2152" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#25323a" text-anchor="start">GPIO22 → base · E → GND</text>
+<text x="3250" y="365" font-family="Arial,Helvetica,sans-serif" font-size="35" font-weight="700" fill="#25323a" text-anchor="start">PC817 · Presenza alimentatore USB</text>
+<text x="3250" y="410" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="400" fill="#596a76" text-anchor="start">Solo lato USB a 5 V: derivazione prima del caricatore interno.</text>
+<rect x="3260" y="470" width="280" height="230" rx="18" fill="#f7e9e5" stroke="#8cab9b" stroke-width="2"/>
+<circle cx="3278" cy="488" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
+<circle cx="3522" cy="488" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
+<text x="3400.0" y="515" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700" fill="#25323a" text-anchor="middle">USB esterna</text>
+<text x="3400.0" y="545" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" fill="#596a76" text-anchor="middle">Ingresso 5 V DC</text>
+<rect x="3980" y="470" width="310" height="230" rx="18" fill="#dde8ef" stroke="#8cab9b" stroke-width="2"/>
+<circle cx="3998" cy="488" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
+<circle cx="4272" cy="488" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
+<text x="4135.0" y="515" font-family="Arial,Helvetica,sans-serif" font-size="28" font-weight="700" fill="#25323a" text-anchor="middle">USB-C NASTIMA</text>
+<text x="4135.0" y="545" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" fill="#596a76" text-anchor="middle">Lo stesso pacco a sinistra</text>
+<text x="3523" y="568" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#ca4239" text-anchor="end">+5 V</text>
+<text x="3523" y="633" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#79518c" text-anchor="end">USB−</text>
+<text x="3997" y="568" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#ca4239" text-anchor="start">+5 V</text>
+<text x="3997" y="633" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#79518c" text-anchor="start">USB−</text>
+<text x="3730" y="540" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#25323a" text-anchor="middle">Ricarica diretta</text>
+<g transform="translate(3350 950) rotate(90)"><path d="M-75 0H-42 M42 0H75" stroke="#ca4239" stroke-width="6"/><rect x="-42" y="-15" width="84" height="30" rx="11" fill="#edd8ac" stroke="#a99169" stroke-width="2"/><path d="M-24 -13V13 M0 -13V13 M24 -13V13" stroke="#b69c74" stroke-width="6"/></g>
+<text x="3378" y="958" font-family="Arial,Helvetica,sans-serif" font-size="25" font-weight="700" fill="#25323a" text-anchor="start">560 Ω</text>
+<text x="3400" y="995" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="400" fill="#25323a" text-anchor="start">¼ W</text>
+<rect x="3570" y="1100" width="360" height="370" rx="18" fill="#293b46" stroke="#1c2b33" stroke-width="2"/>
+<path d="M3720 1100 A30 30 0 0 0 3780 1100" fill="#f5f1f8" stroke="#1c2b33" stroke-width="3"/>
+<circle cx="3602" cy="1132" r="9" fill="white" stroke="white" stroke-width="2"/>
+<text x="3590" y="1188" font-family="Arial,Helvetica,sans-serif" font-size="26" font-weight="700" fill="white" text-anchor="start">1 · A</text>
+<text x="3590" y="1388" font-family="Arial,Helvetica,sans-serif" font-size="26" font-weight="700" fill="white" text-anchor="start">2 · K</text>
+<text x="3910" y="1188" font-family="Arial,Helvetica,sans-serif" font-size="26" font-weight="700" fill="white" text-anchor="end">4 · C</text>
+<text x="3910" y="1388" font-family="Arial,Helvetica,sans-serif" font-size="26" font-weight="700" fill="white" text-anchor="end">3 · E</text>
+<text x="3750" y="1283" font-family="Arial,Helvetica,sans-serif" font-size="39" font-weight="700" fill="white" text-anchor="middle">PC817</text>
+<text x="3750" y="1330" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="400" fill="white" text-anchor="middle">DIP-4</text>
+<text x="3750" y="1532" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#25323a" text-anchor="middle">Vista dall’alto · tacca in alto · puntino vicino al pin 1</text>
+<text x="4180" y="823" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#c57a12" text-anchor="end">3V3 ESP32</text>
+<g transform="translate(4150 1000) rotate(90)"><path d="M-75 0H-42 M42 0H75" stroke="#c57a12" stroke-width="6"/><rect x="-42" y="-15" width="84" height="30" rx="11" fill="#edd8ac" stroke="#a99169" stroke-width="2"/><path d="M-24 -13V13 M0 -13V13 M24 -13V13" stroke="#b69c74" stroke-width="6"/></g>
+<text x="4178" y="1008" font-family="Arial,Helvetica,sans-serif" font-size="25" font-weight="700" fill="#25323a" text-anchor="start">10 kΩ</text>
+<text x="4175" y="1236" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#226db5" text-anchor="middle">GPIO36 / VP</text>
+<text x="4120" y="1770" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#25323a" text-anchor="end">GND ESP32</text>
+<text x="3270" y="1610" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="400" fill="#25323a" text-anchor="start">560 Ω solo nel ramo PC817: il cavo USB principale resta diretto.</text>
+<text x="3270" y="1660" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#79518c" text-anchor="start">USB− (viola): non aggiungere un ponte verso GND ESP32 (nero).</text>
+<text x="3270" y="1710" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="400" fill="#25323a" text-anchor="start">Il rilevatore mantiene separati i suoi due lati.</text>
+<text x="3270" y="1890" font-family="Arial,Helvetica,sans-serif" font-size="30" font-weight="700" fill="#267751" text-anchor="start">USB alimentata → GPIO36 LOW</text>
+<text x="3270" y="1940" font-family="Arial,Helvetica,sans-serif" font-size="30" font-weight="700" fill="#226db5" text-anchor="start">USB assente → GPIO36 HIGH</text>
+<text x="3270" y="2000" font-family="Arial,Helvetica,sans-serif" font-size="25" font-weight="400" fill="#25323a" text-anchor="start">Rileva la presenza USB, anche a batteria piena.</text>
+<text x="3270" y="2040" font-family="Arial,Helvetica,sans-serif" font-size="25" font-weight="400" fill="#25323a" text-anchor="start">Non misura corrente di ricarica o fine carica.</text>
+<text x="3270" y="2110" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#98651a" text-anchor="start">I 5 V USB sono distinti dai 5 V in uscita dal Mini360.</text>
+<rect x="70" y="2220" width="3060" height="160" rx="16" fill="#fff7e8" stroke="#dfc79a" stroke-width="2"/>
+<text x="92" y="2256" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="700" fill="#98651a" text-anchor="start">Dettagli fisici da rilevare</text>
+<text x="92" y="2290" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="400" fill="#25323a" text-anchor="start">2N3904 audio: ordine fisico B/C/E.</text>
+<text x="92" y="2321" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="400" fill="#25323a" text-anchor="start">ESP32: valori montati da leggere.</text>
+<text x="92" y="2352" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="400" fill="#25323a" text-anchor="start">47 µF / 16 V + 104 consigliati presso ESP32.</text>
+<text x="1120" y="2290" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="400" fill="#25323a" text-anchor="start">Condensatori audio tratteggiati: riferimento.</text>
+<text x="1120" y="2321" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="400" fill="#25323a" text-anchor="start">Audio: fili e polarità da verificare.</text>
+<text x="1120" y="2352" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="400" fill="#25323a" text-anchor="start">Fusibile F1: valore da leggere.</text>
+<text x="2150" y="2290" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="400" fill="#25323a" text-anchor="start">SCK: replica 100 kΩ; montata da verificare.</text>
+<text x="2150" y="2321" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="400" fill="#25323a" text-anchor="start">BC337-40: seguire il pinout del componente.</text>
+<text x="2150" y="2352" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="400" fill="#25323a" text-anchor="start">Buzzer: firmware invariato.</text>
+<text x="70" y="2423" font-family="Arial,Helvetica,sans-serif" font-size="24" font-weight="400" fill="#596a76" text-anchor="start">Solo ESP32: posizione pin dalla mappa fornita. Tastiera: matrice logica misurata, ordine connettore da verificare. LED sleep invariato.</text>
 <circle cx="520" cy="230" r="7" fill="#ca4239"/>
 <circle cx="3080" cy="230" r="7" fill="#ca4239"/>
 <circle cx="1210" cy="590" r="7" fill="#c57a12"/>
@@ -561,6 +663,7 @@
 <circle cx="1950" cy="1415" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
 <circle cx="1950" cy="1470" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
 <circle cx="1240" cy="1525" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="1950" cy="1525" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
 <circle cx="1240" cy="1580" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
 <circle cx="3080" cy="910" r="7" fill="#ca4239"/>
 <circle cx="3140" cy="1090" r="7" fill="#25323a"/>
@@ -630,7 +733,28 @@
 <circle cx="1690" cy="1940" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
 <circle cx="1820" cy="1940" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
 <circle cx="1950" cy="1940" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
-<circle cx="2290" cy="2050" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
-<circle cx="2360" cy="2120" r="7" fill="white" stroke="#25323a" stroke-width="3"/>
-<circle cx="3140" cy="2120" r="7" fill="#25323a"/>
+<circle cx="2390" cy="2020" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="2485" cy="1970" r="7" fill="white" stroke="#25323a" stroke-width="3"/>
+<circle cx="2485" cy="2070" r="7" fill="white" stroke="#25323a" stroke-width="3"/>
+<circle cx="2690" cy="1880" r="7" fill="white" stroke="#c57a12" stroke-width="3"/>
+<circle cx="2690" cy="1980" r="7" fill="white" stroke="#25323a" stroke-width="3"/>
+<circle cx="2070" cy="2020" r="7" fill="#226db5"/>
+<circle cx="2690" cy="1860" r="7" fill="#c57a12"/>
+<circle cx="2690" cy="1995" r="7" fill="#25323a"/>
+<circle cx="3120" cy="1660" r="7" fill="#c57a12"/>
+<circle cx="2570" cy="1860" r="7" fill="#c57a12"/>
+<circle cx="2485" cy="2180" r="7" fill="#25323a"/>
+<circle cx="3540" cy="560" r="7" fill="white" stroke="#ca4239" stroke-width="3"/>
+<circle cx="3540" cy="625" r="7" fill="white" stroke="#79518c" stroke-width="3"/>
+<circle cx="3980" cy="560" r="7" fill="white" stroke="#ca4239" stroke-width="3"/>
+<circle cx="3980" cy="625" r="7" fill="white" stroke="#79518c" stroke-width="3"/>
+<circle cx="3660" cy="560" r="7" fill="#ca4239"/>
+<circle cx="3800" cy="625" r="7" fill="#79518c"/>
+<circle cx="3500" cy="1180" r="7" fill="white" stroke="#ca4239" stroke-width="3"/>
+<circle cx="3500" cy="1380" r="7" fill="white" stroke="#79518c" stroke-width="3"/>
+<circle cx="4000" cy="1180" r="7" fill="white" stroke="#226db5" stroke-width="3"/>
+<circle cx="4000" cy="1380" r="7" fill="white" stroke="#25323a" stroke-width="3"/>
+<circle cx="3120" cy="275" r="7" fill="#c57a12"/>
+<circle cx="4150" cy="1180" r="7" fill="#226db5"/>
+<circle cx="3140" cy="1800" r="7" fill="#25323a"/>
 </svg>

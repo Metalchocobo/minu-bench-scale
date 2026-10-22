@@ -7,11 +7,12 @@ from pathlib import Path
 from html import escape
 import sys
 sys.dont_write_bytecode = True
-from draw_wiring import Plate, supply_capacitors, RED, INK, BLUE, GREEN, ORANGE, PAPER, MUTED, UNKNOWN
+from draw_wiring import Plate, supply_capacitors, buzzer_driver, RED, INK, BLUE, GREEN, ORANGE, PAPER, MUTED, UNKNOWN
 
 ROOT = Path(__file__).resolve().parent
-WIDTH, HEIGHT = 3200, 2250
+WIDTH, HEIGHT = 4400, 2450
 AUDIO_POWER = '#9e3655'
+USB_RETURN = '#79518c'
 
 
 class Complete(Plate):
@@ -21,7 +22,7 @@ class Complete(Plate):
         self.rect(0, 0, WIDTH, HEIGHT, PAPER, PAPER, 0)
         self.text(70, 58, 'MINÙ / CABLAGGIO · SCHEMI FORNITI + DOCUMENTAZIONE HX711', 26, GREEN, True)
         self.text(70, 120, 'Tutti i fili, con i pin dell’ESP32 nella posizione della tua mappa', 45, INK, True)
-        self.text(70, 171, 'Un solo foglio A2 · Leggi i valori delle resistenze · Incrocio senza pallino = fili separati', 28, MUTED)
+        self.text(70, 171, 'Un solo foglio A2 · PC817: dettaglio nel riquadro a destra e nella tavola 07 · Incrocio senza pallino = fili separati', 28, MUTED)
 
     def save(self, stem):
         background, foreground = self.parts[:1], self.parts[1:]
@@ -64,7 +65,7 @@ def draw():
     d.text(540,214,'5 V nominali · Mini360 regolato a 5,11 V sul montaggio',27,RED,True)
     d.wire([(1210,590),(1230,590),(1230,275),(3120,275),(3120,1660),(3040,1660)],ORANGE,7)
     d.dot(1210,590,ORANGE)
-    d.text(2620,326,'3V3 ESP32 → OLED + VCC INA219',23,ORANGE,True)
+    d.text(2560,326,'3V3 ESP32 → OLED + INA219 + buzzer',23,ORANGE,True)
     d.wire([(65,500),(65,2180),(3140,2180),(3140,490)],INK,7)
     d.wire([(65,690),(2450,690),(2450,500),(3140,500)],INK,7)
     d.dot(65,690,INK);d.dot(3140,500,INK)
@@ -73,7 +74,7 @@ def draw():
     # Battery -> fuse -> high-side current monitor -> switch -> buck.
     d.board(100,320,300,250,'NASTIMA','LiFePO4 · 6,4 V / 6 Ah','#dde8ef')
     d.text(250,490,'USB-C sul pacco',22,INK,True,'middle')
-    d.text(250,530,'Ricarica esterna 5 V',21,INK,False,'middle')
+    d.text(250,530,'USB-C: riquadro PC817 →',20,INK,False,'middle')
     d.port(400,430,'+',RED);d.port(100,500,'−',INK,'left')
     d.wire([(100,500),(65,500)],INK)
     d.wire([(400,430),(540,430)],RED)
@@ -125,7 +126,7 @@ def draw():
     d.text(1595,1140,'30 pin · 15 per lato',27,INK,True,'middle')
     d.text(1595,1180,'Ordine della mappa di Andrea',23,INK,False,'middle')
     ports={}
-    unused={'RX0 / 3','TX0 / 1','GPIO12','GPIO36 / VP','EN'}
+    unused={'RX0 / 3','TX0 / 1','GPIO12','EN'}
     for row,(l,r) in enumerate(zip(left,right)):
         y=810+55*row
         for x,label,is_left in [(1240,l,True),(1810,r,False)]:
@@ -282,27 +283,86 @@ def draw():
     d.wire([ports['GPIO13'],(2360,920),(2360,1720),(1820,1720),(1820,1940)])
     d.wire([ports['GPIO14'],(2390,1030),(2390,1750),(1950,1750),(1950,1940)])
 
-    # Passive buzzer output and its common ground.
-    d.circle(2360,2050,70,'#293b46','#1c2b33')
-    d.circle(2360,2050,17,'#14222a','#14222a')
-    d.port(2290,2050,color=BLUE);d.port(2360,2120,color=INK)
-    d.text(2310,2041,'+',26,'white',True)
-    d.text(2400,2120,'−',26,INK,True)
-    d.wire([ports['GPIO22'],(1100,1525),(1100,1830),(2240,1830),(2240,2050),(2290,2050)])
-    d.wire([(2360,2120),(3140,2120)],INK);d.dot(3140,2120,INK)
-    d.text(2210,2160,'Buzzer passivo · GPIO22 + GND',24,INK,True)
+    # Active-high low-side driver, powered by the ESP32 3V3 rail.
+    driver = buzzer_driver(d, 2070, 1850)
+    d.wire([ports['GPIO22'],(1100,1525),(1100,1830),(2040,1830),(2040,2020),driver['signal']])
+    d.wire([driver['supply'],(2570,1800),(3120,1800),(3120,1660)],ORANGE)
+    d.dot(3120,1660,ORANGE);d.dot(*driver['supply'],ORANGE)
+    d.wire([driver['ground'],(2485,2180)],INK);d.dot(2485,2180,INK)
+    d.text(2070,2152,'GPIO22 → base · E → GND',22,INK,True)
+
+    # USB-presence detector: the LED branch is parallel to the charging cable.
+    # USB_RETURN is intentionally distinct from the scale's common GND.
+    d.rect(3220,310,1110,1900,'#f5f1f8','#b39ec3',background=True)
+    d.text(3250,365,'PC817 · Presenza alimentatore USB',35,INK,True)
+    d.text(3250,410,'Solo lato USB a 5 V: derivazione prima del caricatore interno.',23,MUTED)
+    d.board(3260,470,280,230,'USB esterna','Ingresso 5 V DC','#f7e9e5')
+    d.board(3980,470,310,230,'USB-C NASTIMA','Lo stesso pacco a sinistra','#dde8ef')
+    for x,y,label,color,side in [(3540,560,'+5 V',RED,'right'),
+                                (3540,625,'USB−',USB_RETURN,'right'),
+                                (3980,560,'+5 V',RED,'left'),
+                                (3980,625,'USB−',USB_RETURN,'left')]:
+        d.port(x,y,label,color,side)
+    d.wire([(3540,560),(3980,560)],RED)
+    d.wire([(3540,625),(3980,625)],USB_RETURN)
+    d.dot(3660,560,RED);d.dot(3800,625,USB_RETURN)
+    d.text(3730,540,'Ricarica diretta',22,INK,True,'middle')
+    d.wire([(3660,560),(3660,780),(3350,780),(3350,875)],RED)
+    d.resistor(3350,950,'560 Ω',True,RED)
+    d.text(3400,995,'¼ W',22,INK)
+    d.wire([(3350,1025),(3350,1180),(3500,1180)],RED)
+    d.wire([(3800,625),(3800,740),(3290,740),(3290,1380),(3500,1380)],USB_RETURN)
+
+    # DIP-4 viewed from above: 1/2 on the left and 4/3 on the right.
+    d.rect(3570,1100,360,370,'#293b46','#1c2b33',18)
+    d.parts.append('<path d="M3720 1100 A30 30 0 0 0 3780 1100" fill="#f5f1f8" stroke="#1c2b33" stroke-width="3"/>')
+    d.circle(3602,1132,9,'white','white')
+    for x,y,body_x,label,color in [(3500,1180,3570,'1 · A',RED),
+                                  (3500,1380,3570,'2 · K',USB_RETURN),
+                                  (4000,1180,3930,'4 · C',BLUE),
+                                  (4000,1380,3930,'3 · E',INK)]:
+        d.wire([(x,y),(body_x,y)],color)
+        d.port(x,y,color=color)
+        d.text(3590 if x==3500 else 3910,y+8,label,26,'white',True,'start' if x==3500 else 'end')
+    d.text(3750,1283,'PC817',39,'white',True,'middle')
+    d.text(3750,1330,'DIP-4',23,'white',False,'middle')
+    d.text(3750,1532,'Vista dall’alto · tacca in alto · puntino vicino al pin 1',23,INK,True,'middle')
+
+    d.wire([(3120,275),(3170,275),(3170,830),(4150,830),(4150,925)],ORANGE)
+    d.dot(3120,275,ORANGE)
+    d.text(4180,823,'3V3 ESP32',22,ORANGE,True,'end')
+    d.resistor(4150,1000,'10 kΩ',True,ORANGE)
+    d.wire([(4150,1075),(4150,1180)],ORANGE)
+    d.wire([(4000,1180),(4150,1180),(4310,1180),(4310,290),
+            (2015,290),(2015,1525),ports['GPIO36 / VP']],BLUE)
+    d.dot(4150,1180,BLUE)
+    d.text(4175,1236,'GPIO36 / VP',23,BLUE,True,'middle')
+    d.wire([(4000,1380),(4150,1380),(4150,1800),(3140,1800)],INK)
+    d.dot(3140,1800,INK)
+    d.text(4120,1770,'GND ESP32',22,INK,True,'end')
+    d.text(3270,1610,'560 Ω solo nel ramo PC817: il cavo USB principale resta diretto.',23,INK)
+    d.text(3270,1660,'USB− (viola): non aggiungere un ponte verso GND ESP32 (nero).',23,USB_RETURN,True)
+    d.text(3270,1710,'Il rilevatore mantiene separati i suoi due lati.',23,INK)
+    d.text(3270,1890,'USB alimentata → GPIO36 LOW',30,GREEN,True)
+    d.text(3270,1940,'USB assente → GPIO36 HIGH',30,BLUE,True)
+    d.text(3270,2000,'Rileva la presenza USB, anche a batteria piena.',25,INK)
+    d.text(3270,2040,'Non misura corrente di ricarica o fine carica.',25,INK)
+    d.text(3270,2110,'I 5 V USB sono distinti dai 5 V in uscita dal Mini360.',23,UNKNOWN,True)
 
     # Missing physical details are explicit and are never replaced by upgrades.
-    d.note(2530,1810,500,'Da rilevare sul circuito',[
-        '2N3904: ordine fisico B/C/E.',
-        'ESP32: valori montati da leggere.',
-        '47 µF / 16 V + 104: consigliati ESP32.',
-        'Caps audio tratteggiati: riferimento.',
-        'Audio: fili e polarità da verificare.',
-        'Fusibile F1: valore da leggere.',
-        'SCK: replica 100 kΩ; montata da verificare.'
-    ],280)
-    d.text(70,2223,'Solo ESP32: posizione pin dalla mappa fornita. Tastiera: matrice logica misurata, ordine connettore da verificare. LED sleep invariato.',24,MUTED)
+    d.rect(70,2220,3060,160,'#fff7e8','#dfc79a')
+    d.text(92,2256,'Dettagli fisici da rilevare',24,UNKNOWN,True)
+    for x, lines in [(92, ['2N3904 audio: ordine fisico B/C/E.',
+                          'ESP32: valori montati da leggere.',
+                          '47 µF / 16 V + 104 consigliati presso ESP32.']),
+                     (1120, ['Condensatori audio tratteggiati: riferimento.',
+                            'Audio: fili e polarità da verificare.',
+                            'Fusibile F1: valore da leggere.']),
+                     (2150, ['SCK: replica 100 kΩ; montata da verificare.',
+                            'BC337-40: seguire il pinout del componente.',
+                            'Buzzer: firmware invariato.'])]:
+        for i, line in enumerate(lines): d.text(x,2290+i*31,line,23)
+    d.text(70,2423,'Solo ESP32: posizione pin dalla mappa fornita. Tastiera: matrice logica misurata, ordine connettore da verificare. LED sleep invariato.',24,MUTED)
     d.save('00-wiring-complete')
 
 

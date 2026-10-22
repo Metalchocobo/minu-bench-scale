@@ -2,7 +2,7 @@
 
 Le fonti della guida sono la documentazione HX711 confermata da Andrea, le coppie GPIO rilevate per la tastiera montata e i due ritagli di schema forniti per gli altri moduli. **OLED e INA219 VCC arrivano da ESP32 3V3; HX711 VCC e IRF9540 S dalla linea Mini360 VIN/5V**. La resistenza LED è **1 kΩ** nello schema; la **100 kΩ SCK–GND è da prevedere nella replica**, mentre soltanto la sua presenza sulla bilancia attuale resta probabile, da confermare. I dettagli fisici ancora da completare sono elencati in fondo.
 
-Questa guida raccoglie i collegamenti della bilancia **NASTIMA + Mini360**, con ESP32, HX711, OLED SSD1322, INA219, tastiera, buzzer, DFPlayer Mini e LED di standby. Serve a riconoscere i fili e preparare una replica seguendo le fonti indicate; i dettagli che richiedono la bilancia sotto mano sono indicati esplicitamente.
+Questa guida raccoglie i collegamenti della bilancia **NASTIMA + Mini360**, con ESP32, HX711, OLED SSD1322, INA219, tastiera, buzzer, DFPlayer Mini, LED di standby e rilevatore presenza USB **PC817 DIP-4**. Il PC817 fa parte del cablaggio per la replica; il suo montaggio fisico sull'esemplare attuale non è confermato. La guida serve a riconoscere i fili e preparare una replica seguendo le fonti indicate; i dettagli che richiedono la bilancia sotto mano sono indicati esplicitamente.
 
 Il **MOSFET IRF9540 resta il componente scelto**. La tastiera usa la mappa firmware ricavata dalle coppie GPIO rilevate sul cablaggio montato. Sleep e LED conservano il loro funzionamento. Questa guida non prescrive una nuova variante di alimentazione.
 
@@ -10,25 +10,27 @@ Il **MOSFET IRF9540 resta il componente scelto**. La tastiera usa la mappa firmw
 
 ## 1. Tavole da consultare
 
-Lo [schema generale in PDF A2, pagina singola](./cablaggio-generale.pdf) mostra **tutti i fili e tutti i 30 terminali dell'ESP32 nelle posizioni della vista fornita da Andrea**. La [guida navigabile](./index.html) riunisce schema generale e tavole di dettaglio; il [PDF della guida illustrata](./guida-illustrata.pdf) raccoglie le sei tavole di dettaglio. Ogni tavola è disponibile come PNG e come SVG ingrandibile.
+Lo [schema generale in PDF A2, pagina singola](./cablaggio-generale-pc817.pdf) mostra **tutti i fili e tutti i 30 terminali dell'ESP32 nelle posizioni della vista fornita da Andrea**. La [guida navigabile](./index.html) riunisce schema generale e tavole di dettaglio; il [PDF della guida illustrata](./guida-illustrata.pdf) raccoglie le sette tavole di dettaglio in sette pagine A3 orizzontali. Ogni tavola è disponibile come PNG e come SVG ingrandibile.
 
 | Tavola | Cosa mostra | File |
 |---|---|---|
-| 00 — Schema generale | Tutti i collegamenti, componenti e pin dell'ESP32 nell'ordine fisico fornito | [PDF A2](./cablaggio-generale.pdf) · [PNG](./00-wiring-complete.png) · [SVG](./00-wiring-complete.svg) |
+| 00 — Schema generale | Tutti i collegamenti, componenti e pin dell'ESP32 nell'ordine fisico fornito | [PDF A2](./cablaggio-generale-pc817.pdf) · [PNG](./00-wiring-complete.png) · [SVG](./00-wiring-complete.svg) |
 | 01 — Vista completa | Tutti i moduli e i gruppi di fili | [PNG](./01-wiring-overview.png) · [SVG](./01-wiring-overview.svg) |
 | 02 — Alimentazione | Batteria, ricarica, fusibile, INA219, interruttore, Mini360 e condensatori | [PNG](./02-power.png) · [SVG](./02-power.svg) |
 | 03 — Cella e HX711 | I quattro fili della cella, SCK e partitore DOUT | [PNG](./03-hx711.png) · [SVG](./03-hx711.svg) |
 | 04 — Audio | DFPlayer, altoparlante, IRF9540, NPN e resistenze | [PNG](./04-audio.png) · [SVG](./04-audio.svg) |
 | 05 — Comandi | Tastiera, buzzer e LED | [PNG](./05-controls.png) · [SVG](./05-controls.svg) |
 | 06 — Display e misura batteria | OLED e collegamenti di alimentazione/segnale INA219 | [PNG](./06-display-ina.png) · [SVG](./06-display-ina.svg) |
+| 07 — Presenza USB | PC817 DIP-4, ramo USB del caricatore, resistenze e ingresso GPIO36 / VP | [PNG](./07-usb-pc817.png) · [SVG](./07-usb-pc817.svg) |
 
 Per i **pad reali del Mini360 visto dal retro**, consultare anche la [tavola di dettaglio esistente](../mini360/02-pad-regolazione-ina219.png). Le sue quattro posizioni sono ricavate dalla vista del venditore: scritta MINI-360 dritta, freccia a sinistra; **OUT− alto a sinistra, OUT+ basso a sinistra, IN− alto a destra, IN+ basso a destra**. Questa indicazione vale per il modulo DAOKAI identificato nel progetto.
 
 ## 2. Come leggere i collegamenti
 
 - **5 V** indica la linea positiva in uscita dal Mini360. Sul montaggio Andrea ha riferito una regolazione di **5,11 V**.
+- **USB +5 V / USB−** sono i due fili dell'ingresso USB del caricatore della batteria: il +5 V USB è distinto da Mini360 OUT+. Il rilevatore PC817 non aggiunge un ponte fra USB− e GND della bilancia.
 - **GND** indica il negativo comune: tutti i GND della bilancia sono collegati fra loro.
-- **3V3** è un'altra uscita dell'ESP32, a 3,3 V. Dal primo ritaglio di schema alimenta **VCC dell'OLED e VCC dell'INA219**; i GPIO scambiano segnali a 3,3 V.
+- **3V3** è un'altra uscita dell'ESP32, a 3,3 V. Alimenta **VCC dell'OLED, VCC dell'INA219 e + del buzzer passivo**; i GPIO scambiano segnali a 3,3 V.
 - **GPIO35**, per esempio, significa il pin con quel numero sull'ESP32. Individuarlo dalla scritta sulla scheda; non contare i piedini partendo da un angolo.
 - **In serie** significa che il filo arriva a una resistenza e riparte dall'altro capo della resistenza.
 - **Tra due punti** significa che ciascun capo della resistenza o del condensatore va a uno di quei punti. Non interrompere il filo principale per inserire un condensatore.
@@ -36,7 +38,7 @@ Per i **pad reali del Mini360 visto dal retro**, consultare anche la [tavola di 
 
 I colori delle illustrazioni aiutano a seguire i collegamenti; non certificano il colore dei fili già presenti nella bilancia. Leggere sempre le etichette alle due estremità.
 
-Le bande sulle resistenze disegnate sono illustrative: usare il **valore scritto accanto**, non il colore delle bande. Il PDF generale contiene **una pagina A2 orizzontale**; il PDF della guida contiene sei pagine **A3 orizzontali**, ingrandibili sullo schermo. Per una stampa A4 selezionare “adatta alla pagina”.
+Le bande sulle resistenze disegnate sono illustrative: usare il **valore scritto accanto**, non il colore delle bande. Il PDF generale contiene **una pagina A2 orizzontale**; il PDF della guida contiene sette pagine **A3 orizzontali**, ingrandibili sullo schermo. Per una stampa A4 selezionare “adatta alla pagina”.
 
 ### Orientamento fisico dell'ESP32 montato
 
@@ -60,7 +62,7 @@ Usare la vista fornita da Andrea: **3V3 in alto a sinistra, VIN in alto a destra
 | 14 | **GPIO22** | **GPIO36 / VP** |
 | 15 | **GPIO23** | **EN** |
 
-Nell'immagine GPIO21 porta anche l'etichetta SDA e GPIO22 l'etichetta SCL. **Per l'INA219 della bilancia usare GPIO32 SDA e GPIO33 SCL**: GPIO21 è la riga R4 della tastiera e GPIO22 pilota il buzzer. RX2/TX2 sono qui GPIO16/GPIO17, usati per HX711 SCK e tastiera C1, non per l'audio. GPIO12, GPIO36/VP ed EN non hanno fili esterni assegnati; RX0/TX0 restano alla seriale.
+Nell'immagine GPIO21 porta anche l'etichetta SDA e GPIO22 l'etichetta SCL. **Per l'INA219 della bilancia usare GPIO32 SDA e GPIO33 SCL**: GPIO21 è la riga R4 della tastiera e GPIO22 pilota il buzzer. RX2/TX2 sono qui GPIO16/GPIO17, usati per HX711 SCK e tastiera C1, non per l'audio. **GPIO36 / VP è riservato all'ingresso presenza USB del PC817**, con pull-up esterna da 10 kΩ a 3V3. GPIO12 ed EN non hanno fili esterni assegnati; RX0/TX0 restano alla seriale.
 
 ## 3. Alimentazione: dal pacco batteria ai moduli
 
@@ -76,7 +78,7 @@ Componenti identificati: batteria **NASTIMA BK06-LF60-NATC**, LiFePO4 6,4 V nomi
 | Mini360 **OUT+** | Linea 5 V | Uscita regolata a 5,11 V sul montaggio |
 | Linea 5 V | ESP32 **VIN/5V** | Leggere il nome del pin; non collegarla al pin 3V3 |
 | Linea 5 V | HX711 **VCC** | Alimentazione della misura |
-| ESP32 **3V3** | OLED **VCC** e INA219 **VCC** | Alimentazioni indicate nel primo ritaglio di schema |
+| ESP32 **3V3** | OLED **VCC**, INA219 **VCC** e **+ del buzzer passivo** | OLED/INA219 dal primo ritaglio; buzzer con pilotaggio BC337-40 |
 | Linea **VIN/5V** | IRF9540 **S** | Indicata nel ritaglio audio; non 3V3; vedi tavola 04 |
 | USB-C femmina della scocca | USB-C della batteria | Prolunga di ricarica verso il caricatore interno al pacco |
 
@@ -216,16 +218,24 @@ Non collegare 5 V, 3V3 o GND alle sei linee della tastiera: ciascuna arriva solt
 
 ### Buzzer e LED
 
+Il **buzzer passivo** è adatto all'alimentazione a **3,3 V** e al circuito di pilotaggio.
+
 | Da | A | Dettaglio |
 |---|---|---|
-| ESP32 **GPIO22** | Buzzer passivo, terminale **+ / segnale** | Pilotaggio documentato |
-| Buzzer, terminale **−** | GND comune | Modello fisico da rilevare |
+| ESP32 **GPIO22** | **Base (B) BC337-40 NPN** | **220 Ω / ¼ W in serie** |
+| BC337-40 **emettitore (E)** | GND comune | Nessuno |
+| BC337-40 **collettore (C)** | Buzzer, terminale **−** | Nessuno |
+| ESP32 **3V3** | Buzzer, terminale **+** | Alimentazione 3,3 V |
+| **1N5819, catodo con fascetta** | Buzzer **+ / 3V3** | Diodo in parallelo al buzzer |
+| **1N5819, anodo senza fascetta** | Buzzer **− / collettore** | Altro capo dello stesso diodo |
 | ESP32 **GPIO15** | **Anodo del LED**, attraverso la resistenza in serie | **1 kΩ**, identificata nello schema |
 | **Catodo del LED** | GND comune | Identificare la polarità del LED |
 
+**In parallelo** significa che il diodo collega gli stessi due terminali del buzzer: su ciascun terminale arrivano il filo del circuito e un capo del diodo. La **220 Ω limita la corrente della base**, non è in serie al buzzer. Il firmware resta invariato: PWM LEDC su GPIO22 attivo HIGH e silenzio LOW.
+
 Il LED montato è un normale **LED rosso del kit Arduino**, con **1 kΩ in serie da GPIO15**, come indicato nel ritaglio di schema. La guida conserva i collegamenti e il comportamento di sleep esistenti.
 
-## 7. OLED e segnali INA219
+## 7. Display, misura batteria e presenza USB
 
 ### OLED SSD1322, SPI, 256 × 64, 3,12 pollici
 
@@ -252,17 +262,35 @@ Il modello preciso dell'OLED posseduto non è identificato nei documenti: la fam
 | Fusibile F1, lato uscita | **VIN+** | Positivo batteria |
 | **VIN−** | S1, poi Mini360 IN+ | Positivo verso il carico, non GND |
 
-I collegamenti VCC/SDA/SCL non trasportano la corrente della bilancia. L'INA219 misura attraverso VIN+/VIN− la corrente diretta al Mini360 e la tensione del ramo batteria. La ricarica USB interna al pacco non passa attraverso questo sensore.
+I collegamenti VCC/SDA/SCL non trasportano la corrente della bilancia. L'INA219 misura attraverso VIN+/VIN− la corrente diretta al Mini360 e la tensione del ramo batteria. La ricarica USB interna al pacco non passa attraverso questo sensore. L'indicatore USB `charging` usa invece il PC817 e resta indipendente dalle letture INA219.
 
 La documentazione non specifica resistenze I2C esterne aggiuntive. Presenza, valori e collegamenti delle eventuali resistenze già sulla schedina si verificano sul modello effettivo; non sono disegnati come componenti esterni montati.
 
+### Presenza USB: PC817 DIP-4, tavola 07
+
+Il rilevatore PC817 si collega **in parallelo all'ingresso USB del caricatore della batteria**: il percorso di ricarica resta continuo e si aggiunge un ramo per il LED interno del PC817. Individuare **USB +5 V e USB− prima del caricatore**, non l'uscita Mini360 OUT+ / OUT−. Il 5 V USB e il 5 V della bilancia sono linee distinte.
+
+| Da | A | Componente / dettaglio |
+|---|---|---|
+| **USB +5 V**, ramo parallelo al caricatore | PC817 **pin 1, anodo** | **560 Ω / ¼ W in serie** |
+| PC817 **pin 2, catodo** | **USB−** | Lato USB del rilevatore |
+| PC817 **pin 3, emettitore** | **GND ESP32** | Lato bilancia |
+| PC817 **pin 4, collettore** | **GPIO36 / VP** | Ingresso digitale presenza USB |
+| **GPIO36 / VP** | **ESP32 3V3** | **10 kΩ di pull-up esterna** |
+
+I due collegamenti che arrivano a GPIO36 sono sullo stesso punto: il collettore del PC817 e un capo della 10 kΩ. **L'altro capo della 10 kΩ va a 3V3**, non a GND. GPIO36 è input-only e non ha pull-up/pull-down interni, quindi la resistenza esterna è necessaria. Identificare il riferimento del pin 1 sul DIP-4 e seguire il [pinout Sharp](https://global.sharp/products/device/lineup/data/pdf/datasheet/PC817XxNSZ1B_e.pdf): **1 anodo, 2 catodo, 3 emettitore, 4 collettore**.
+
+**Non aggiungere un ponte USB− / GND bilancia nel rilevatore.** Il lato USB accende il LED interno e il lato ESP32 legge il fototransistor; il collegamento fra i due è ottico. A USB nominale 5 V la corrente LED calcolata con 560 Ω è circa **6–7 mA**, non una misura sull'esemplare.
+
+Con ESP32 alimentato, **USB presente = LOW** e **USB assente = HIGH**. Il firmware conferma sia collegamento sia scollegamento dopo **250 ms di livello stabile**. L'icona animata `charging` indica USB presente anche a batteria piena; resta indipendente da INA219 assente, errori I2C o letture invalide/scadute. Il segnale non misura corrente di ricarica, carica residua o fine carica e non disabilita le protezioni per tensione bassa. Il PC817 fa parte del cablaggio per la replica; il montaggio fisico sull'esemplare attuale non è confermato e non sono documentate prove hardware del rilevatore.
+
 ## 8. Resistenze e dettagli da distinguere
 
-### Valori presenti nel cablaggio documentato o nell'appunto audio
+### Valori del cablaggio di riferimento e della replica
 
 | Valore | Quantità per i collegamenti descritti | Dove |
 |---|---:|---|
-| **220 Ω** | 1 | In serie fra GPIO16 e SCK HX711, secondo WIRING |
+| **220 Ω** | 2 | Una fra GPIO16 e SCK HX711; una **¼ W** fra GPIO22 e base BC337-40 |
 | **10 kΩ** | 1 | DOUT HX711 → punto GPIO35 |
 | **20 kΩ** | 1 | Punto GPIO35 → GND |
 | **100 kΩ** | 1 | Pull-down SCK HX711 → GND, dopo la 220 Ω e vicino al modulo; da prevedere nella replica |
@@ -271,8 +299,14 @@ La documentazione non specifica resistenze I2C esterne aggiuntive. Presenza, val
 | **100 kΩ** | 1 | G → S del MOSFET |
 | **100 kΩ** | 1 | B del NPN → GND |
 | **1 kΩ** | 1 | Resistenza in serie al LED su GPIO15, identificata nello schema |
+| **560 Ω / ¼ W** | 1 | USB +5 V → pin 1 anodo PC817 |
+| **10 kΩ** | 1 | Pull-up GPIO36 / collettore PC817 → ESP32 3V3 |
 
 Questa tabella raccoglie i valori riportati nelle fonti e la 100 kΩ SCK–GND prevista per la replica: servono **tre resistenze da 100 kΩ in totale**, una per l'HX711 e due per l'audio. Non sostituisce l'ispezione dell'esemplare per certificare le sigle e la collocazione fisica dei componenti.
+
+Il pilotaggio del buzzer comprende inoltre **un transistor NPN BC337-40** e **un diodo 1N5819**, collegati come descritto nella sezione 6. Il BC337-40 del buzzer è distinto dal 2N3904 del power-gate DFPlayer.
+
+Il rilevatore presenza USB comprende **un optoisolatore PC817 DIP-4**, oltre alla **560 Ω / ¼ W** e alla **10 kΩ** già elencate nella tabella. Questi tre componenti fanno parte della replica; la loro installazione fisica sulla bilancia attuale non è confermata.
 
 ### Componenti da completare e raccomandazioni da verificare
 
@@ -281,6 +315,8 @@ Questa tabella raccoglie i valori riportati nelle fonti e la 100 kΩ SCK–GND p
 | Resistenza BUSY → 3V3 | **10–47 kΩ**, raccomandata soltanto in caso di segnale instabile | Assente dall'appunto audio; presenza fisica da verificare |
 | Coppia presso ESP32, distinta dalla PCB custom | Montata fra **VIN/5V e GND**; **47 µF / 16 V + 100 nF (104) consigliati per la replica** | Terminali confermati, valori fisici di questa coppia non letti; la coppia PCB custom 47 µF / 16 V + 104 è invece già identificata |
 | Fusibile F1 | **T2 A** proposto per fili corti in rame almeno 0,5 mm² | Valore montato e spunti non confermati |
+
+**Diodi di alimentazione:** la nuova bilancia deve ancora essere cablata; **la replica NASTIMA non richiede la coppia di selezione delle sorgenti del progetto Li-ion 2S**. Quel progetto prevedeva due 1N5822 per unire alimentatore 12 V e batteria sull'ingresso del buck; qui il Mini360 riceve dal solo ramo batteria e l'USB-C ricarica il pacco internamente. Le tavole mantengono **S1 → IN+** e **OUT+ → linea 5 V** diretti. Sul DFPlayer non è previsto un diodo aggiuntivo nel circuito base: usare il riferimento **5,00 V** per la nuova replica e verificare VCC dopo l'IRF9540. Il possibile ritorno dall'USB del PC verso il Mini360 resta una verifica separata; vedere [dettaglio tecnico](../../docs/WIRING.md#due-diodi-presso-il-mini360) e [procedura USB](../mini360/README.md#collegamenti-del-ramo-di-potenza). Il diodo 1N5819 del buzzer resta previsto.
 
 ## 9. Dati da completare con la bilancia sotto mano
 
@@ -292,7 +328,9 @@ Quando il circuito sarà disponibile, rilevare questi dati e integrare la stessa
 4. **INA219:** modello effettivo ed eventuali resistenze presenti sulla schedina; il VCC da **ESP32 3V3** è già indicato nel primo ritaglio.
 5. **Moduli:** foto leggibile delle serigrafie di OLED e HX711 e impostazione RATE dell'HX711. L'ordine fisico dei 30 terminali ESP32 è quello della vista fornita da Andrea; l'OLED è alimentato da **3V3**, mentre il modello e l'ordine fisico dei suoi terminali restano da identificare.
 6. **Coppia distinta presso ESP32:** presenza e collegamento fra **VIN/5V e GND** sono confermati; i valori fisici di questa coppia restano da leggere. Per la replica guidata sono consigliati **47 µF / 16 V + 100 nF (104)**. Non confonderla con la coppia aggiuntiva sulla PCB custom, già identificata come **47 µF / 16 V + 104**.
-7. **Altri dettagli:** modello del buzzer, impedenza/potenza altoparlante, presenza fisica della **100 kΩ SCK–GND** sulla bilancia attuale ed eventuale pull-up BUSY. La 100 kΩ SCK–GND è già prevista per la replica; sul montaggio attuale resta probabile, da confermare. La **resistenza LED da 1 kΩ** è già identificata nello schema.
+7. **Altri dettagli:** impedenza/potenza altoparlante, presenza fisica della **100 kΩ SCK–GND** sulla bilancia attuale ed eventuale pull-up BUSY. La 100 kΩ SCK–GND è già prevista per la replica; sul montaggio attuale resta probabile, da confermare. La **resistenza LED da 1 kΩ** è già identificata nello schema.
+8. **Rilevatore USB PC817:** fa parte del cablaggio per la replica; l'installazione fisica sull'esemplare attuale non è confermata. Non sono documentate misure o prove hardware del rilevatore.
+9. **Eventuali diodi sul montaggio precedente:** identificarli soltanto se si vuole ricostruire quell'esemplare. La coppia 1N5822 del progetto Li-ion 2S non è richiesta per la selezione delle sorgenti nella replica NASTIMA e non va aggiunta sulla base del ricordo.
 
 I punti principali del collegamento sono già descritti; questi rilievi completano la **replica fisica identica**. Dove un valore o una posizione manca, la guida lo lascia indicato come da confermare.
 
@@ -305,7 +343,8 @@ I punti principali del collegamento sono già descritti; questi rilievi completa
 - [Mappa effettiva della tastiera](../../firmware/esp32_hx711_serial/keypad.cpp).
 - [Datasheet Vishay IRF9540, piedini del TO-220](https://www.vishay.com/docs/91078/91078.pdf).
 - [Datasheet onsemi 2N3904, riferimento tecnico e package del produttore](https://www.onsemi.com/download/data-sheet/pdf/2n3904-d.pdf).
+- [Datasheet Sharp PC817, pinout DIP-4 e caratteristiche del componente](https://global.sharp/products/device/lineup/data/pdf/datasheet/PC817XxNSZ1B_e.pdf).
 
 ## 11. Sorgenti delle tavole
 
-`draw_wiring.py` genera le sei tavole di dettaglio; `draw_complete.py` genera la tavola generale con i pin ESP32 nella posizione della mappa fornita. `render.cjs` produce i PNG, `build_pdf.py` compone il PDF dei dettagli e `build_complete_pdf.py` esporta il PDF generale A2. Dopo una modifica, rigenerare in quest'ordine e controllare visivamente fili, giunzioni, polarità ed etichette prima di distribuire i PDF. `index.html` consulta gli SVG locali e offre ingrandimento senza dipendenze di rete.
+`draw_wiring.py` genera le tavole di dettaglio 01-06; `draw_pc817.py` genera la tavola 07 con il rilevatore USB. `draw_complete.py` genera la tavola generale con i pin ESP32 nella posizione della mappa fornita. Dopo questi tre generatori, `render.cjs` produce i PNG, `build_pdf.py` compone il PDF dei sette dettagli e `build_complete_pdf.py` esporta il PDF generale A2. Dopo una modifica, rigenerare in quest'ordine e controllare visivamente fili, giunzioni, polarità ed etichette prima di distribuire i PDF. `index.html` consulta gli SVG locali e offre ingrandimento senza dipendenze di rete.

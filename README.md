@@ -13,9 +13,10 @@ Hardware di riferimento:
 - **Batteria NASTIMA BK06-LF60-NATC**, LiFePO4 **6,4 V nominali / 6 Ah**, con BMS e ricarica USB-C integrati
 - **Mini360 DAOKAI B0B82GL5XN**, chip **MP1482DS**, uscita regolata a **5,11 V** (valore riferito sul montaggio)
 - **INA219** (CJMCU-219) per tensione/corrente batteria (high-side), VCC collegato a **3V3 ESP32**
-- **Tastierino 4×2** + **buzzer**
+- **Tastierino 4×2** + **buzzer passivo**, alimentato a **3,3 V** e pilotato da **BC337-40 + 220 Ω + 1N5819**
 - **DFPlayer Mini**, alimentato tramite **IRF9540 P-MOSFET + NPN 2N3904**, con marcatura **H331** riferita da Andrea
 - **LED rosso di standby** del kit Arduino su GPIO15 con **1 kΩ in serie**, come indicato nello schema
+- **Rilevatore presenza USB PC817 DIP-4** su **GPIO36 / VP**, con **560 Ω / ¼ W** sul lato USB e **10 kΩ di pull-up a 3V3** sul lato ESP32; fa parte del cablaggio per la replica, mentre il montaggio fisico sull'esemplare attuale non è confermato
 
 La [guida illustrata del cablaggio corrente](artifacts/wiring-current/README.md) raccoglie panoramica, collegamenti e componenti dello schema. Le tavole descrivono lo stato montato riferito e distinguono le raccomandazioni non confermate sul montaggio.
 
@@ -32,7 +33,7 @@ Funzioni principali (firmware HX711):
 - Lettura HX711 con filtri + stati **STABLE / UNSTABLE / LIVE / SOVRACCARICO**
 - **Zero-tracking** vicino allo zero + **snap-to-zero** allo scarico
 - **TARA** automatica e manuale con centro robusto: tollera il rumore ambientale, distingue la deriva reale e segnala acusticamente gli errori tecnici
-- Monitor batteria con **tacche** + stato **charging** stabilizzato; soltanto campioni INA219 validi, plausibili e freschi alimentano filtri e protezioni
+- Monitor batteria con **tacche** da INA219 e indicatore **USB presente (`charging`)** da PC817, filtrato per 250 ms; soltanto campioni INA219 validi, plausibili e freschi alimentano filtri e protezioni della batteria
 - Protezione “batteria scarica” con **avviso + beep + light-sleep**, anti-flapping (debounce 10 s, recovery stabile 30 s) e cooldown avvisi 5 min
 - **HX health** runtime: stati **OK / WARN / ERROR / ERROR HARD**, badge **"Errore Cella"** (testo piccolo + triangolino) in alto a destra in WARN, schermata error bloccante (senza mostrare l'ultimo peso), blocco tara/calib, audio 0015.mp3 una sola volta all’ingresso in ERROR
 
@@ -105,7 +106,23 @@ Sulla **PCB custom fra Mini360 ed ESP32** è montata una **coppia aggiuntiva 47 
 
 **Sono montati anche condensatori esterni presso l'ESP32 fra VIN/5V e GND**, distinti dalla coppia PCB custom e dai componenti integrati nella scheda. I valori fisici di questa coppia presso l'ESP32 non sono stati letti. **Per la sua replica sono consigliati 47 µF / 16 V elettrolitico + 100 nF ceramico (104)**, entrambi in parallelo fra VIN/5V e GND, vicino alla scheda; il + dell'elettrolitico va a VIN/5V e il − a GND. Questi valori consigliati non identificano quelli presenti presso l'ESP32. I gruppi rimangono separati: ingresso Mini360 **220 µF / 16 V + 104**; uscita Mini360 **470 µF / 10 V + 104**; PCB custom **47 µF / 16 V + 104**; coppia presso ESP32 **con valori fisici ignoti**; audio **470 µF / 16 V + 104**.
 
-Cablaggio completo e polarità: [docs/WIRING.md](docs/WIRING.md). Lo **schema generale con tutti i fili** è disponibile in [PDF A2, pagina singola](artifacts/wiring-current/cablaggio-generale.pdf), [PNG](artifacts/wiring-current/00-wiring-complete.png) e [SVG](artifacts/wiring-current/00-wiring-complete.svg); la [guida illustrata](artifacts/wiring-current/README.md) raccoglie anche le tavole di dettaglio. Tavole e dati del convertitore: [Mini360](artifacts/mini360/README.md). Le tacche usano fasce indicative LiFePO4 e l'icona `charging` stima la ricarica dalla tensione; avvisi sonori, countdown e protezioni conservano soglie e tempi, indipendenti dall'icona (sezioni 8–9). La combinazione **TOTAL + WIFI** permette di leggere tensione e corrente INA sul display.
+Cablaggio completo e polarità: [docs/WIRING.md](docs/WIRING.md). Lo **schema generale con tutti i fili** è disponibile in [PDF A2, pagina singola](artifacts/wiring-current/cablaggio-generale-pc817.pdf), [PNG](artifacts/wiring-current/00-wiring-complete.png) e [SVG](artifacts/wiring-current/00-wiring-complete.svg); la [guida illustrata](artifacts/wiring-current/README.md) raccoglie anche le tavole di dettaglio. Tavole e dati del convertitore: [Mini360](artifacts/mini360/README.md). Le tacche usano fasce indicative LiFePO4; l'icona `charging` indica la presenza USB rilevata dal PC817, con filtro di 250 ms su collegamento e scollegamento. Avvisi sonori, countdown e protezioni conservano soglie e tempi, indipendenti dall'icona (sezioni 8–9). La combinazione **TOTAL + WIFI** permette di leggere tensione e corrente INA sul display.
+
+### 2.1 Presenza USB di ricarica: PC817 su GPIO36 / VP
+
+Il rilevatore usa un **PC817 in DIP-4**. Il suo lato LED si collega **in parallelo all'ingresso USB del caricatore della batteria**, senza interrompere il percorso di ricarica. **USB +5 V e Mini360 OUT+ sono due linee distinte**: usare il 5 V USB prima del caricatore, non la linea 5 V della bilancia.
+
+| Da | A | Componente / dettaglio |
+|---|---|---|
+| **USB +5 V**, ramo parallelo al caricatore | PC817 **pin 1, anodo** | **560 Ω / ¼ W in serie** |
+| PC817 **pin 2, catodo** | **USB−** | Ritorno del solo lato LED |
+| PC817 **pin 3, emettitore** | **GND ESP32** | Lato bilancia |
+| PC817 **pin 4, collettore** | **GPIO36 / VP** | Ingresso digitale presenza USB |
+| **GPIO36 / VP** | **ESP32 3V3** | **10 kΩ di pull-up esterna** |
+
+Con ESP32 alimentato, **USB presente = LOW** e **USB assente = HIGH**. GPIO36 è input-only e non dispone di pull-up/pull-down interni: la 10 kΩ esterna è necessaria. Il rilevatore **non aggiunge un ponte fra USB− e GND della bilancia**; i due lati del PC817 comunicano otticamente. A USB nominale 5 V la corrente LED calcolata è circa **6–7 mA**, non una misura sul montaggio.
+
+Questo ingresso rileva la **presenza della tensione USB**: non misura corrente di ricarica, carica residua o fine carica. Il PC817 fa parte del cablaggio per la replica; la sua presenza fisica sull'esemplare attuale non è confermata e non è documentato un collaudo hardware. Collegamenti illustrati nella [tavola 07](artifacts/wiring-current/07-usb-pc817.svg); pin funzionali nel [datasheet Sharp PC817](https://global.sharp/products/device/lineup/data/pdf/datasheet/PC817XxNSZ1B_e.pdf).
 
 ---
 
@@ -130,14 +147,17 @@ La scheda montata usa **30 terminali, 15 per fila**. Nella vista di riferimento 
 | Tastiera riga MODE / TARE | Keypad | 21 | uscita scansione |
 | Tastiera colonna SKIP / ENTER / WIFI / MODE | Keypad | 17 | ingresso pull-up; terminale TX2 |
 | Tastiera colonna SLEEP / CLEAR / TOTAL / TARE | Keypad | 5 | ingresso pull-up |
-| Buzzer | buzzer passivo | 22 | LEDC |
+| Buzzer | buzzer passivo tramite BC337-40 | 22 | PWM LEDC → 220 Ω → base NPN; alimentazione buzzer 3V3 |
 | DFPlayer TX | DFPlayer RX | 4 | resistenza 1 kΩ in serie nello schema corrente |
 | DFPlayer RX | DFPlayer TX | 34 | collegato nello schema; input-only, opzionale per il firmware |
 | DFPlayer power-gate | high-side esterno | 2 | HIGH = ON; non alimenta direttamente il modulo |
 | DFPlayer BUSY | DFPlayer | 39 | collegamento diretto nello schema; pull-up esterna solo condizionale |
 | LED standby | LED esterno | 15 | active-high, con resistenza in serie |
+| Presenza USB di ricarica | PC817, collettore pin 4 | 36 / VP | input-only, LOW = USB presente; pull-up esterna 10 kΩ a 3V3 |
 
 La mappa tastiera segue le coppie GPIO rilevate sul montaggio, riportate in [WIRING](docs/WIRING.md#5-tastiera-4x2--esp32). Righe e colonne sono il raggruppamento logico della scansione; le sigle R1–R6 del ritaglio non definiscono l'ordine fisico dei sei pin sul connettore. La configurazione è in `config/config_pins.h`, la mappa delle funzioni in `keypad.cpp`.
+
+Il buzzer passivo è adatto all'alimentazione a **3,3 V** e al circuito di pilotaggio: **GPIO22 → 220 Ω / ¼ W → base BC337-40**, emettitore a **GND comune**, collettore al **− del buzzer**, **+ del buzzer a ESP32 3V3**. Il diodo **1N5819** collega gli stessi due terminali del buzzer: **catodo con fascetta al + / 3V3**, **anodo al − / collettore**. Il firmware resta invariato: PWM attivo HIGH, silenzio LOW. Dettagli in [WIRING, buzzer](docs/WIRING.md#6-buzzer--esp32).
 
 ---
 
@@ -276,8 +296,9 @@ Se INA non viene trovato:
 - Il bus I2C usa un timeout `Wire` di **50 ms** per limitare blocchi su transazioni INA219 anomale.
 
 Validità runtime:
-- tensione e corrente aggiornano stato, filtro e rilevamento charging soltanto se ogni lettura I2C termina con successo e i valori sono finiti e plausibili
-- un errore di lettura non viene convertito in una falsa tensione bassa: resta disponibile l'ultimo campione valido per la sola UI, marcato con la propria età; `charging` e i suoi timer vengono azzerati su letture invalide o scadute, senza far avanzare il debounce
+- tensione e corrente aggiornano filtri e livello batteria soltanto se ogni lettura I2C termina con successo e i valori sono finiti e plausibili
+- un errore di lettura non viene convertito in una falsa tensione bassa: resta disponibile l'ultimo campione valido per la sola UI, marcato con la propria età; campioni invalidi o scaduti non alimentano le protezioni della batteria
+- `charging` dipende dal PC817: resta indipendente da presenza, validità e freschezza dell'INA219; un errore I2C non spegne l'indicatore USB
 - i limiti di plausibilità correnti sono 3–9 V sul bus, ±330 mV sullo shunt e ±3.500 mA
 - countdown e sleep di protezione richiedono sempre un campione valido più recente di **1,5 s**; un valore stale non può spegnere la bilancia
 
@@ -297,16 +318,15 @@ FULL indica la fascia alta, non certifica una carica completa. La lettura riferi
 
 Nota: c'è un **cuscinetto** tra 0 tacche e il light-sleep per batteria scarica. La sequenza di countdown parte a **≤ 5,80 V** dopo il debounce previsto.
 
-### 8.3 Indicatore “in carica” da tensione
-Con la NASTIMA, la corrente USB entra nel caricatore interno al pacco senza attraversare lo shunt esterno. L'INA219 misura **la corrente diretta al carico**, che resta disponibile nella diagnostica ma non determina `charging`. L'icona usa invece la tensione filtrata, con soglie iniziali scelte dalle letture riferite da Andrea:
+### 8.3 Indicatore USB presente (`charging`)
 
-- si accende con **V ≥ 6,70 V** per almeno **5 s** continui
-- si spegne con **V ≤ 6,68 V** per almeno **10 s** continui
-- nella banda **6,68 V < V < 6,70 V** conserva lo stato; una conferma interrotta riparte da zero
-- non impone un tempo minimo acceso aggiuntivo
-- usa soltanto campioni validi e freschi: una lettura invalida o scaduta spegne l'indicazione e azzera i timer; per riaccenderla serve una nuova conferma completa
+L'icona animata segue la **presenza della tensione USB rilevata dal PC817 su GPIO36 / VP**: LOW significa USB presente, HIGH USB assente. La stessa informazione è conservata in `BatteryStatus.charging`; resta attiva anche a batteria piena e non misura corrente di ricarica, carica residua o fine carica. Con la NASTIMA la corrente USB entra nel caricatore interno al pacco senza attraversare lo shunt esterno: la corrente INA219 è quella diretta al carico.
 
-Il campionamento resta ogni **500 ms**, con filtro EMA di tensione **α = 0,2**. È una **stima indicativa della ricarica**, non una prova di USB collegata né una misura della carica residua. Con batteria bassa la ricarica può essere attiva senza raggiungere 6,70 V; dopo aver scollegato l'USB l'icona resta accesa finché non è confermata la soglia di uscita. Questa indicazione non disabilita le protezioni per tensione bassa.
+- Collegamento e scollegamento richiedono entrambi **250 ms di livello stabile**, definiti da `USB_PRESENCE_DEBOUNCE_MS` in `config/config_battery.h`.
+- La lettura USB viene aggiornata indipendentemente dall'INA219: sensore assente, errori I2C e campioni invalidi o scaduti non azzerano l'indicatore.
+- All'avvio l'indicatore parte spento finché il primo livello USB è confermato. Dopo una pausa di campionamento superiore a 250 ms, incluso il light-sleep, serve una nuova finestra stabile; durante la conferma resta l'ultimo stato.
+
+Il campionamento INA219 ogni **500 ms** e il filtro EMA di tensione **α = 0,2** riguardano livello batteria e protezioni, non il rilevamento USB. Nel debug seriale **`charging=YES/NO` indica presenza USB confermata**, mentre **`valid=YES/NO` riguarda la lettura INA219**. L'indicatore USB non disabilita avvisi sonori, countdown o protezioni per tensione bassa.
 
 ---
 
@@ -315,7 +335,7 @@ Il campionamento resta ogni **500 ms**, con filtro EMA di tensione **α = 0,2**.
 La protezione qui è pensata per l’ESP32 (evitare latenze/reset quando il buck 5V perde margine). Entra in light-sleep, ma non scollega fisicamente Mini360 o batteria e non sostituisce il BMS del pacco. Avvisi, countdown e soglia hard-low restano attivi anche con l'icona `charging` accesa: il collegamento USB o lo stato dell'icona non annullano la protezione. Il recupero dipende dalla tensione misurata.
 
 Comportamento:
-- **0 tacche (EMPTY)**: icona batteria **lampeggiante** sotto **6,10 V**. L'avviso sonoro ha una soglia separata dalle tacche:
+- **0 tacche (EMPTY)** sotto **6,10 V**: icona batteria **lampeggiante con USB assente**, animata con USB presente. L'avviso sonoro ha una soglia separata dalle tacche:
   - **0011.mp3** (batteria bassa) con **cooldown 5 min**
   - beep buzzer con **cooldown 5 min**
   - L'avviso 0011 e il beep richiedono **5,80 V < V < 5,85 V** per almeno **10 s** (`V_EMPTY_WARNING_MAX_V`); sotto questa finestra interviene il percorso countdown/critico. Cambiare le tacche non cambia questa finestra o il recupero del countdown.
@@ -324,7 +344,7 @@ Comportamento:
   - **0012.mp3** (batteria critica) **subito all'ingresso countdown** e **di nuovo a metà** (a ~60 s)
   - beep ogni **10 s** per **120 s**
   - segue la schermata **Zzz per 5 s**, poi entra in **LIGHT-SLEEP**; la soglia hard-low può anticipare lo sleep
-- La soglia hard-low **≤ 5,70 V** deve restare confermata da campioni INA validi e freschi per circa **3 s** prima dello sleep; il debounce non aggiunge un rilevamento della presenza USB.
+- La soglia hard-low **≤ 5,70 V** deve restare confermata da campioni INA validi e freschi per circa **3 s** prima dello sleep; resta attiva anche con USB presente.
 - Prima del light-sleep per batteria scarica: DFPlayer viene **spento** via MOSFET (zero consumo audio in sleep).
 - Prima della disconnessione pulita MQTT viene pubblicato retained lo stato `sleeping`, così il gestionale non conserva uno status `online` mentre la bilancia dorme.
 - Anti-troncamento audio (DFPlayer): applicato un gap ~200 ms tra stop → play e ignorati i primi ~300 ms di BUSY=idle dopo il play (evita tagli tipo 0001→0002).
@@ -688,7 +708,7 @@ firmware/esp32_hx711_serial/
 ├── buzzer.h / .cpp          # Buzzer:: (beep, toni)
 ├── hx711_driver.h / .cpp    # HX711 low-level (SCK/DOUT, read)
 ├── keypad.h / .cpp          # Keypad:: (4x2, debounce, one-shot, wake suppression)
-├── battery_monitor.h / .cpp # BatteryMonitor:: (INA219, validità/freshness, charging)
+├── battery_monitor.h / .cpp # BatteryMonitor:: (INA219, validità/freshness, presenza USB PC817)
 ├── hx_health.h / .cpp       # HxHealth:: (OK/WARN/ERROR/ERROR_HARD)
 ├── ui_display.h / .cpp      # UiDisplay:: (OLED SSD1322, layout, icone)
 ├── net_ota_cloud.h / .cpp   # Net:: (WiFi/OTA/MQTT, outbox confirm/skip/undo)
