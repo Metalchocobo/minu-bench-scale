@@ -94,7 +94,8 @@
 <rect x="365" y="413" width="140" height="44" rx="8" fill="#e9d8bc" stroke="#b4a17e" stroke-width="2"/>
 <text x="435" y="444" font-family="Arial,Helvetica,sans-serif" font-size="26" font-weight="700" fill="#25323a" text-anchor="middle">F1</text>
 <text x="435" y="388" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="400" fill="#25323a" text-anchor="middle">Fusibile vicino al +</text>
-<text x="435" y="490" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="700" fill="#98651a" text-anchor="middle">Valore da confermare</text>
+<text x="435" y="490" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="700" fill="#25323a" text-anchor="middle">F2A rapido · replica</text>
+<text x="435" y="523" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" fill="#25323a" text-anchor="middle">Ceramico 5×20 · dati DC</text>
 <rect x="610" y="330" width="300" height="220" rx="18" fill="#e8f3ee" stroke="#8cab9b" stroke-width="2"/>
 <circle cx="628" cy="348" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
 <circle cx="892" cy="348" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
@@ -187,7 +188,7 @@
 <text x="783" y="1185" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">3,3 V</text>
 <text x="1018" y="1185" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">Segnali</text>
 <text x="1235" y="1185" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="400" fill="#25323a" text-anchor="start">● = unione dei fili</text>
-<text x="65" y="1224" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" fill="#596a76" text-anchor="start">Banda − del condensatore al negativo; ceramico senza polarità. Retro Mini360: vedi tavola pad dedicata.</text>
+<text x="65" y="1224" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" fill="#596a76" text-anchor="start">F1 replica: dati DC dichiarati, fili rame ≥ 0,5 mm²; montato da identificare. Condensatori: banda − al negativo.</text>
 <circle cx="300" cy="435" r="7" fill="white" stroke="#ca4239" stroke-width="3"/>
 <circle cx="300" cy="505" r="7" fill="white" stroke="#25323a" stroke-width="3"/>
 <circle cx="610" cy="435" r="7" fill="white" stroke="#ca4239" stroke-width="3"/>

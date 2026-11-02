@@ -6,7 +6,7 @@ Questa guida raccoglie i collegamenti della bilancia **NASTIMA + Mini360**, con 
 
 Il **MOSFET IRF9540 resta il componente scelto**. La tastiera usa la mappa firmware ricavata dalle coppie GPIO rilevate sul cablaggio montato. Sleep e LED conservano il loro funzionamento. Questa guida non prescrive una nuova variante di alimentazione.
 
-**Per una replica identica occorre completare i dettagli fisici elencati in fondo**, soprattutto orientamento dei piedini del NPN 2N3904, collegamenti dei condensatori audio e valore del fusibile. Le illustrazioni mostrano dove collegare i fili; sui moduli di cui manca il modello esatto conta la scritta del terminale, non la sua posizione nel disegno.
+**Per una replica identica occorre completare i dettagli fisici elencati in fondo**, soprattutto orientamento dei piedini del NPN 2N3904, collegamenti dei condensatori audio e identificazione del fusibile montato. **Per la replica F1 è scelto: F2A rapido, ceramico, 5×20 mm**, con requisiti DC dichiarati nella [specifica F1](../../docs/WIRING.md#fusibile-f1-per-la-replica). Le illustrazioni mostrano dove collegare i fili; sui moduli di cui manca il modello esatto conta la scritta del terminale, non la sua posizione nel disegno.
 
 ## 1. Tavole da consultare
 
@@ -70,7 +70,7 @@ Componenti identificati: batteria **NASTIMA BK06-LF60-NATC**, LiFePO4 6,4 V nomi
 
 | Da | A | Dettaglio |
 |---|---|---|
-| Batteria, morsetto **+** | Fusibile **F1**, poi **VIN+ dell'INA219** | Il valore del fusibile montato va rilevato |
+| Batteria, morsetto **+** | Fusibile **F1**, poi **VIN+ dell'INA219** | Replica: **F2A rapido ceramico 5×20 mm**, vicino alla batteria; dati DC dichiarati. Marcatura montata da rilevare |
 | INA219 **VIN−** | Ingresso dell'interruttore **S1** | VIN− è ancora sul positivo della batteria |
 | Uscita di **S1** | Mini360 **IN+** | Alimentazione positiva del convertitore |
 | Batteria, morsetto **−** | Mini360 **IN−** e GND comune | Negativo |
@@ -314,7 +314,7 @@ Il rilevatore presenza USB comprende **un optoisolatore PC817 DIP-4**, oltre all
 |---|---|---|
 | Resistenza BUSY → 3V3 | **10–47 kΩ**, raccomandata soltanto in caso di segnale instabile | Assente dall'appunto audio; presenza fisica da verificare |
 | Coppia presso ESP32, distinta dalla PCB custom | Montata fra **VIN/5V e GND**; **47 µF / 16 V + 100 nF (104) consigliati per la replica** | Terminali confermati, valori fisici di questa coppia non letti; la coppia PCB custom 47 µF / 16 V + 104 è invece già identificata |
-| Fusibile F1 | **T2 A** proposto per fili corti in rame almeno 0,5 mm² | Valore montato e spunti non confermati |
+| Fusibile F1 | Replica: **F2A rapido, ceramico, 5×20 mm**; fili corti in rame almeno **0,5 mm²**, portafusibile isolato e dati DC dichiarati | Marcatura montata, sezione effettiva e spunti da verificare. **T2A** valutabile soltanto per spunti normali confermati; [specifica F1](../../docs/WIRING.md#fusibile-f1-per-la-replica) |
 
 **Diodi di alimentazione:** la nuova bilancia deve ancora essere cablata; **la replica NASTIMA non richiede la coppia di selezione delle sorgenti del progetto Li-ion 2S**. Quel progetto prevedeva due 1N5822 per unire alimentatore 12 V e batteria sull'ingresso del buck; qui il Mini360 riceve dal solo ramo batteria e l'USB-C ricarica il pacco internamente. Le tavole mantengono **S1 → IN+** e **OUT+ → linea 5 V** diretti. Sul DFPlayer non è previsto un diodo aggiuntivo nel circuito base: usare il riferimento **5,00 V** per la nuova replica e verificare VCC dopo l'IRF9540. Il possibile ritorno dall'USB del PC verso il Mini360 resta una verifica separata; vedere [dettaglio tecnico](../../docs/WIRING.md#due-diodi-presso-il-mini360) e [procedura USB](../mini360/README.md#collegamenti-del-ramo-di-potenza). Il diodo 1N5819 del buzzer resta previsto.
 
@@ -324,7 +324,7 @@ Quando il circuito sarà disponibile, rilevare questi dati e integrare la stessa
 
 1. **Transistor NPN 2N3904 H331:** faccia con la scritta, orientamento e ordine dei piedini C/B/E e fili effettivamente collegati. La sigla è identificata; il pinout fisico dell'esemplare resta da verificare.
 2. **Condensatori presso il DFPlayer:** sono identificati **470 µF / 16 V** per l'elettrolitico e **104 = 100 nF** per il ceramico; rilevare quantità complessiva, polarità, terminali collegati e posizione fisica. Il ritaglio dell'appunto non permette di ricostruire questi dettagli.
-3. **Fusibile F1:** marcatura, tipo e portafusibile installati.
+3. **Fusibile F1 montato:** rilevare marcatura completa, tipo e portafusibile installati. La replica prevede **F2A rapido ceramico 5×20 mm**; verificare sezione dei fili, dati DC e spunti senza confondere la scelta progettuale con il componente dell'esemplare precedente.
 4. **INA219:** modello effettivo ed eventuali resistenze presenti sulla schedina; il VCC da **ESP32 3V3** è già indicato nel primo ritaglio.
 5. **Moduli:** foto leggibile delle serigrafie di OLED e HX711 e impostazione RATE dell'HX711. L'ordine fisico dei 30 terminali ESP32 è quello della vista fornita da Andrea; l'OLED è alimentato da **3V3**, mentre il modello e l'ordine fisico dei suoi terminali restano da identificare.
 6. **Coppia distinta presso ESP32:** presenza e collegamento fra **VIN/5V e GND** sono confermati; i valori fisici di questa coppia restano da leggere. Per la replica guidata sono consigliati **47 µF / 16 V + 100 nF (104)**. Non confonderla con la coppia aggiuntiva sulla PCB custom, già identificata come **47 µF / 16 V + 104**.

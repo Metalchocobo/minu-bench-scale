@@ -14,6 +14,12 @@ Per identificare i contatti di una replica senza conoscere l'ordine del connetto
 
 Il **buzzer passivo** usa **GPIO22 → 220 Ω / ¼ W → base BC337-40 NPN**, con emettitore a **GND comune**, collettore al **− del buzzer** e **+ del buzzer a ESP32 3V3**. Il **1N5819** è in parallelo ai terminali del buzzer, con **catodo/fascetta al + / 3V3** e **anodo al − / collettore**. Il firmware resta invariato: PWM LEDC attivo HIGH, silenzio LOW. Cablaggio completo in [WIRING, buzzer](../../docs/WIRING.md#6-buzzer--esp32).
 
+## Codice bilancia e LED voce
+
+Da seriale a **115200 baud**: `scale code 00-S` salva il codice in **NVS `minu_identity`, chiave `code`**; **al prossimo riavvio** il nome diventa **Ronin 00-S**, visibile dalla prima schermata OLED e nel campo `name` degli status/LWT MQTT. `scale status` mostra nome attivo e codice salvato; `scale reset` salva il default **00**. Sono ammessi **1–12 caratteri ASCII A-Z, a-z, 0-9, `-`, `_`**, con zeri iniziali mantenuti. Il nome attivo resta immutabile fino al riavvio, anche per il worker MQTT. Il `scale_id` tecnico resta il MAC; i record già registrati nel Manager non vengono rinominati automaticamente dalla discovery. Implementazione: `scale_identity.h/.cpp`; flusso completo nel [README principale](../../README.md#codice-e-nome-della-bilancia).
+
+Il LED esistente su **GPIO15 + 1 kΩ** pulsa con sfumature software mentre il DFPlayer conferma la riproduzione via **BUSY GPIO39**. L'effetto simula la voce senza seguirne l'ampiezza o le sillabe; player spento, AUDIO OFF, idle e sola coda non lo attivano. In standby manuale/per inattività il PWM viene sganciato e il LED resta fisso; al wake viene ripristinato. Lo sleep per batteria scarica lo lascia spento. `status_led.h/.cpp` gestisce l'effetto non bloccante, con parametri in `config/config_led.h`: **5 kHz, 8 bit, canale LEDC 8** separato dal gruppo del buzzer. Non occorrono modifiche al cablaggio; la resa visiva va verificata sulla bilancia. Riferimento in [WIRING](../../docs/WIRING.md#8-led-audio-e-standby--esp32).
+
 ## Ingresso presenza USB: PC817
 
 Il rilevatore USB usa **GPIO36 / VP**, input-only senza pull interni, con **10 kΩ esterna fra GPIO36 e ESP32 3V3**. Il **PC817 DIP-4** si collega così: **USB +5 V → 560 Ω / ¼ W → pin 1 anodo**; **pin 2 catodo → USB−**; **pin 3 emettitore → GND ESP32**; **pin 4 collettore → GPIO36 / VP**. Il lato LED è un ramo **in parallelo all'ingresso USB del caricatore della batteria**; non usare Mini360 OUT+ e non aggiungere un ponte fra USB− e GND della bilancia.
@@ -48,7 +54,13 @@ I condensatori restano in gruppi distinti: ingresso Mini360 **220 µF / 16 V + 1
 
 Verifica locale:
 
+Gli harness `tests/firmware_scale_identity_harness.cpp` e `tests/firmware_status_led_harness.cpp` compilano i moduli reali con stub NVS/PWM: verificano persistenza e applicazione del codice al riavvio, errori di storage, input invalidi, sfumature, stop, standby/wake, rollover e fallback senza PWM. Dalla root, con un compilatore C++17:
+
 ```sh
+c++ -std=c++17 -Wall -Wextra -Werror -I tests/identity_stubs tests/firmware_scale_identity_harness.cpp firmware/esp32_hx711_serial/scale_identity.cpp -o /tmp/firmware_scale_identity_harness
+/tmp/firmware_scale_identity_harness
+c++ -std=c++17 -Wall -Wextra -Werror -I tests/status_led_stubs tests/firmware_status_led_harness.cpp firmware/esp32_hx711_serial/status_led.cpp -o /tmp/firmware_status_led_harness
+/tmp/firmware_status_led_harness
 c++ -std=c++17 -Wall -Wextra -Werror tests/firmware_mqtt_protocol_harness.cpp -o /tmp/firmware_mqtt_protocol_harness
 /tmp/firmware_mqtt_protocol_harness
 arduino-cli compile --fqbn esp32:esp32:esp32 firmware/esp32_hx711_serial

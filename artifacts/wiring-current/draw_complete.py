@@ -80,7 +80,8 @@ def draw():
     d.wire([(400,430),(540,430)],RED)
     d.rect(540,406,130,48,'#ecdabe','#b4a17e',8)
     d.text(605,439,'F1',26,INK,True,'middle')
-    d.text(605,388,'Valore ignoto',22,UNKNOWN,True,'middle')
+    d.text(540,355,'F2A rapido · replica',22,INK,True)
+    d.text(540,388,'Ceramico 5×20 · dati DC',20,INK)
     d.wire([(670,430),(850,430)],RED)
     d.board(850,300,350,280,'INA219','VIN− è positivo, non GND')
     d.port(850,430,'VIN+',RED,'left');d.port(1200,430,'VIN−',RED)
@@ -357,7 +358,7 @@ def draw():
                           '47 µF / 16 V + 104 consigliati presso ESP32.']),
                      (1120, ['Condensatori audio tratteggiati: riferimento.',
                             'Audio: fili e polarità da verificare.',
-                            'Fusibile F1: valore da leggere.']),
+                            'F1: replica F2A; montato da identificare.']),
                      (2150, ['SCK: replica 100 kΩ; montata da verificare.',
                             'BC337-40: seguire il pinout del componente.',
                             'Buzzer: firmware invariato.'])]:

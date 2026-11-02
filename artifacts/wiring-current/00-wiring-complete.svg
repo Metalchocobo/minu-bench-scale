@@ -270,7 +270,8 @@
 <text x="117" y="508" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="700" fill="#25323a" text-anchor="start">−</text>
 <rect x="540" y="406" width="130" height="48" rx="8" fill="#ecdabe" stroke="#b4a17e" stroke-width="2"/>
 <text x="605" y="439" font-family="Arial,Helvetica,sans-serif" font-size="26" font-weight="700" fill="#25323a" text-anchor="middle">F1</text>
-<text x="605" y="388" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#98651a" text-anchor="middle">Valore ignoto</text>
+<text x="540" y="355" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#25323a" text-anchor="start">F2A rapido · replica</text>
+<text x="540" y="388" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="400" fill="#25323a" text-anchor="start">Ceramico 5×20 · dati DC</text>
 <rect x="850" y="300" width="350" height="280" rx="18" fill="#e8f3ee" stroke="#8cab9b" stroke-width="2"/>
 <circle cx="868" cy="318" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
 <circle cx="1182" cy="318" r="5" fill="#ffffff" stroke="#8cab9b" stroke-width="2"/>
@@ -600,7 +601,7 @@
 <text x="92" y="2352" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="400" fill="#25323a" text-anchor="start">47 µF / 16 V + 104 consigliati presso ESP32.</text>
 <text x="1120" y="2290" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="400" fill="#25323a" text-anchor="start">Condensatori audio tratteggiati: riferimento.</text>
 <text x="1120" y="2321" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="400" fill="#25323a" text-anchor="start">Audio: fili e polarità da verificare.</text>
-<text x="1120" y="2352" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="400" fill="#25323a" text-anchor="start">Fusibile F1: valore da leggere.</text>
+<text x="1120" y="2352" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="400" fill="#25323a" text-anchor="start">F1: replica F2A; montato da identificare.</text>
 <text x="2150" y="2290" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="400" fill="#25323a" text-anchor="start">SCK: replica 100 kΩ; montata da verificare.</text>
 <text x="2150" y="2321" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="400" fill="#25323a" text-anchor="start">BC337-40: seguire il pinout del componente.</text>
 <text x="2150" y="2352" font-family="Arial,Helvetica,sans-serif" font-size="23" font-weight="400" fill="#25323a" text-anchor="start">Buzzer: firmware invariato.</text>

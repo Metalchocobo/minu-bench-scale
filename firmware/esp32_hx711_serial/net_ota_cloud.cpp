@@ -1,4 +1,5 @@
 #include "net_ota_cloud.h"
+#include "scale_identity.h"
 #include "config/config_scale.h"
 #include "mqtt_update_cycle.h"
 #include "mqtt_transport_health.h"
@@ -1270,7 +1271,7 @@ static bool mqttPublishStatus(const char* state) {
   char payload[512];
   int written = snprintf(payload, sizeof(payload),
     "{\"type\":\"status\",\"state\":\"%s\",\"scale_id\":\"%s\",\"name\":\"%s\",\"firmware_version\":\"%s\",\"boot_id\":\"%s\",\"transport_id\":\"%s\",\"status_seq\":%lu,\"published_at\":%lu,\"uptime_ms\":%lu,\"operational_mode\":\"%s\",\"tare_required\":%s,\"fallback_reason\":\"%s\",\"last_command_error\":\"%s\",\"rx_probe_seq\":%lu,\"rx_mask\":%u,\"rx_health\":\"%s\",\"pending_response_id\":\"%s\"}",
-    state, mqtt_scaleId, MQTT_SCALE_NAME, MQTT_FW_VERSION,
+    state, mqtt_scaleId, ScaleIdentity::name(), MQTT_FW_VERSION,
     bootId, transportId, (unsigned long)mqtt_statusSequence,
     (unsigned long)time(nullptr), (unsigned long)nowMs, operationalMode,
     mqtt_tareRequired ? "true" : "false",
@@ -2090,7 +2091,7 @@ static bool mqttAttemptConnect() {
   char lwtPayload[192];
   snprintf(lwtPayload, sizeof(lwtPayload),
     "{\"type\":\"status\",\"state\":\"offline\",\"scale_id\":\"%s\",\"name\":\"%s\"}",
-    mqtt_scaleId, MQTT_SCALE_NAME);
+    mqtt_scaleId, ScaleIdentity::name());
 
   // Verifica che il clock sia sincronizzato (NTP), necessario per TLS
   time_t now = time(nullptr);

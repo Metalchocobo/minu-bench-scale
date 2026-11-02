@@ -18,7 +18,8 @@
 <rect x="370" y="519" width="115" height="42" rx="5" fill="#fff4df" stroke="#d1a362" stroke-width="2"/>
 <text x="427" y="548" fill="#a66713" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" text-anchor="middle">F1</text>
 <text x="355" y="484" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" text-anchor="start">F1 vicino al +</text>
-<text x="360" y="586" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" text-anchor="start">T2 A · proposta¹</text>
+<text x="360" y="586" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" text-anchor="start">F2A rapido · replica¹</text>
+<text x="360" y="616" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" text-anchor="start">Ceramico 5×20 mm</text>
 <polyline points="485,540 575,540" fill="none" stroke="#f4f7fa" stroke-width="12" stroke-linejoin="round"/>
 <polyline points="485,540 575,540" fill="none" stroke="#c63d36" stroke-width="5" stroke-linejoin="round"/>
 <rect x="575" y="390" width="290" height="260" rx="14" fill="#e6f4ef" stroke="#83b6a0" stroke-width="2"/>
@@ -149,7 +150,7 @@
 <polyline points="1640,1081.5 1640,1195" fill="none" stroke="#26333d" stroke-width="5" stroke-linejoin="round"/>
 <text x="1680" y="1078.5" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="19" font-weight="400" text-anchor="start">C4</text>
 <text x="1660" y="1142" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="17" font-weight="400" text-anchor="start">100 nF</text>
-<text x="175" y="1245" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="400" text-anchor="start">¹ F1 T2 A: proposta per fili di potenza corti ≥ 0,5 mm²; verificare gli spunti del carico reale.</text>
+<text x="175" y="1245" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="400" text-anchor="start">¹ F1 replica: F2A ceramico 5×20; dati DC dichiarati, rame ≥ 0,5 mm². Montato da identificare.</text>
 <text x="175" y="1279" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="400" text-anchor="start">Condensatori: saldare vicino ai pad del Mini360. Vedi il dettaglio 03-condensatori-mini360.</text>
 <text x="55" y="1355" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="20" font-weight="400" text-anchor="start">Rosso = positivo DC   •   Nero = negativo / GND   •   Pallino pieno = collegamento</text>
 <text x="55" y="1391" fill="#26333d" font-family="Arial,Helvetica,sans-serif" font-size="18" font-weight="400" text-anchor="start">Incroci senza pallino = fili separati · 18/09/2026 · Collegamenti logici, non distanze di montaggio.</text>

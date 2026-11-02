@@ -42,6 +42,8 @@
 #include "ota_store.h"
 #include "calibration_wizard.h"
 #include "weigh_stack.h"
+#include "scale_identity.h"
+#include "status_led.h"
 
 // ========================= ALIAS =========================
 using namespace ScaleConfig;
@@ -294,8 +296,8 @@ static uint32_t g_hxLogLastMs   = 0;
 static uint32_t lastBattDebug = 0;
 
 // ========================= HELPER SLEEP LED =========================
-static inline void sleepLedOn()  { digitalWrite(SLEEP_LED_PIN, SLEEP_LED_ACTIVE_HIGH ? HIGH : LOW); }
-static inline void sleepLedOff() { digitalWrite(SLEEP_LED_PIN, SLEEP_LED_ACTIVE_HIGH ? LOW : HIGH); }
+static inline void sleepLedOn()  { StatusLed::setStandby(true); }
+static inline void sleepLedOff() { StatusLed::setStandby(false); }
 
 // ========================= FORWARD DECLARATIONS =========================
 void printHelp();
@@ -379,6 +381,7 @@ void printHelp() {
   Serial.println(F("mqtt set \"host\" \"user\" \"pass\", mqtt creds, mqtt clear, mqtt apply, mqtt status"));
   Serial.println(F("cal status, cal zero, cal ref <g>, cal save, cal load"));
   Serial.println(F("stack [status], stack list, stack clear"));
+  Serial.println(F("scale status, scale code <code>, scale reset (next boot)"));
   Serial.println(F("-----------------------\n"));
 }
 
@@ -429,6 +432,40 @@ void parseCommand(const char* cmd) {
     }
   }
 #endif
+
+  // Human-readable identity is persisted for reboot; never mutate the name
+  // concurrently with the MQTT connection worker or an existing broker LWT.
+  if (strcmp(cmd, "scale") == 0 || strncmp(cmd, "scale ", 6) == 0) {
+    const char* arg = cmd + 5;
+    while (*arg == ' ') ++arg;
+    const char* newCode = nullptr;
+    if (strncmp(arg, "code ", 5) == 0) {
+      newCode = arg + 5;
+    } else if (strcmp(arg, "reset") == 0) {
+      newCode = ScaleIdentity::DEFAULT_CODE;
+    } else if (*arg != '\0' && strcmp(arg, "status") != 0) {
+      Serial.println(F("[SCALE] scale status | scale code <code> | scale reset"));
+      return;
+    }
+    if (newCode) {
+      if (!ScaleIdentity::isValidCode(newCode)) {
+        Serial.println(F("[SCALE] Codice: 1-12 caratteri A-Z a-z 0-9 - _"));
+        return;
+      }
+      if (!ScaleIdentity::saveCode(newCode)) {
+        Serial.println(F("[SCALE] Errore salvataggio NVS"));
+        return;
+      }
+    }
+    Serial.print(F("[SCALE] Nome attivo: "));
+    Serial.println(ScaleIdentity::name());
+    Serial.print(F("[SCALE] Codice salvato: "));
+    Serial.println(ScaleIdentity::savedCode());
+    if (strcmp(ScaleIdentity::code(), ScaleIdentity::savedCode()) != 0) {
+      Serial.println(F("[SCALE] Nuovo nome attivo al prossimo riavvio"));
+    }
+    return;
+  }
 
   // hxlog
   if (strncmp(cmd, "hxlog ", 6) == 0) {
@@ -1711,6 +1748,7 @@ static void bootPump(uint32_t ms) {
     uint32_t now = millis();
     keypad_update(now);
     Audio::task(now);
+    StatusLed::update(millis(), Audio::isPlaying());
     (void)keypad_get_event();
     delay(10);
   }
@@ -1731,6 +1769,7 @@ static void bootWaitTare() {
     uint32_t now = millis();
     keypad_update(now);
     Audio::task(now);
+    StatusLed::update(millis(), Audio::isPlaying());
 #if ENABLE_WIFI_OTA
     Net::update();
     wifiAudioUpdate(now);
@@ -1834,6 +1873,7 @@ static void enterLowBatteryLightSleep() {
 
   delay(80);
   Audio::powerOffNow();
+  StatusLed::update(millis(), false);
 
 #if ENABLE_MQTT
   Net::mqttSuspend();
@@ -2039,10 +2079,13 @@ void setup() {
   delay(50);
   const bool wdtReset = wasWatchdogReset();
 
-  pinMode(SLEEP_LED_PIN, OUTPUT);
-  sleepLedOff();
+  StatusLed::begin();
   g_lastKeyPressMs = millis();
   setupLoopWatchdog();
+
+  ScaleIdentity::load();
+  Serial.print(F("[SCALE] "));
+  Serial.println(ScaleIdentity::name());
 
   // Display subito
   ui_init();
@@ -2292,6 +2335,7 @@ void loop() {
 
   // Audio
   Audio::task(now);
+  StatusLed::update(millis(), Audio::isPlaying());
 
   // Tastiera
   keypad_update(now);

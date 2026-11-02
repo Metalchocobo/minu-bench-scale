@@ -158,14 +158,16 @@ Con GPIO2 HIGH il NPN porta il gate verso GND e accende il P-MOSFET; con GPIO2 L
 
 Il firmware chiude UART e imposta GPIO4 e GPIO34 come INPUT prima di portare GPIO2 LOW. Non alimentare il DFPlayer direttamente da GPIO2. La topologia coincide con il comando firmware `HIGH = ON`; caduta di tensione e temperatura dell'IRF9540 durante l'audio non sono state misurate.
 
-## 8) LED di standby → ESP32
+## 8) LED audio e standby → ESP32
 
 - **GPIO15 → resistenza 1 kΩ → anodo LED**
 - Catodo LED → **GND**
 
 Il LED montato è un normale **LED rosso del kit Arduino**. La resistenza **1 kΩ** è identificata nel ritaglio di schema fornito da Andrea.
 
-Il firmware usa logica active-high: LED acceso durante standby/light sleep.
+Il firmware usa logica active-high. Durante una riproduzione confermata dal **BUSY DFPlayer su GPIO39**, lo stesso GPIO15 genera pulsazioni morbide tramite **PWM LEDC a 5 kHz, 8 bit**. È un effetto voce simulato, non la misura dell'ampiezza audio: BUSY fornisce soltanto riproduzione/idle. Non serve aggiungere hardware per la sfumatura e la resistenza **1 kΩ resta in serie**.
+
+Durante lo standby manuale o per inattività/light-sleep, il firmware sgancia il PWM e mantiene il LED **acceso fisso**; al wake ripristina il PWM. Lo sleep di protezione per batteria scarica lo lascia spento. Il canale LEDC **8** è separato dal gruppo del buzzer, così il cambio delle sue frequenze non altera il LED. Il collegamento BUSY deve essere presente e affidabile per attivare l'effetto; con player spento, AUDIO OFF o riproduzione non confermata il LED resta spento durante il normale funzionamento.
 
 ## 9) Alimentazione e masse
 
@@ -178,7 +180,17 @@ Il firmware usa logica active-high: LED acceso durante standby/light sleep.
 - **Uscita:** Mini360 OUT+ → linea nominale 5 V, regolata sul montaggio a **5,11 V** → ESP32 **VIN/5V**, HX711 **VCC** e IRF9540 **S** del power-gate audio. ESP32 **3V3 → OLED VCC, INA219 VCC e + del buzzer passivo**. Non applicare la linea 5 V al pin 3V3.
 - **S1:** interruttore semplice dopo VIN− dell'INA219 e prima di IN+ e dei condensatori d'ingresso. In OFF disalimenta il Mini360 dalla batteria; non interrompe la ricarica interna del pacco. Gli ingressi INA219 possono restare sul bus batteria con VCC spento, come ammesso dal [datasheet TI, §8.3.1](https://www.ti.com/lit/ds/symlink/ina219.pdf).
 
-F1 **T2 A** resta il valore proposto nello schema per fili corti in rame ≥ 0,5 mm²; non sono stati riferiti valore effettivamente montato o misure degli spunti. CTK3S e SLA non sono componenti del percorso corrente.
+CTK3S e SLA non sono componenti del percorso corrente.
+
+### Fusibile F1 per la replica
+
+La scelta per la replica è **F2A rapido, ceramico, 5×20 mm**, sul positivo **il più vicino possibile alla batteria**, prima dell'INA219. Usare un portafusibile isolato adatto al formato e al servizio DC e fili di potenza corti in rame **≥ 0,5 mm²**; la sezione effettivamente montata resta da verificare.
+
+Il fusibile deve avere **tensione nominale DC almeno pari alla tensione massima del pacco** e **potere d'interruzione DC adeguato alla corrente di guasto disponibile**. Il solo corpo ceramico o la scritta «250 V» non dimostrano questi requisiti. Un riferimento tecnico è [SIBA 179021.2](https://www.siba-fuses.com/products/detail/179021-2): **F2A, 5×20 mm, 250 V AC/DC, potere d'interruzione 1.500 A AC/DC**. Questi dati identificano il componente di riferimento, non una prova di coordinamento dell'intera protezione con batteria, cablaggio e carico.
+
+La scelta F2A richiede verifica di assorbimento a regime e spunti all'accensione/risveglio con Wi-Fi e audio. **T2A ritardato** resta un'alternativa da valutare soltanto se spunti normali confermati provocano interventi indesiderati: confrontare le curve del componente e conservare il valore **2 A**, senza aumentarlo per evitare le aperture. F1 protegge soprattutto il cablaggio dai cortocircuiti; non garantisce di salvare ESP32 o Mini360 né protegge dalle sovratensioni. Un PTC autoripristinante richiede un dimensionamento diverso e non è un ricambio diretto.
+
+**Stato fisico:** la specifica F2A ceramico riguarda la replica; marcatura completa e portafusibile dell'esemplare montato restano da rilevare. Non sono riportate misure degli spunti o prove di cortocircuito.
 
 ### Rilevatore presenza USB: PC817 DIP-4
 
@@ -254,4 +266,4 @@ L'USB del PC sull'ESP32 è distinta dall'USB di ricarica del pacco. OUT+ rimane 
 
 ## 11) Dati da rilevare per una replica esatta
 
-La guida riporta i collegamenti dalle fonti indicate, non un collaudo elettrico completo. Sono identificati **2N3904 H331**, **condensatori audio 470 µF / 16 V + ceramico 104 = 100 nF**, **coppia aggiuntiva PCB custom 47 µF / 16 V + 104** e **resistenza LED 1 kΩ**. Restano da verificare **orientamento fisico e pinout del NPN**, **versione e ordine fisico dei terminali del modulo OLED**, **quantità, collegamenti, polarità e collocazione dei condensatori audio**, **valori fisici della distinta coppia presso l'ESP32** e **valore del fusibile F1**. L'alimentazione OLED e INA219 da **3V3** è indicata nel primo ritaglio; il source IRF9540 su **VIN/5V** è indicato nel secondo. La coppia presso ESP32 è confermata fra **VIN/5V e GND**; per la sua replica si adottano i valori consigliati **47 µF / 16 V + 100 nF**, senza presentarli come letti sul montaggio e senza confonderli con la coppia PCB custom identificata. La **100 kΩ SCK–GND è da prevedere nella replica**; soltanto la sua presenza sul montaggio attuale resta **probabile, da confermare**. La pull-up BUSY resta una raccomandazione condizionale non confermata sul montaggio.
+La guida riporta i collegamenti dalle fonti indicate, non un collaudo elettrico completo. Sono identificati **2N3904 H331**, **condensatori audio 470 µF / 16 V + ceramico 104 = 100 nF**, **coppia aggiuntiva PCB custom 47 µF / 16 V + 104** e **resistenza LED 1 kΩ**. Restano da verificare **orientamento fisico e pinout del NPN**, **versione e ordine fisico dei terminali del modulo OLED**, **quantità, collegamenti, polarità e collocazione dei condensatori audio**, **valori fisici della distinta coppia presso l'ESP32** e **marcatura e portafusibile F1 effettivamente montati**. Per la replica F1 è definito nella [sezione dedicata](#fusibile-f1-per-la-replica) come **F2A rapido, ceramico, 5×20 mm**, con requisiti DC dichiarati. L'alimentazione OLED e INA219 da **3V3** è indicata nel primo ritaglio; il source IRF9540 su **VIN/5V** è indicato nel secondo. La coppia presso ESP32 è confermata fra **VIN/5V e GND**; per la sua replica si adottano i valori consigliati **47 µF / 16 V + 100 nF**, senza presentarli come letti sul montaggio e senza confonderli con la coppia PCB custom identificata. La **100 kΩ SCK–GND è da prevedere nella replica**; soltanto la sua presenza sul montaggio attuale resta **probabile, da confermare**. La pull-up BUSY resta una raccomandazione condizionale non confermata sul montaggio.

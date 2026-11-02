@@ -1,4 +1,5 @@
 #include "ui_display.h"
+#include "scale_identity.h"
 
 #include <SPI.h>
 #include <U8g2lib.h>
@@ -341,17 +342,27 @@ void ui_init() {
 }
 
 // -----------------------------------------------------------------------------
-// LAYOUT BOOT (logo Minù + "Ronin 00")
+// BOOT LAYOUT (Minu logo + configured scale name)
 // -----------------------------------------------------------------------------
 void ui_showBoot(const char* line1, const char* line2) {
   oled.clearBuffer();
 
-  // ----- Gruppo logo + scritta "Ronin 00" -----
-  const char* roninText = "Ronin 00";
+  const char* roninText = ScaleIdentity::name();
 
   // Font più piccolo e centrato rispetto al logo
   oled.setFont(u8g2_font_logisoso24_tf);
   int16_t textW = oled.getStrWidth(roninText);
+  int16_t textH = 24;
+  if (MINU_LOGO_WIDTH + 8 + textW > 256) {
+    oled.setFont(u8g2_font_logisoso16_tf);
+    textW = oled.getStrWidth(roninText);
+    textH = 16;
+  }
+  if (MINU_LOGO_WIDTH + 8 + textW > 256) {
+    oled.setFont(u8g2_font_6x12_tr);
+    textW = oled.getStrWidth(roninText);
+    textH = 12;
+  }
 
   const int16_t GAP      = 8;   // spazio tra logo e testo
   const int16_t centerY  = 26;  // centro verticale del gruppo
@@ -364,10 +375,9 @@ void ui_showBoot(const char* line1, const char* line2) {
   int16_t logoY = centerY - (MINU_LOGO_HEIGHT / 2);
   oled.drawXBMP(logoX, logoY, MINU_LOGO_WIDTH, MINU_LOGO_HEIGHT, MINU_LOGO_bits);
 
-  // Scritta "Ronin 00" centrata verticalmente rispetto al logo
-  const int16_t TEXT_H = 24;  // altezza nominale del font logisoso24
+  // Center the full name vertically with the logo, including long codes.
   int16_t textX = logoX + MINU_LOGO_WIDTH + GAP;
-  int16_t textBaselineY = centerY + (TEXT_H / 2) - 1;
+  int16_t textBaselineY = centerY + (textH / 2) - 1;
   oled.drawStr(textX, textBaselineY, roninText);
 
   // ----- Stato boot in basso (2 righe) -----

@@ -35,7 +35,26 @@ Funzioni principali (firmware HX711):
 - **TARA** automatica e manuale con centro robusto: tollera il rumore ambientale, distingue la deriva reale e segnala acusticamente gli errori tecnici
 - Monitor batteria con **tacche** da INA219 e indicatore **USB presente (`charging`)** da PC817, filtrato per 250 ms; soltanto campioni INA219 validi, plausibili e freschi alimentano filtri e protezioni della batteria
 - Protezione “batteria scarica” con **avviso + beep + light-sleep**, anti-flapping (debounce 10 s, recovery stabile 30 s) e cooldown avvisi 5 min
+- **LED voce** con pulsazioni PWM morbide durante la riproduzione confermata dal BUSY del DFPlayer; lo stesso LED resta fisso nello standby
+- **Codice bilancia persistente** da seriale, con nome derivato `Ronin <codice>` sul boot OLED e nella discovery MQTT
 - **HX health** runtime: stati **OK / WARN / ERROR / ERROR HARD**, badge **"Errore Cella"** (testo piccolo + triangolino) in alto a destra in WARN, schermata error bloccante (senza mostrare l'ultimo peso), blocco tara/calib, audio 0015.mp3 una sola volta all’ingresso in ERROR
+
+### Codice e nome della bilancia
+
+La bilancia usa il nome **`Ronin <codice>`**, con codice predefinito **`00`**. Il codice è una stringa: gli zeri iniziali vengono mantenuti e sono ammessi **1–12 caratteri ASCII**, lettere maiuscole/minuscole, cifre, trattino e underscore, senza spazi.
+
+Da monitor seriale a **115200 baud**, inviare una riga terminata da Invio:
+
+```text
+scale code 01
+scale code 00-S
+scale status
+scale reset
+```
+
+`scale code 00-S` salva il codice in **NVS `minu_identity`, chiave `code`** e produce il nome **Ronin 00-S al prossimo riavvio**. Il nome attivo resta coerente per l'intera sessione, incluso il Last Will MQTT già registrato. `scale status` mostra nome attivo e codice salvato; `scale reset` salva il valore predefinito `00` per il prossimo avvio. La configurazione sopravvive agli upload USB/OTA e allo spegnimento, ma non alla cancellazione completa della flash. Un errore di scrittura viene segnalato senza applicare il nuovo codice.
+
+Il nome completo compare già dalla prima schermata di avvio; per i codici lunghi il font si riduce automaticamente. È anche il campo `name` degli status MQTT online/sleeping e del Last Will offline, usato dal Manager per proporre il nome nella discovery. Le bilance già registrate nel Manager conservano il nome del proprio record finché viene modificato lì. Il `scale_id` tecnico e i topic MQTT continuano a usare il MAC ESP32: impostare il codice non cambia le associazioni esistenti.
 
 ### HX health (runtime, HX711)
 
@@ -95,6 +114,8 @@ Schema logico:
 3. Batteria **− → GND comune / Mini360 IN−**; Mini360 **OUT− → GND comune**.
 4. Mini360 **OUT+ → linea nominale 5 V**: ESP32 **VIN/5V**, HX711 **VCC** e IRF9540 **S** del circuito audio.
 5. ESP32 **3V3 → OLED VCC e INA219 VCC**, come indicato nel primo ritaglio di schema; il source dell'IRF9540 resta sulla linea **VIN/5V**, come indicato nel ritaglio audio.
+
+**F1 per la replica:** fusibile **F2A rapido, ceramico, 5×20 mm**, vicino al positivo batteria, con portafusibile isolato e caratteristiche DC dichiarate. Requisiti, riferimento tecnico e alternativa T2A sono nella [sezione fusibile del cablaggio](docs/WIRING.md#fusibile-f1-per-la-replica); la scelta per la replica non identifica il componente effettivamente montato.
 
 **S1 è un interruttore semplice sul positivo dopo VIN− dell'INA219. VIN− non è massa.** In OFF stacca il Mini360 dalla batteria; la ricarica interna del pacco rimane indipendente. CTK3S e batteria al piombo non fanno parte dell'alimentazione montata. L'uscita del buck resta collegata all'ESP32: S1 non isola l'eventuale alimentazione proveniente dall'USB del PC. Il ritorno USB non è stato caratterizzato sull'esemplare e non è documentato come guasto.
 
@@ -370,11 +391,17 @@ Caratteristiche:
 - **SLEEP breve**: al rilascio avvia la sequenza di standby manuale (schermata **Zzz...** per ~5 s + audio 0003), poi light-sleep anche se è presente un semplice comando `weigh` MQTT. Se il worker MQTT sta connettendo, la richiesta resta accodata e lo sleep parte appena il trasporto viene rilasciato, senza richiedere una seconda pressione. Una response ancora nel lock operatore, un upload OTA o il sovraccarico continuano invece a bloccarlo; una response già detached no.
 - **SLEEP tenuto per 2 secondi**: non entra in standby; commuta il DFPlayer tra **AUDIO OFF** e **AUDIO ON**, salva la scelta in NVS e la mantiene dopo riavvii e spegnimenti completi, con conferma sul display e buzzer.
 
-### Indicatore esterno sleep (LED)
-Quando il display è spento, per capire che la bilancia è in sleep, usa un LED su:
+### Indicatore esterno audio e sleep (LED)
+Lo stesso LED indica la riproduzione audio e lo standby:
 - **GPIO15** → **resistenza 1 kΩ** → **anodo LED** → catodo a **GND** (HIGH = LED acceso).
 
-Il LED montato è un normale LED rosso del kit Arduino. La resistenza da **1 kΩ** è identificata nel ritaglio di schema fornito da Andrea; collegamenti e comportamento sleep restano quelli correnti.
+Il LED montato è un normale LED rosso del kit Arduino. La resistenza da **1 kΩ** è identificata nel ritaglio di schema fornito da Andrea e resta in serie: la sfumatura non richiede modifiche hardware.
+
+- Durante una riproduzione confermata dal segnale **BUSY** il LED genera pulsazioni sfumate di durata e intensità diverse. È un effetto voce simulato: BUSY indica riproduzione/idle, non il volume o le sillabe del file.
+- A riproduzione terminata, su stop, AUDIO OFF o power-off del player il LED si spegne. Non si anima soltanto perché un brano è in coda o il modulo è in inizializzazione.
+- Durante lo **standby manuale o per inattività/light-sleep** il LED resta **acceso fisso**, anche con AUDIO OFF; al wake torna alla gestione audio. Lo sleep di protezione per batteria scarica lo lascia spento.
+
+Il PWM è **5 kHz, 8 bit**, sul canale LEDC **8**, separato dal gruppo usato dal buzzer. L'inviluppo viene aggiornato a timestamp, senza attese aggiunte al loop. Prima dello standby il PWM viene sganciato e GPIO15 pilotato come uscita fissa; viene riagganciato al wake. Parametri e sequenza delle pulsazioni sono in `config/config_led.h`. Se l'allocazione PWM fallisce, il firmware lo segnala in seriale e usa un lampeggio digitale come fallback. Intensità e resa visiva richiedono verifica sulla bilancia fisica.
 
 ## 11) WiFi + OTA (opzionale)
 
@@ -451,11 +478,11 @@ Comandi seriali:
 
 Se le credenziali non sono configurate, MQTT resta inattivo (nessun tentativo di connessione).
 
-Porta bilancia: **8883** (MQTTS/TLS). Porta browser: **8884** (WSS/TLS). Il certificato CA ISRG Root X1 è nel firmware. `MQTT_SCALE_NAME` e `MQTT_FW_VERSION` sono definiti in `net_ota_cloud.h`; la versione corrente è **1.5.2**.
+Porta bilancia: **8883** (MQTTS/TLS). Porta browser: **8884** (WSS/TLS). Il certificato CA ISRG Root X1 è nel firmware. `MQTT_FW_VERSION` è definita in `net_ota_cloud.h`; la versione corrente è **1.5.2**. Il nome discovery è derivato dal codice salvato in NVS tramite `ScaleIdentity`.
 
 ### Topic e QoS effettivo
 
-La bilancia si identifica con il MAC STA letto direttamente dall'eFuse ESP32 (lowercase, senza separatori, 12 hex), usato come `scale_id` nei topic MQTT. L'identità è disponibile anche con WiFi inizialmente OFF; il valore tutto zero è invalido e impedisce l'avvio MQTT.
+La bilancia si identifica con il MAC STA letto direttamente dall'eFuse ESP32 (lowercase, senza separatori, 12 hex), usato come `scale_id` nei topic MQTT. L'identità è disponibile anche con WiFi inizialmente OFF; il valore tutto zero è invalido e impedisce l'avvio MQTT. Il campo discovery `name` usa invece il nome configurato **`Ronin <codice>`**, caricato da NVS prima dell'avvio della rete.
 
 | Topic | Direzione | QoS | Retain | Uso |
 |---|---|---:|---:|---|
@@ -699,9 +726,12 @@ firmware/esp32_hx711_serial/
 ├── config/
 │   ├── config_pins.h        # Pin hardware (HX711, I2C, SPI, keypad, buzzer, DFPlayer)
 │   ├── config_audio.h       # AudioConfig:: (volume, timing, tracce MP3)
+│   ├── config_led.h         # LedConfig:: (PWM e inviluppo LED voce)
 │   ├── config_scale.h       # ScaleConfig:: (filtri, stati, ZT, display)
 │   └── config_battery.h     # BatteryConfig:: (soglie tensione, timing shutdown)
 ├── audio.h / audio.cpp      # Audio:: (DFPlayer: play, coda, power-gating)
+├── status_led.h / .cpp      # StatusLed:: (LED voce PWM e standby fisso)
+├── scale_identity.h / .cpp  # ScaleIdentity:: (codice NVS e nome Ronin al boot)
 ├── scale_filters.h / .cpp   # ScaleFilters:: (mediana, MA, spike guard, storico)
 ├── scale_state.h / .cpp     # ScaleState:: (offset, tara, stati, ZT, display)
 ├── dfplayer_driver.h / .cpp # DFPlayer:: (UART, comandi base)
@@ -719,12 +749,14 @@ firmware/esp32_hx711_serial/
 
 **Namespace principali:**
 - `Audio::` — gestione DFPlayer (coda FIFO, priorità, power-gating, anti-troncamento)
+- `StatusLed::` — pulsazioni LED durante BUSY e uscita fissa in standby
+- `ScaleIdentity::` — codice persistente e nome leggibile, immutabile durante la sessione
 - `ScaleFilters::` — filtri segnale (mediana 3, media mobile, spike guard, storico range/slope)
 - `ScaleState::` — macchina a stati (STABLE/UNSTABLE/LIVE), zero-tracking, tara, quantizzazione display
 - `Net::` — WiFi/OTA/MQTT (TLS, identity eFuse, status, comandi e outbox response)
 - `MqttStore::` — persistenza credenziali MQTT in NVS
 - `WeighStack::` — stack pesate locale reversibile (grammi, offset/ZT precedenti, provenienza e receipt)
-- `ScaleConfig::` / `AudioConfig::` / `BatteryConfig::` — parametri configurabili (soglie, timing, tracce)
+- `ScaleConfig::` / `AudioConfig::` / `BatteryConfig::` / `LedConfig::` — parametri configurabili (soglie, timing, tracce, LED)
 
 ### Task Watchdog
 Il firmware include un **Task Watchdog** (8 secondi) attivo già durante il setup, con reset esplicito nei loop di boot intenzionali. Nel loop principale viene resettato a ogni iterazione. Il worker di connessione MQTT è separato e non è registrato nel WDT del loop, quindi DNS/TCP/TLS non richiedono di alterarne il timeout.

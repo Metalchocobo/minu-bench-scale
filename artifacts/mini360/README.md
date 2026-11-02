@@ -54,7 +54,7 @@ Applicare 5 V all'uscita non costituisce di per sé una sovratensione su un'usci
 
 L'USB di ricarica del pacco è un collegamento diverso dall'USB del PC sull'ESP32: entra nel caricatore interno della batteria. In OFF viene eliminato l'assorbimento del Mini360 dalla batteria; restano le funzioni interne al pacco (BMS e caricatore). Non si dichiara quindi consumo totale nullo della batteria.
 
-F1 **T2 A** è il valore progettuale proposto per cablaggio corto di potenza in rame di almeno **0,5 mm²**; valore effettivamente montato e spunti non sono stati riferiti separatamente. Usare portafusibile isolato e rating DC idoneo. Non è una misura della corrente della bilancia o una garanzia di protezione dei semiconduttori del buck.
+F1 per la replica è **F2A rapido, ceramico, 5×20 mm**, con portafusibile isolato adatto al servizio DC, vicino al positivo batteria e con fili di potenza corti in rame di almeno **0,5 mm²**. Tensione e potere d'interruzione devono essere dichiarati per DC; il solo corpo ceramico non basta. **T2A** è un'alternativa da valutare se spunti normali confermati fanno intervenire il rapido, conservando **2 A**. Riferimento tecnico, verifiche e limiti sono nella [specifica F1](../../docs/WIRING.md#fusibile-f1-per-la-replica). La scelta per la replica non identifica marcatura e portafusibile effettivamente montati e non garantisce la protezione dei semiconduttori del buck.
 
 Condensatori ripresi dalle indicazioni già presenti nel README del progetto:
 

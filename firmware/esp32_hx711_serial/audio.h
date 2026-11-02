@@ -55,6 +55,9 @@ bool toggleEnabled();
 bool isEnabled();
 bool isReady();
 
+// True only while the powered player asserts the learned playing BUSY level.
+bool isPlaying();
+
 // Spegne completamente DFPlayer (per standby/light-sleep)
 void powerOffNow();
 

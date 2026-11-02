@@ -521,6 +521,12 @@ bool isReady() {
   return g_userEnabled && g_dfpPowered && g_dfpUartReady && !isRecovering();
 }
 
+bool isPlaying() {
+  return g_userEnabled && g_dfpPowered && g_dfpUartReady &&
+         g_state == PLAYING && g_busyPolarityKnown &&
+         dfpBusyReadStable() == g_busyPlaying;
+}
+
 void powerOffNow() {
   diagRecord(DIAG_POWER_OFF);
   queueClear();

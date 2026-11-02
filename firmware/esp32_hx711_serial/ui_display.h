@@ -6,7 +6,7 @@
 // Inizializza l'hardware display (SPI + OLED)
 void ui_init();
 
-// Mostra la schermata di boot (logo + Ronin 00)
+// Boot screen: logo + configured Ronin name.
 // line1/line2 vengono mostrate in basso; possono essere "" se non servono.
 void ui_showBoot(const char* line1, const char* line2);
 

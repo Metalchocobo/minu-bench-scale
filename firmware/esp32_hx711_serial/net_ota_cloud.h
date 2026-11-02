@@ -43,7 +43,7 @@
   // Comandi: mqtt set "host" "user" "pass", mqtt creds, mqtt clear, mqtt apply
   #define MQTT_PORT       8883          // MQTTS (TLS)
   #define MQTT_FW_VERSION "1.5.2"
-  #define MQTT_SCALE_NAME "Minu Bench Scale"  // Nome visibile nel browser
+  // Discovery name comes from ScaleIdentity (NVS); technical ID stays the MAC.
 #endif
 
 namespace Net {

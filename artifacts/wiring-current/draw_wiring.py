@@ -241,7 +241,8 @@ def power():
     d.rect(365,413,140,44,'#e9d8bc','#b4a17e',8)
     d.text(435,444,'F1',26,INK,True,'middle')
     d.text(435,388,'Fusibile vicino al +',22,INK,False,'middle')
-    d.text(435,490,'Valore da confermare',21,UNKNOWN,True,'middle')
+    d.text(435,490,'F2A rapido · replica',21,INK,True,'middle')
+    d.text(435,523,'Ceramico 5×20 · dati DC',19,INK,False,'middle')
     d.wire([(505,435),(610,435)],RED)
     d.board(610,330,300,220,'INA219','Il positivo attraversa lo shunt')
     d.port(610,435,'VIN+',RED,'left');d.port(910,435,'VIN−',RED)
@@ -277,7 +278,7 @@ def power():
             d.text(x+25,1093,'Coppia aggiuntiva confermata.',20,INK,True)
         else:
             d.text(x+25,1093,'Vicino ai pad, con fili corti.',20)
-    d.footer('Banda − del condensatore al negativo; ceramico senza polarità. Retro Mini360: vedi tavola pad dedicata.')
+    d.footer('F1 replica: dati DC dichiarati, fili rame ≥ 0,5 mm²; montato da identificare. Condensatori: banda − al negativo.')
     d.save('02-power')
 
 
