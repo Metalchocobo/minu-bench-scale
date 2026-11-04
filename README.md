@@ -4,7 +4,7 @@ Il cablaggio di riferimento segue la documentazione HX711 confermata da Andrea e
 
 Bilancia da banco per uso interno in laboratorio (gelato/pasticceria), pensata per guidare e rendere affidabili le pesate ingredienti (non “pesatura legale”).
 
-Progetto meccanico separato: la [soluzione economica proposta per un solo prototipo](docs/mechanical/prototype-affordability/README.md) prevede cella e supporti commerciali T130, con scocca, fondo e piatto FDM personalizzati; costo completo e innesti sono ancora da verificare. Il [CAD della Proposta 02](docs/mechanical/concept-02/README.md) contiene invece quattro parti in alluminio su misura e non è il pacchetto da ordinare per questa soluzione. L'obiettivo resta 20 kg utili, otto tasti, display posseduto e ricarica USB; portata e accoppiamenti richiedono collaudo. Le varianti meccaniche non definiscono l'alimentazione montata, descritta nella sezione 2 e in [WIRING](docs/WIRING.md).
+Progetto meccanico separato: la [soluzione economica proposta per un solo prototipo](docs/mechanical/prototype-affordability/README.md) prevede cella e supporti commerciali T130, con scocca, fondo e piatto FDM personalizzati; costo completo e innesti sono ancora da verificare. Il [CAD della Proposta 02](docs/mechanical/concept-02/README.md) contiene invece quattro parti in alluminio su misura e non è il pacchetto da ordinare per questa soluzione. I 20 kg utili sono l'obiettivo del progetto meccanico, con otto tasti, display posseduto e ricarica USB; portata e accoppiamenti richiedono collaudo. La bilancia attuale monta una cella da 20 kg nominali, come riferito da Andrea, e usa il limite operativo di 15 kg complessivi descritto sotto. Le varianti meccaniche non definiscono l'alimentazione montata, descritta nella sezione 2 e in [WIRING](docs/WIRING.md).
 
 Hardware di riferimento:
 - **ESP32 DevKit a 30 pin**, due file da 15 terminali, nell'orientamento fornito da Andrea
@@ -24,10 +24,13 @@ La [guida illustrata del cablaggio corrente](artifacts/wiring-current/README.md)
 
 ## 0) Stato e obiettivo
 
-Target:
-- Portata: **20 kg**
-- Lettura visualizzata: **1 g** nel campo operativo fino a ±16 kg
-- Oltre il campo operativo il peso reale non viene trasformato in 16.000 g: compare lo stato bloccante **SOVRACCARICO**, con isteresi di rientro
+Configurazione corrente:
+- Cella montata: **20 kg nominali**, dato riferito da Andrea; limite operativo firmware **15 kg complessivi**.
+- Il carico complessivo è **contenitore + tutto il contenuto presente + 500 g stimati per piatto/supporti**. I 500 g sono una stima prudenziale indicata da Andrea, non una massa misurata; la soglia corrisponde quindi a **14,5 kg di contenitore + contenuto**.
+- Lettura visualizzata: **1 g**; resta indipendente la guardia sul netto oltre **±16 kg**.
+- A **15.000 g complessivi o più**, oppure oltre il campo netto ±16 kg, compare **SOVRACCARICO** e TARE/ENTER sono bloccati. Il rientro richiede carico complessivo sotto **14.950 g** e valore assoluto del netto sotto **15.950 g**. Il valore fuori campo non viene registrato come una pesata clamped valida.
+
+Durante il sovraccarico il display mantiene **SOVRACCARICO**, **Rimuovi peso dal piatto** e **ENTER e TARA bloccati**. All'ingresso nello stato parte automaticamente un **doppio beep del buzzer**, una sola volta per evento; l'avviso si riarma dopo il rientro. La sequenza è non bloccante, con due toni da 1.500 Hz di 120 ms separati da 80 ms, e funziona anche con **AUDIO OFF**, DFPlayer spento o assente. Non richiede nuovi file MP3; parametri in `config/config_audio.h`.
 
 Funzioni principali (firmware HX711):
 - Lettura HX711 con filtri + stati **STABLE / UNSTABLE / LIVE / SOVRACCARICO**
@@ -37,6 +40,7 @@ Funzioni principali (firmware HX711):
 - Protezione “batteria scarica” con **avviso + beep + light-sleep**, anti-flapping (debounce 10 s, recovery stabile 30 s) e cooldown avvisi 5 min
 - **LED voce** con pulsazioni PWM morbide durante la riproduzione confermata dal BUSY del DFPlayer; lo stesso LED resta fisso nello standby
 - **Codice bilancia persistente** da seriale, con nome derivato `Ronin <codice>` sul boot OLED e nella discovery MQTT
+- **Console remota MQTT 1.0** nel firmware **1.6.0**, con sessione esclusiva, diagnostica/configurazione e log USB duplicati in un buffer RAM limitato; accesso tramite gateway Manager e ACL broker dedicate.
 - **HX health** runtime: stati **OK / WARN / ERROR / ERROR HARD**, badge **"Errore Cella"** (testo piccolo + triangolino) in alto a destra in WARN, schermata error bloccante (senza mostrare l'ultimo peso), blocco tara/calib, audio 0015.mp3 una sola volta all’ingresso in ERROR
 
 ### Codice e nome della bilancia
@@ -162,12 +166,12 @@ La scheda montata usa **30 terminali, 15 per fila**. Nella vista di riferimento 
 | SPI CS | OLED SSD1322 | 25 | |
 | SPI DC | OLED SSD1322 | 26 | |
 | SPI RST | OLED SSD1322 | 27 | |
-| Tastiera riga SKIP / SLEEP | Keypad | 13 | uscita scansione |
-| Tastiera riga ENTER / CLEAR | Keypad | 14 | uscita scansione |
-| Tastiera riga WIFI / TOTAL | Keypad | 19 | uscita scansione |
-| Tastiera riga MODE / TARE | Keypad | 21 | uscita scansione |
-| Tastiera colonna SKIP / ENTER / WIFI / MODE | Keypad | 17 | ingresso pull-up; terminale TX2 |
-| Tastiera colonna SLEEP / CLEAR / TOTAL / TARE | Keypad | 5 | ingresso pull-up |
+| Tastiera riga TARE / CLEAR | Keypad | 13 | uscita scansione |
+| Tastiera riga MODE / SLEEP | Keypad | 14 | uscita scansione |
+| Tastiera riga TOTAL / WIFI | Keypad | 19 | uscita scansione |
+| Tastiera riga ENTER / SKIP | Keypad | 21 | uscita scansione |
+| Tastiera colonna TARE / MODE / TOTAL / ENTER | Keypad | 17 | ingresso pull-up; terminale TX2 |
+| Tastiera colonna CLEAR / SLEEP / WIFI / SKIP | Keypad | 5 | ingresso pull-up |
 | Buzzer | buzzer passivo tramite BC337-40 | 22 | PWM LEDC → 220 Ω → base NPN; alimentazione buzzer 3V3 |
 | DFPlayer TX | DFPlayer RX | 4 | resistenza 1 kΩ in serie nello schema corrente |
 | DFPlayer RX | DFPlayer TX | 34 | collegato nello schema; input-only, opzionale per il firmware |
@@ -177,6 +181,17 @@ La scheda montata usa **30 terminali, 15 per fila**. Nella vista di riferimento 
 | Presenza USB di ricarica | PC817, collettore pin 4 | 36 / VP | input-only, LOW = USB presente; pull-up esterna 10 kΩ a 3V3 |
 
 La mappa tastiera segue le coppie GPIO rilevate sul montaggio, riportate in [WIRING](docs/WIRING.md#5-tastiera-4x2--esp32). Righe e colonne sono il raggruppamento logico della scansione; le sigle R1–R6 del ritaglio non definiscono l'ordine fisico dei sei pin sul connettore. La configurazione è in `config/config_pins.h`, la mappa delle funzioni in `keypad.cpp`.
+
+Disposizione frontale dei tasti, dall'alto verso il basso:
+
+```text
+SKIP | OK
+WIFI | SLEEP
+X    | TOTAL
+MODE | TARE
+```
+
+**OK** corrisponde a **ENTER**, **X** a **CLEAR** (annulla l'ultima pesata; la pressione lunga svuota lo stack locale). La mappa software tiene conto dell'orientamento del pannello; i sei collegamenti GPIO restano quelli indicati.
 
 Il buzzer passivo è adatto all'alimentazione a **3,3 V** e al circuito di pilotaggio: **GPIO22 → 220 Ω / ¼ W → base BC337-40**, emettitore a **GND comune**, collettore al **− del buzzer**, **+ del buzzer a ESP32 3V3**. Il diodo **1N5819** collega gli stessi due terminali del buzzer: **catodo con fascetta al + / 3V3**, **anodo al − / collettore**. Il firmware resta invariato: PWM attivo HIGH, silenzio LOW. Dettagli in [WIRING, buzzer](docs/WIRING.md#6-buzzer--esp32).
 
@@ -260,6 +275,7 @@ Nota: la guard scarta solo **frame singoli** (o confermati) e quindi non cambia 
 - Auto-TARE e tara manuale stimano lo zero con **trimmed mean**: ordinano i campioni e scartano le due code prima della media. Vibrazioni periodiche di frullatori o lavorazioni sul banco allargano il range ma non spostano necessariamente il centro, quindi il range resta diagnostico e non blocca la tara.
 - La tara manuale parte dal rilascio del tasto, usa 64 campioni e rifiuta soltanto una deriva sostenuta fra l'inizio e la fine della finestra. Un doppio beep basso più l'audio opzionale `0016.mp3` segnalano un fallimento reale; un beep acuto conferma il successo.
 - La tara di lavoro post-**ENTER** è immediata quando il peso è già quieto. Se non lo è, ENTER apre un'acquisizione visibile di massimo **1,5 s**: appena arriva STABLE registra e tara; al timeout usa un centro RAW robusto soltanto se non rileva una deriva continua.
+- TARE, ENTER, undo, zero-tracking e Auto-TARE cambiano soltanto lo zero operativo. Il limite complessivo usa lo **zero di calibrazione persistente del piatto vuoto**, quindi continua a conteggiare contenitore e ingredienti anche dopo le tare e dopo un riavvio con peso presente.
 
 ### Auto-TARE al boot
 - Dopo **300 ms** di assestamento raccoglie fino a **64 campioni** in un massimo di **2 s**. Con almeno 32 campioni validi calcola sempre il centro robusto, scartando un ottavo dei valori per ogni coda, applica lo zero e completa il boot anche su un banco rumoroso.
@@ -289,7 +305,7 @@ Tasto **TARE**:
 Zero di lavoro post-**ENTER**:
 - con HX OK, snapshot fresco, peso positivo e assenza di sovraccarico, un peso già STABLE in WORK o quieto da almeno 400 ms in LIVE viene registrato subito
 - se il gate normale non è pronto, emette un beep basso e mostra **ACQUISIZIONE PESO** con barra di avanzamento per un massimo di **1,5 s**; appena il peso diventa quieto registra e tara senza attendere la fine della barra
-- al timeout calcola un centro robusto sui campioni RAW successivi alla pressione. Il range resta diagnostico per tollerare l'oscillazione dei liquidi; una deriva oltre **4 g/s**, campioni insufficienti o non freschi rifiutano l'operazione. Il valore robusto deve inoltre restare nel campo ±16 kg
+- al timeout calcola un centro robusto sui campioni RAW successivi alla pressione. Il range resta diagnostico per tollerare l'oscillazione dei liquidi; una deriva oltre **4 g/s**, campioni insufficienti o non freschi rifiutano l'operazione. Il valore robusto deve inoltre rispettare sia il campo netto ±16 kg sia il limite complessivo di 15 kg
 - nel fallback applica come nuovo zero lo stesso centro RAW da cui ricava i grammi registrati
 - registra nello stack anche offset/zero-tracking precedenti e, per un comando session-aware, UUID, `product_id`, sessione e receipt del `confirm`; questi dati rendono reversibile il commit con CLEAR breve
 - solo dopo il nuovo zero registra il peso nello stack e prepara il `confirm` MQTT; la response resta in retry finché Laravel l'ha persistita e il browser completa clear + ACK
@@ -572,6 +588,27 @@ La coppia (`scale_id`, `response_id`) resta l'identità della receipt. La `sessi
 
 I browser precedenti restano supportati. Un comando v1.2 privo di `command_id` ma con sessione può essere cancellato solo da un clear anch'esso privo di ID con la stessa `session_id`; per un comando realmente legacy senza sessione il clear può riportare la sessione del Manager nuovo. Un comando privo di `session_id` usa response one-shot senza `response_id`, senza receipt/ACK applicativo e senza undo remoto.
 
+### Console remota del Manager
+
+Il firmware **1.6.0** espone `console_version: 1` nello status. La console usa il WiFi/MQTT esistente e non richiede hardware aggiuntivo. Funziona dopo l'avvio della rete; non sostituisce la seriale USB per boot precoce, crash, WiFi guasto o bilancia già in standby.
+
+| Topic | Direzione | Retain | QoS |
+|---|---|---|---|
+| `minu/scale/{scale_id}/console/request` | Gateway Laravel → bilancia | no | 1 |
+| `minu/scale/{scale_id}/console/response` | Bilancia → gateway Laravel | no | 0, retry RPC con la stessa fingerprint |
+
+La console richiede **identità MQTT distinte e ACL broker applicate prima del firmware**: il browser di pesatura deve essere escluso da entrambi i topic console, la bilancia può leggere le proprie request e scrivere le proprie response, il gateway Laravel ha gli accessi inversi. Le credenziali console rimangono sul server; il solo ruolo UI non protegge i topic da credenziali broker già distribuite ai browser. Il gateway controlla ruolo dedicato o amministratore su ogni operazione. La subscription console è opzionale e non partecipa al watchdog owner/command/ack della pesatura.
+
+Ogni request JSON contiene `v:1`, `action`, `request_id`, `session_id`, `boot_id` ed `expires_at` (epoch Unix). `probe` può omettere sessione/boot ed è privo di effetti; `open`, `poll`, `exec` e `close` richiedono sessione e boot esatti. Gli ID sono stringhe ASCII di massimo 64 caratteri tra lettere, cifre, `-`, `_`. La scadenza deve essere futura ed entro 30 secondi dal clock NTP della bilancia; il gateway usa normalmente 10 secondi. Le response riportano `v`, `type:console`, azione/ID/boot/bilancia, `state` (`ok`, `done`, `busy`, `rejected`), `error` e `console_version:1`. Il probe esatto prova la capacità; un timeout su una bilancia online indica capacità non confermata, non bilancia offline.
+
+Una sola sessione può essere aperta per bilancia. Soltanto `open` della stessa sessione e `poll` valido rinnovano il **lease monotono di 30 secondi**; il gateway rinnova mentre la console resta aperta. La chiusura, la perdita trasporto o la scadenza disabilitano la cattura log e liberano il blocco standby. **SLEEP breve e inattività sono bloccati mentre la sessione è attiva**, incluso un countdown già iniziato; la protezione di batteria scarica resta prioritaria. Dopo il rilascio riparte il timer di inattività. Una nuova apertura dopo chiusura/scadenza usa un `session_id` nuovo; fino a quattro sessioni chiuse mantengono un fence di replay per 31 secondi, senza espellere fence ancora validi.
+
+`exec` aggiunge `seq` (da 1, incrementi esatti di 1) e `command` (1–127 byte UTF-8, senza NUL/CR/LF). Il callback accoda una sola richiesta e il parser seriale la esegue nel loop, senza accedere al client quando il worker rete lo possiede. Lo stesso ID/sequenza/comando restituisce lo stato precedente senza ripetere effetti; una fingerprint conflittuale è rifiutata. `done` significa che il parser ha terminato: l'esito del comando è nel log. Un rifiuto definitivo del comando consuma la sequenza; errori envelope/boot/sessione non la consumano. `busy/executing` è transitorio. Le mutazioni incompatibili con acquisizione/TARE/OTA, e i cambi trasporto durante una receipt pending, restituiscono `rejected/busy` senza restare in attesa. Restano attivi i guard esistenti su calibrazione e stack. Reboot, `wifi apply` e `mqtt apply` possono interrompere la risposta: il gateway mostra esito non verificato e non inventa un nuovo comando di retry.
+
+Tutti i comandi seriali restano disponibili, inclusi configurazione, calibrazione e audio, salvo **`showpass`, esclusivamente USB**. Le password inviate per configurare WiFi/OTA/MQTT non vengono ristampate. Anche un `showpass` da USB durante una sessione non riversa la password in rete; un comando sconosciuto non riversa l'input grezzo nel log remoto. Il gateway maschera echo e audit dei parametri segreti.
+
+I log sono duplicati dalla USB solo durante la sessione in un ring RAM da **2 KiB**, protetto anche dalle stampe del worker. Non vengono pubblicati durante le `write`. `poll` aggiunge il cursore byte `cursor` (default 0) e restituisce `data`, `cursor` successivo, `oldest_cursor` e byte `dropped`; anche `open` può leggere lo stesso formato. Il gateway conserva il cursore e segnala perdite. Ogni risposta legge al massimo 160 byte, ridotti se necessario per rispettare il pacchetto MQTT da 640 byte; i caratteri UTF-8 non vengono spezzati e byte non validi sono sostituiti. La rete invia al massimo una risposta console per aggiornamento dopo le response di pesatura. Il buffer e le sessioni sono volatili: niente log persistenti, niente replay di comandi dopo reboot.
+
 ### Ownership browser
 
 Ogni scheda browser usa un `session_id` stabile durante reload e reconnect, un `connection_id` diverso per ogni documento e un nuovo `command_id` per ogni attivazione logica, conservato nei retry dello stesso comando. Un Web Lock esclusivo impedisce a una scheda duplicata di riusare l'ID copiato da `sessionStorage`; il fallback cross-tab ruota l'ID anche quando la presenza di un'altra istanza resta incerta. Il topic owner retained contiene anche `connection_id`, `lease_id` ed `expected_command_id` quando non c'è una response in corso: il valore è l'ID desiderato oppure `""` per dichiarare che il firmware non deve avere un comando attivo. Il controllo è confermato dall'eco esatta di utente, sessione, connessione e lease, mentre lo stato comando deve coincidere con l'hint. Il proprietario rinnova il lease ogni **10 secondi**; dopo **30 secondi** senza rinnovo un'altra scheda può reclamarlo. Il firmware considera presente il consumer per **25 secondi dall'arrivo** dell'ultimo owner valido, tollerando un heartbeat saltato. Una tolleranza massima di 5 secondi sul TTL è concessa soltanto a timestamp strettamente progressivi dello stesso lease con skew entro 10 secondi; replay uguali e lease scaduti restano esclusi. Il timestamp monotono è verificato soltanto all'interno dello stesso `connection_id + lease_id`. In fallback 1.5.2, una nuova generazione diventa prima un candidato inattivo e viene attivata solo dal secondo heartbeat strettamente progressivo sulla stessa lease; il Manager produce entrambe le prove nella recovery fenced. Il recupero non dipende dall'epoch ESP32 e un retained isolato resta innocuo.
@@ -732,6 +769,8 @@ firmware/esp32_hx711_serial/
 ├── audio.h / audio.cpp      # Audio:: (DFPlayer: play, coda, power-gating)
 ├── status_led.h / .cpp      # StatusLed:: (LED voce PWM e standby fisso)
 ├── scale_identity.h / .cpp  # ScaleIdentity:: (codice NVS e nome Ronin al boot)
+├── remote_console.h / .cpp  # RemoteConsole:: (tee USB, RPC MQTT e polling log)
+├── remote_console_state.h/.cpp # Core console: lease, sequenze, fence e ring RAM
 ├── scale_filters.h / .cpp   # ScaleFilters:: (mediana, MA, spike guard, storico)
 ├── scale_state.h / .cpp     # ScaleState:: (offset, tara, stati, ZT, display)
 ├── dfplayer_driver.h / .cpp # DFPlayer:: (UART, comandi base)
@@ -839,6 +878,10 @@ La bilancia può essere calibrata in due modi:
 1. **Wizard on-display** — per calibrazione guidata senza PC
 2. **Comandi seriali** — per calibrazione remota/debug
 
+Acquisire lo zero con **piatto e supporti montati, senza contenitore né ingredienti**. Dopo il cambio cella occorre rifare la calibrazione: la sola TARE non modifica il coefficiente CPG. Per la cella da 20 kg è preferibile un riferimento noto da **10 kg**, con massa verificata; controllare poi altri pesi e il ritorno a zero. Se la vecchia calibrazione attiva SOVRACCARICO e blocca il wizard con quel riferimento, effettuare prima una calibrazione da **2 kg**, poi ripetere con 10 kg; in alternativa usare la procedura seriale. Il peso di riferimento regola la conversione in grammi; la tara precisa richiede anche montaggio libero da attriti e piatto fermo.
+
+Lo zero di calibrazione è conservato in **NVS `hxscale`, chiave `offset_counts`**, insieme al CPG in `scale_cpg`. È distinto dall'offset operativo: TARE, ENTER, undo, Auto-TARE, zero-tracking, light-sleep e recupero WDT non lo spostano. Il carico complessivo è `(raw - zero_calibrazione) / CPG + 500 g`; la quota di 500 g stima prudentemente il peso statico escluso dallo zero a piatto vuoto. Un nuovo zero di calibrazione acquisito con un contenitore presente renderebbe errato questo controllo.
+
 #### Wizard calibrazione (on-display)
 
 Il wizard si attiva tenendo premuto **SKIP** per 5 secondi.
@@ -847,13 +890,13 @@ Il wizard si attiva tenendo premuto **SKIP** per 5 secondi.
 
 | Step | Schermata | Azione | Tasti |
 |---:|---|---|---|
-| 1/4 | ZERO | Piatto vuoto, acquisisci offset | **ENTER** = conferma, **CLEAR** = annulla |
+| 1/4 | ZERO | Piatto montato e vuoto, senza contenitore: acquisisci zero calibrazione | **ENTER** = conferma, **CLEAR** = annulla |
 | 2/4 | PLACE | Appoggia peso di riferimento | **ENTER** = conferma, **CLEAR** = annulla |
 | 3/4 | VALUE | Seleziona peso in grammi | **SKIP** = +, **TARE** = -, **ENTER** = vai a conferma |
 | 4/4 | CONFIRM | Verifica CPG calcolato | **ENTER** = salva in NVS, **CLEAR** = annulla |
 
 **Selezione peso:**
-- Da 500g a 20kg
+- Da 500 g a 20 kg selezionabili; usare un riferimento compatibile con il limite operativo corrente, preferibilmente 10 kg
 - Step di 500g sotto 2000g
 - Step di 50g sopra 2000g
 
@@ -871,21 +914,21 @@ Il wizard si attiva tenendo premuto **SKIP** per 5 secondi.
 
 Per calibrazione remota o debug:
 
-- `cal status` — stampa offset, CPG, ZT counts, grammi attuali
-- `cal zero` — imposta il valore raw corrente come nuovo offset (tara "permanente")
-- `cal ref <grammi>` — con un peso noto posizionato, calcola il nuovo CPG
-- `cal save` — salva offset e CPG in NVS e segnala errore se `Preferences` fallisce
-- `cal load` — ricarica offset e CPG da NVS
+- `cal status` — stampa offset operativo, zero di calibrazione, CPG, ZT counts, grammi netti e carico complessivo stimato
+- `cal zero` — con piatto vuoto e senza contenitore, imposta sia lo zero di calibrazione sia l'offset operativo
+- `cal ref <grammi>` — con un peso noto posizionato, calcola il nuovo CPG rispetto allo zero di calibrazione
+- `cal save` — salva zero di calibrazione e CPG in NVS anche se nel frattempo la tara operativa è cambiata; segnala errore se `Preferences` fallisce
+- `cal load` — ricarica zero di calibrazione e CPG da NVS e ripristina l'offset operativo sullo zero di calibrazione
 
 **Procedura di calibrazione seriale:**
-1. Bilancia vuota, esegui `cal zero`
-2. Posiziona un peso noto (es. 500g), esegui `cal ref 500`
-3. Verifica con `cal status` che i grammi siano corretti
+1. Piatto montato e vuoto, senza contenitore, esegui `cal zero`
+2. Posiziona un riferimento noto da 10 kg, esegui `cal ref 10000`
+3. Verifica con `cal status` che i grammi netti siano corretti e il totale includa i 500 g stimati
 4. Salva con `cal save`
 
 **Note:**
 - `cal zero` e `cal ref` sono disabilitati se HX health è in ERROR
-- tara/calibrazione sono bloccate durante **SOVRACCARICO**
+- TARE/ENTER e i tasti ENTER/TARE del wizard sono bloccati durante **SOVRACCARICO**; i comandi seriali `cal` restano disponibili per la ricalibrazione deliberata e richiedono di rispettare la procedura a piatto vuoto
 - `cal ref` rifiuta valori ≤ 0 e CPG fuori range 20-1000
 - Dopo `cal zero` o `cal ref` i filtri vengono resettati automaticamente
 - dopo WDT viene ricaricata la calibrazione NVS senza applicare una tara runtime RTC
@@ -913,14 +956,19 @@ Metti i file in **SD:/MP3/** con nome a 4 cifre (es. `0001.mp3`).
 | 0018.mp3 | Modalità LIVE |
 
 
-### Debug seriale HX711 (opzionale)
-Di default il log continuo del sensore è disattivato.
+### Comandi e log seriali
 
-Nota: il parser comandi seriali è **non bloccante** (nessun timeout/attesa). I comandi vengono eseguiti solo quando invii una riga completa (terminata da invio). 
-Comandi:
-- `hxlog on` / `hxlog off`
-- `hxlog ?`
-- `hxlog rate <ms>` (50..5000)
+La seriale usa **115200 baud**. `help` mostra l'elenco completo dei comandi e delle opzioni disponibili nella build, mostrato anche all'avvio. Il parser è **non bloccante**: esegue il comando soltanto dopo una riga completa terminata da invio.
+
+In modalità **WORK**, ogni passaggio **UNSTABLE → STABLE** stampa sempre il peso netto appena acquisito nel latch, con due decimali: `[STABLE] 123.45 g`. La riga appare una sola volta per ingresso in STABLE, indipendentemente da `hxlog`; con sovraccarico aggiunge `[SOVRACCARICO]` e riporta il valore reale, senza clamp. È una lettura diagnostica: non registra una nuova voce nello stack e non invia una pesata MQTT.
+
+L'analisi periodica della batteria e il log continuo HX711 sono **disattivati a ogni avvio**. I messaggi di inizializzazione e di errore reale della batteria restano visibili. Comandi diagnostici:
+
+- `batt status` — stampa una sola analisi batteria, inclusi tensione, corrente, validità INA219 e presenza USB.
+- `battlog on` — stampa subito l'analisi batteria e la ripete ogni **3 secondi**.
+- `battlog off` — interrompe l'analisi periodica; la preferenza non viene salvata in NVS.
+- `hxlog on` / `hxlog off` — abilita/disabilita il log continuo HX711.
+- `hxlog rate <ms>` — imposta il periodo del log HX711 (**50..5000 ms**).
 
 
 ### Tastiera: debounce + one-shot + long press

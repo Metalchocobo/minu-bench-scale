@@ -275,8 +275,8 @@ def draw():
     d.board(1250,1940,760,180,'Tastiera 4 × 2','Nessun filo a VCC o GND')
     for x,label in [(1300,'R4 / 21'),(1430,'R3 / 19'),(1560,'C2 / 5'),(1690,'C1 / 17'),(1820,'R1 / 13'),(1950,'R2 / 14')]:
         d.port(x,1940,color=BLUE);d.text(x,1920,label,22,BLUE,True,'middle')
-    d.text(1630,2057,'R1: SKIP / SLEEP · R2: ENTER / CLEAR',21,INK,True,'middle')
-    d.text(1630,2091,'R3: WIFI / TOTAL · R4: MODE / TARE',21,INK,True,'middle')
+    d.text(1630,2057,'R1: TARE / CLEAR · R2: MODE / SLEEP',21,INK,True,'middle')
+    d.text(1630,2091,'R3: TOTAL / WIFI · R4: ENTER / SKIP',21,INK,True,'middle')
     d.wire([ports['TX2 / 17'],(1140,1140),(1140,1720),(1690,1720),(1690,1940)])
     d.wire([ports['GPIO5'],(1110,1195),(1110,1750),(1560,1750),(1560,1940)])
     d.wire([ports['GPIO19'],(1180,1305),(1180,1840),(1430,1840),(1430,1940)])

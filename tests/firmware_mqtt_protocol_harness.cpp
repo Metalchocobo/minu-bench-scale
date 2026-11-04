@@ -1865,8 +1865,8 @@ void testMaximumPayloadsFitBuffers() {
     "\",\"reason\":\"manager_incident\"}";
   const std::string status =
     "{\"type\":\"status\",\"state\":\"sleeping\","
-    "\"scale_id\":\"123456789abc\",\"name\":\"Minu Bench Scale\","
-    "\"firmware_version\":\"1.5.0\",\"boot_id\":\"ffffffff\","
+    "\"scale_id\":\"123456789abc\",\"name\":\"Ronin 123456789012\","
+    "\"firmware_version\":\"1.6.0\",\"console_version\":1,\"boot_id\":\"ffffffff\","
     "\"transport_id\":\"ffffffff\",\"status_seq\":4294967295,"
     "\"published_at\":4294967295,\"uptime_ms\":4294967295,"
     "\"operational_mode\":\"local\","
@@ -1881,7 +1881,7 @@ void testMaximumPayloadsFitBuffers() {
   assert(confirm.size() < 384);
   assert(confirmRequestAck.size() < 384);
   constexpr size_t mqttPacketBufferSize = 640;
-  assert(status.size() < 512);
+  assert(status.size() < 544);
   // MQTT_MAX_PACKET_SIZE also includes topic and packet framing.
   assert(topic.size() + commandAck.size() + 8 < mqttPacketBufferSize);
   assert(topic.size() + confirm.size() + 8 < mqttPacketBufferSize);

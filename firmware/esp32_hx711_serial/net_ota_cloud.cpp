@@ -1,4 +1,5 @@
 #include "net_ota_cloud.h"
+#include "remote_console.h"
 #include "scale_identity.h"
 #include "config/config_scale.h"
 #include "mqtt_update_cycle.h"
@@ -61,8 +62,8 @@ static void configureLoopWdt(uint32_t timeoutMs) {
   };
   esp_err_t cfgErr = esp_task_wdt_reconfigure(&cfg);
   if (cfgErr != ESP_OK) {
-    Serial.print(F("[WDT] cfg fail "));
-    Serial.println((int)cfgErr);
+    ConsoleLog.print(F("[WDT] cfg fail "));
+    ConsoleLog.println((int)cfgErr);
     return;
   }
 
@@ -71,14 +72,14 @@ static void configureLoopWdt(uint32_t timeoutMs) {
     esp_err_t addErr = esp_task_wdt_add(NULL);
     statusErr = esp_task_wdt_status(NULL);
     if (statusErr != ESP_OK) {
-      Serial.print(F("[WDT] add fail "));
-      Serial.println((int)addErr);
+      ConsoleLog.print(F("[WDT] add fail "));
+      ConsoleLog.println((int)addErr);
       return;
     }
   }
 
   if (esp_task_wdt_reset() != ESP_OK) {
-    Serial.println(F("[WDT] feed fail"));
+    ConsoleLog.println(F("[WDT] feed fail"));
   }
 }
 
@@ -102,9 +103,9 @@ static void wifiLoadCredsFromNVS(bool log) {
   WifiStore::loadSlot(2, wifiSsid2, sizeof(wifiSsid2), wifiPass2, sizeof(wifiPass2));
   wifiRebuildCredList();
   if (log) {
-    Serial.print(F("[NET] WiFi creds: "));
-    Serial.print(wifiCredsN);
-    Serial.println(F(" rete/i configurata/e."));
+    ConsoleLog.print(F("[NET] WiFi creds: "));
+    ConsoleLog.print(wifiCredsN);
+    ConsoleLog.println(F(" rete/i configurata/e."));
   }
 }
 
@@ -112,9 +113,9 @@ static void otaLoadPasswordHashFromNVS(bool log) {
   otaPassConfigured = OtaStore::loadHash(otaPassHash, sizeof(otaPassHash));
   if (log) {
     if (otaPassConfigured) {
-      Serial.println(F("[OTA] Password attiva (salvata in NVS come hash)."));
+      ConsoleLog.println(F("[OTA] Password attiva (salvata in NVS come hash)."));
     } else {
-      Serial.println(F("[OTA] ATTENZIONE: nessuna password OTA impostata."));
+      ConsoleLog.println(F("[OTA] ATTENZIONE: nessuna password OTA impostata."));
     }
   }
 }
@@ -137,8 +138,8 @@ static void wifiKickAttempt(uint8_t idx) {
   wifiAttemptStartMs = now;
   wifiTriedThisRound = (wifiTriedThisRound < wifiCredsN) ? (wifiTriedThisRound + 1) : wifiCredsN;
 
-  Serial.print(F("[NET] WiFi: tentativo connessione a: "));
-  Serial.println(wifiCreds[wifiAttemptIdx].ssid);
+  ConsoleLog.print(F("[NET] WiFi: tentativo connessione a: "));
+  ConsoleLog.println(wifiCreds[wifiAttemptIdx].ssid);
 }
 
 static void wifiScheduleAttempt(uint8_t idx, uint32_t now) {
@@ -169,10 +170,10 @@ void wifiSetup() {
   wifiPendingAttemptAtMs = 0;
   wifiLoadCredsFromNVS(true);
   if (wifiCredsN > 0) {
-    Serial.println(F("[NET] WiFi avviato (background)."));
+    ConsoleLog.println(F("[NET] WiFi avviato (background)."));
     wifiKickAttempt(0);
   } else {
-    Serial.println(F("[NET] WiFi ON ma nessuna credenziale configurata. Usa la seriale per impostarle."));
+    ConsoleLog.println(F("[NET] WiFi ON ma nessuna credenziale configurata. Usa la seriale per impostarle."));
   }
 }
 
@@ -227,7 +228,7 @@ void wifiReloadCredsAndRestart() {
   if (wifiCredsN > 0) {
     wifiScheduleAttempt(0, millis());
   } else {
-    Serial.println(F("[NET] Nessuna credenziale configurata: tentativi sospesi."));
+    ConsoleLog.println(F("[NET] Nessuna credenziale configurata: tentativi sospesi."));
   }
 }
 
@@ -246,7 +247,7 @@ void otaSetup(const char* hostname) {
   }
 
   ArduinoOTA.onStart([]() {
-    Serial.println(F("[OTA] Update iniziato"));
+    ConsoleLog.println(F("[OTA] Update iniziato"));
 #if ENABLE_MQTT
     mqttAbortForOta();
 #endif
@@ -255,23 +256,23 @@ void otaSetup(const char* hostname) {
   });
 
   ArduinoOTA.onEnd([]() {
-    Serial.println(F("\n[OTA] Update finito"));
+    ConsoleLog.println(F("\n[OTA] Update finito"));
     otaInProgress = false;
     restoreLoopWdt();  // Riaggiunge loopTask al WDT
   });
 
   ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
     if (total == 0) return;
-    Serial.printf("[OTA] Avanzamento: %u%%\r", (progress * 100) / total);
+    ConsoleLog.printf("[OTA] Avanzamento: %u%%\r", (progress * 100) / total);
   });
 
   ArduinoOTA.onError([](ota_error_t error) {
-    Serial.printf("[OTA] Errore[%u]\n", error);
+    ConsoleLog.printf("[OTA] Errore[%u]\n", error);
     otaInProgress = false;
     restoreLoopWdt();
   });
 
-  Serial.println(F("[OTA] Configurato. Si attiva quando il WiFi si connette."));
+  ConsoleLog.println(F("[OTA] Configurato. Si attiva quando il WiFi si connette."));
 }
 
 #endif // ENABLE_WIFI_OTA
@@ -332,6 +333,8 @@ static char   mqtt_topicRsp[48] = {0};  // minu/scale/{id}/response
 static char   mqtt_topicSts[48] = {0};  // minu/scale/{id}/status
 static char   mqtt_topicAck[48] = {0};  // minu/scale/{id}/ack
 static char   mqtt_topicOwner[48] = {0}; // minu/scale/{id}/owner
+static char   mqtt_topicConsoleRequest[48] = {0};
+static char   mqtt_topicConsoleResponse[48] = {0};
 static char   mqtt_clientId[32] = {0};  // scale-{scaleId}
 
 // Stato comando attivo
@@ -626,6 +629,10 @@ static void buildTopics() {
   snprintf(mqtt_topicSts, sizeof(mqtt_topicSts), "minu/scale/%s/status",   mqtt_scaleId);
   snprintf(mqtt_topicAck, sizeof(mqtt_topicAck), "minu/scale/%s/ack",      mqtt_scaleId);
   snprintf(mqtt_topicOwner, sizeof(mqtt_topicOwner), "minu/scale/%s/owner", mqtt_scaleId);
+  snprintf(mqtt_topicConsoleRequest, sizeof(mqtt_topicConsoleRequest),
+           "minu/scale/%s/console/request", mqtt_scaleId);
+  snprintf(mqtt_topicConsoleResponse, sizeof(mqtt_topicConsoleResponse),
+           "minu/scale/%s/console/response", mqtt_scaleId);
   snprintf(mqtt_clientId, sizeof(mqtt_clientId), "scale-%s",               mqtt_scaleId);
 }
 
@@ -688,6 +695,7 @@ static bool mqttConnectAbortRequested() {
 }
 
 static void mqttAbortForOta() {
+  RemoteConsole::transportLost();
   (void)mqttRequestConnectAbort(MQTT_CONNECT_ABORT_OFFLINE);
 }
 
@@ -923,7 +931,7 @@ static bool mqttHandleOwner(const JsonDocument& doc) {
       mqttResetCommand();
       mqtt_commandSnapshotReady = true;
       expectationMatches = true;
-      Serial.println(F("[MQTT] Owner atteso clear: comando raw rimosso"));
+      ConsoleLog.println(F("[MQTT] Owner atteso clear: comando raw rimosso"));
     }
     mqtt_rxCommandExpectationPending = false;
     mqtt_rxCommandExpectationStartedMs = 0;
@@ -1012,7 +1020,7 @@ static void mqttEnterLocalFallback(MqttFallbackReason reason) {
        mqtt_confirmRequestState == MQTT_CONFIRM_REQUEST_RUNNING)) {
     mqttResetConfirmRequest();
   }
-  Serial.println(F("[MQTT] Sessione remota sganciata; operatore in locale"));
+  ConsoleLog.println(F("[MQTT] Sessione remota sganciata; operatore in locale"));
 }
 
 static void mqttLeaveLocalFallback() {
@@ -1050,7 +1058,7 @@ static void mqttUpdateLocalFallback() {
       mqtt_remoteUnavailableSinceMs = 0;
       mqttSetCommandError(MQTT_COMMAND_ERROR_NONE);
       mqtt_activityFlag = true;
-      Serial.println(F("[MQTT] Contesto remoto ripristinato automaticamente"));
+      ConsoleLog.println(F("[MQTT] Contesto remoto ripristinato automaticamente"));
       if (mqtt_cmdActive && mqtt_cmdCommandId[0] != '\0') {
         (void)mqttPublishCommandAck();
       }
@@ -1118,7 +1126,7 @@ static bool mqttPublishPendingResponse() {
   // Space attempts from completion, not from their start: even a slow failed
   // TLS write leaves a full retry interval for keypad/scale processing.
   mqtt_responseLastPublishMs = millis();
-  if (!published) Serial.println(F("[MQTT] Response publish fallito; retry attivo"));
+  if (!published) ConsoleLog.println(F("[MQTT] Response publish fallito; retry attivo"));
   return published;
 }
 
@@ -1268,9 +1276,9 @@ static bool mqttPublishStatus(const char* state) {
     !mqtt_tareRequired && !mqtt_localFallbackActive &&
       mqttInboundHealthy() && mqttOwnerIsFresh()
       ? "app" : "local";
-  char payload[512];
+  char payload[544];
   int written = snprintf(payload, sizeof(payload),
-    "{\"type\":\"status\",\"state\":\"%s\",\"scale_id\":\"%s\",\"name\":\"%s\",\"firmware_version\":\"%s\",\"boot_id\":\"%s\",\"transport_id\":\"%s\",\"status_seq\":%lu,\"published_at\":%lu,\"uptime_ms\":%lu,\"operational_mode\":\"%s\",\"tare_required\":%s,\"fallback_reason\":\"%s\",\"last_command_error\":\"%s\",\"rx_probe_seq\":%lu,\"rx_mask\":%u,\"rx_health\":\"%s\",\"pending_response_id\":\"%s\"}",
+    "{\"type\":\"status\",\"state\":\"%s\",\"scale_id\":\"%s\",\"name\":\"%s\",\"firmware_version\":\"%s\",\"console_version\":1,\"boot_id\":\"%s\",\"transport_id\":\"%s\",\"status_seq\":%lu,\"published_at\":%lu,\"uptime_ms\":%lu,\"operational_mode\":\"%s\",\"tare_required\":%s,\"fallback_reason\":\"%s\",\"last_command_error\":\"%s\",\"rx_probe_seq\":%lu,\"rx_mask\":%u,\"rx_health\":\"%s\",\"pending_response_id\":\"%s\"}",
     state, mqtt_scaleId, ScaleIdentity::name(), MQTT_FW_VERSION,
     bootId, transportId, (unsigned long)mqtt_statusSequence,
     (unsigned long)time(nullptr), (unsigned long)nowMs, operationalMode,
@@ -1405,6 +1413,8 @@ static bool mqttSubscribeInbound() {
   bool ownerSubscribed = mqttClient.subscribe(mqtt_topicOwner, 1);
   bool commandSubscribed = mqttClient.subscribe(mqtt_topicCmd, 1);
   bool ackSubscribed = mqttClient.subscribe(mqtt_topicAck, 1);
+  // Console ACL rollout is independent of business-channel health.
+  (void)mqttClient.subscribe(mqtt_topicConsoleRequest, 1);
   return ownerSubscribed && commandSubscribed && ackSubscribed;
 }
 
@@ -1478,7 +1488,7 @@ static bool mqttUpdateInboundHealth() {
     }
     mqtt_rxRepairDeadlineMs = now + MQTT_RX_REPAIR_TIMEOUT_MS;
     mqtt_statusDirty = true;
-    Serial.println(F("[MQTT] Ingresso atteso silente; risottoscrizione"));
+    ConsoleLog.println(F("[MQTT] Ingresso atteso silente; risottoscrizione"));
     (void)mqttSubscribeInbound();
     return true;
   }
@@ -1502,7 +1512,7 @@ static bool mqttUpdateInboundHealth() {
     mqtt_rxCompletedRetries = 0;
     mqtt_rxRepairDeadlineMs = 0;
     mqtt_statusDirty = true;
-    Serial.println(F("[MQTT] Ingressi ripristinati"));
+    ConsoleLog.println(F("[MQTT] Ingressi ripristinati"));
     return true;
   }
 
@@ -1518,7 +1528,7 @@ static bool mqttUpdateInboundHealth() {
     }
     mqtt_rxRepairDeadlineMs = now + MQTT_RX_REPAIR_TIMEOUT_MS;
     mqtt_statusDirty = true;
-    Serial.println(F("[MQTT] Ingresso ancora silente; nuova subscribe"));
+    ConsoleLog.println(F("[MQTT] Ingresso ancora silente; nuova subscribe"));
     (void)mqttSubscribeInbound();
     return true;
   }
@@ -1549,7 +1559,7 @@ static bool mqttUpdateInboundHealth() {
     mqtt_statusDirty = true;
     mqttEnterLocalFallback(MQTT_FALLBACK_RX_TIMEOUT);
     (void)mqttPublishStatus("online");
-    Serial.println(F("[MQTT] Owner ancora silente; resto in locale"));
+    ConsoleLog.println(F("[MQTT] Owner ancora silente; resto in locale"));
     return true;
   }
 
@@ -1561,7 +1571,7 @@ static bool mqttUpdateInboundHealth() {
     mqtt_responseAckReconnectDone = true;
     mqttSetCommandError(MQTT_COMMAND_ERROR_ACK_TIMEOUT);
   }
-  Serial.println(ackTimedOut
+  ConsoleLog.println(ackTimedOut
     ? F("[MQTT] ACK non ripristinato; singolo reconnect")
     : F("[MQTT] Ingresso non ripristinato; reconnect"));
 
@@ -1574,6 +1584,10 @@ static bool mqttUpdateInboundHealth() {
 
 // ========================= CALLBACK RICEZIONE COMANDI =========================
 static void mqttCallback(char* topic, byte* payload, unsigned int length) {
+  if (strcmp(topic, mqtt_topicConsoleRequest) == 0) {
+    RemoteConsole::receive(payload, length);
+    return;
+  }
   bool isCommandTopic = (strcmp(topic, mqtt_topicCmd) == 0);
   bool isAckTopic = (strcmp(topic, mqtt_topicAck) == 0);
   bool isOwnerTopic = (strcmp(topic, mqtt_topicOwner) == 0);
@@ -1613,8 +1627,8 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length) {
   DeserializationError err = deserializeJson(doc, payload, length);
   if (err) {
     if (isOwnerTopic) mqttDeactivateOwnerSnapshot();
-    Serial.print(F("[MQTT] JSON parse error: "));
-    Serial.println(err.c_str());
+    ConsoleLog.print(F("[MQTT] JSON parse error: "));
+    ConsoleLog.println(err.c_str());
     return;
   }
 
@@ -1631,7 +1645,7 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length) {
   }
 
   if (type[0] == '\0') {
-    Serial.println(F("[MQTT] Comando senza campo 'type', ignorato"));
+    ConsoleLog.println(F("[MQTT] Comando senza campo 'type', ignorato"));
     return;
   }
 
@@ -1640,8 +1654,8 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length) {
     if (strcmp(type, "response_ack") == 0 && responseId &&
         mqtt_responsePending && strcmp(responseId, mqtt_responseId) == 0) {
       mqttMarkInboundTopic(MQTT_RX_ACK);
-      Serial.print(F("[MQTT] Response ACK: "));
-      Serial.println(responseId);
+      ConsoleLog.print(F("[MQTT] Response ACK: "));
+      ConsoleLog.println(responseId);
       if (mqtt_responseKind == MQTT_RESPONSE_UNDO) {
         if (!mqtt_localFallbackActive && !mqtt_undoWasDetachedApplied) {
           mqtt_undoAckFlag = true;
@@ -1667,8 +1681,8 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length) {
       const bool rejectedConfirm = mqtt_responseKind == MQTT_RESPONSE_CONFIRM;
       const bool rejectedAfterDetachedApply =
         rejectedUndo && mqtt_undoWasDetachedApplied;
-      Serial.print(F("[MQTT] Response quarantined: "));
-      Serial.println(responseId);
+      ConsoleLog.print(F("[MQTT] Response quarantined: "));
+      ConsoleLog.println(responseId);
       if (rejectedUndo) {
         // A quarantine is terminal but is not a successful undo commit. Clear
         // both deferred paths and let the main loop discard its staged marker
@@ -1720,7 +1734,7 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length) {
       mqttIsSafeCommandId(requestId) && mqttIsSafeCommandId(connectionId) &&
       mqttIsSafeCommandId(commandId);
     if (!idsValid) {
-      Serial.println(F("[MQTT] confirm_request con ID non valido"));
+      ConsoleLog.println(F("[MQTT] confirm_request con ID non valido"));
       return;
     }
     if (mqtt_tareRequired) {
@@ -1794,7 +1808,7 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length) {
     mqtt_activityFlag = true;
     mqttPublishConfirmRequestAck(
       requestId, commandId, connectionId, "accepted", "");
-    Serial.println(F("[MQTT] confirm_request accodata"));
+    ConsoleLog.println(F("[MQTT] confirm_request accodata"));
 
   } else if (strcmp(type, "weigh") == 0) {
     const char* uuid   = doc["uuid"];
@@ -1812,7 +1826,7 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length) {
         strlen(commandId) >= sizeof(mqtt_cmdCommandId) ||
         !mqttIsSafeCommandId(connectionId) || !mqttIsSafeCommandId(commandId)) {
       mqttSetCommandError(MQTT_COMMAND_ERROR_INVALID);
-      Serial.println(F("[MQTT] weigh con ID non valido, ignorato"));
+      ConsoleLog.println(F("[MQTT] weigh con ID non valido, ignorato"));
       return;
     }
     bool modernCommand = sessionId[0] != '\0' &&
@@ -1826,7 +1840,7 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length) {
     }
     if (connectionId[0] != '\0' && !ownerAuthorized) {
       mqttSetCommandError(MQTT_COMMAND_ERROR_OWNER);
-      Serial.println(F("[MQTT] weigh ignorato: owner non valido"));
+      ConsoleLog.println(F("[MQTT] weigh ignorato: owner non valido"));
       return;
     }
 
@@ -1843,7 +1857,7 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length) {
       mqtt_rxCommandExpectationPending = false;
       mqtt_rxCommandExpectationStartedMs = 0;
       mqtt_statusDirty = true;
-      Serial.println(F("[MQTT] weigh ignorato: owner attende clear"));
+      ConsoleLog.println(F("[MQTT] weigh ignorato: owner attende clear"));
       return;
     }
 
@@ -1876,19 +1890,19 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length) {
       // without requiring a page reload or another command publication.
       if (sameCommandId && samePayload) mqtt_commandSnapshotReady = true;
       mqttSetCommandError(MQTT_COMMAND_ERROR_FALLBACK);
-      Serial.println(F("[MQTT] weigh ignorato: owner non rinnovato"));
+      ConsoleLog.println(F("[MQTT] weigh ignorato: owner non rinnovato"));
       return;
     }
 
     if (mqtt_responsePending) {
       mqttSetCommandError(MQTT_COMMAND_ERROR_RESPONSE_PENDING);
-      Serial.println(F("[MQTT] CMD weigh ignorato: response ACK pending"));
+      ConsoleLog.println(F("[MQTT] CMD weigh ignorato: response ACK pending"));
       return;
     }
     if (mqtt_confirmRequestState == MQTT_CONFIRM_REQUEST_QUEUED ||
         mqtt_confirmRequestState == MQTT_CONFIRM_REQUEST_RUNNING) {
       mqttSetCommandError(MQTT_COMMAND_ERROR_CONFIRM_PENDING);
-      Serial.println(F("[MQTT] CMD weigh ignorato: confirm_request pending"));
+      ConsoleLog.println(F("[MQTT] CMD weigh ignorato: confirm_request pending"));
       return;
     }
 
@@ -1910,15 +1924,15 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length) {
         }
         if (mqtt_tareRequired) {
           mqtt_statusDirty = true;
-          Serial.println(F("[MQTT] CMD weigh differito: TARE richiesta"));
+          ConsoleLog.println(F("[MQTT] CMD weigh differito: TARE richiesta"));
           return;
         }
         mqttSetCommandError(MQTT_COMMAND_ERROR_NONE);
-        Serial.println(F("[MQTT] CMD weigh duplicato: stato invariato"));
+        ConsoleLog.println(F("[MQTT] CMD weigh duplicato: stato invariato"));
         mqttPublishCommandAck();
       } else {
         mqttSetCommandError(MQTT_COMMAND_ERROR_CONFLICT);
-        Serial.println(F("[MQTT] CMD weigh command_id conflittuale: ignorato"));
+        ConsoleLog.println(F("[MQTT] CMD weigh command_id conflittuale: ignorato"));
       }
       return;
     }
@@ -1960,7 +1974,7 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length) {
 
     if (mqtt_tareRequired) {
       mqtt_statusDirty = true;
-      Serial.println(F("[MQTT] CMD weigh memorizzato; attendo TARE"));
+      ConsoleLog.println(F("[MQTT] CMD weigh memorizzato; attendo TARE"));
       return;
     }
     mqttSetCommandError(MQTT_COMMAND_ERROR_NONE);
@@ -1969,12 +1983,12 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length) {
       mqtt_commandRxBeep = true;
     }
 
-    Serial.print(F("[MQTT] CMD weigh: uuid="));
-    Serial.print(mqtt_cmdUuid);
-    Serial.print(F(" target="));
-    Serial.print(mqtt_cmdTargetWeight, 1);
-    Serial.print(F("g name="));
-    Serial.println(name);
+    ConsoleLog.print(F("[MQTT] CMD weigh: uuid="));
+    ConsoleLog.print(mqtt_cmdUuid);
+    ConsoleLog.print(F(" target="));
+    ConsoleLog.print(mqtt_cmdTargetWeight, 1);
+    ConsoleLog.print(F("g name="));
+    ConsoleLog.println(name);
     mqttPublishCommandAck();
 
   } else if (strcmp(type, "clear") == 0) {
@@ -2011,14 +2025,14 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length) {
       mqttEnterLocalFallback(MQTT_FALLBACK_PAGEHIDE);
       mqtt_commandSnapshotReady = true;
       if (mqtt_responsePending) {
-        Serial.println(F("[MQTT] pagehide: response in retry, tasti locali liberi"));
+        ConsoleLog.println(F("[MQTT] pagehide: response in retry, tasti locali liberi"));
         return;
       }
       // The owner detach is independent from command deletion. Only the exact
       // raw command fence may erase it; a takeover page can still free the
       // operator without deleting a predecessor/legacy retained command.
       if (lifecycleCommandExact) mqttResetCommand();
-      Serial.println(lifecycleCommandExact
+      ConsoleLog.println(lifecycleCommandExact
         ? F("[MQTT] pagehide: comando sganciato")
         : F("[MQTT] pagehide: sessione sganciata"));
       return;
@@ -2027,12 +2041,12 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length) {
     // Pending response bytes are immutable. Only the matching response_ack
     // may close the outbox and reset its command.
     if (mqtt_responsePending) {
-      Serial.println(F("[MQTT] CMD clear ignorato: response ACK pending"));
+      ConsoleLog.println(F("[MQTT] CMD clear ignorato: response ACK pending"));
       return;
     }
     if (mqtt_confirmRequestState == MQTT_CONFIRM_REQUEST_QUEUED ||
         mqtt_confirmRequestState == MQTT_CONFIRM_REQUEST_RUNNING) {
-      Serial.println(F("[MQTT] CMD clear ignorato: confirm_request pending"));
+      ConsoleLog.println(F("[MQTT] CMD clear ignorato: confirm_request pending"));
       return;
     }
 
@@ -2045,7 +2059,7 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length) {
         connectionId[0] != '\0') {
       mqttResetCommand();
       mqtt_commandSnapshotReady = true;
-      Serial.println(F("[MQTT] Snapshot clear: comando raw rimosso"));
+      ConsoleLog.println(F("[MQTT] Snapshot clear: comando raw rimosso"));
       return;
     }
     bool activeFullyLegacy = mqtt_cmdCommandId[0] == '\0' &&
@@ -2069,14 +2083,14 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length) {
       mqttResetCommand();
       mqtt_commandSnapshotReady = true;
       mqtt_activityFlag = true;
-      Serial.println(F("[MQTT] CMD clear: tornato in idle"));
+      ConsoleLog.println(F("[MQTT] CMD clear: tornato in idle"));
     } else {
-      Serial.println(F("[MQTT] CMD clear fence mismatch, ignorato"));
+      ConsoleLog.println(F("[MQTT] CMD clear fence mismatch, ignorato"));
     }
 
   } else {
-    Serial.print(F("[MQTT] Comando tipo sconosciuto: "));
-    Serial.println(type);
+    ConsoleLog.print(F("[MQTT] Comando tipo sconosciuto: "));
+    ConsoleLog.println(type);
   }
 }
 
@@ -2096,27 +2110,27 @@ static bool mqttAttemptConnect() {
   // Verifica che il clock sia sincronizzato (NTP), necessario per TLS
   time_t now = time(nullptr);
   if (now < 1700000000) {  // Prima di ~nov 2023 = clock non sincronizzato
-    Serial.println(F("[MQTT] Clock non sincronizzato (NTP in corso), rinvio"));
+    ConsoleLog.println(F("[MQTT] Clock non sincronizzato (NTP in corso), rinvio"));
     return false;
   }
 
-  Serial.print(F("[MQTT] Connessione a "));
-  Serial.print(mqtt_host);
-  Serial.print(F(":"));
-  Serial.print(MQTT_PORT);
-  Serial.println(F("..."));
+  ConsoleLog.print(F("[MQTT] Connessione a "));
+  ConsoleLog.print(mqtt_host);
+  ConsoleLog.print(F(":"));
+  ConsoleLog.print(MQTT_PORT);
+  ConsoleLog.println(F("..."));
 
   // Connessione TLS manuale con hostname (per SNI)
   // PubSubClient risolve il DNS e passa l'IP a WiFiClientSecure,
   // perdendo il hostname necessario per SNI. Lo facciamo noi prima.
   if (!mqttWifiClient.connected()) {
-    Serial.println(F("[MQTT] TLS handshake..."));
+    ConsoleLog.println(F("[MQTT] TLS handshake..."));
     bool tlsOk = mqttWifiClient.connect(mqtt_host, MQTT_PORT);
     if (!tlsOk) {
-      Serial.println(F("[MQTT] TLS handshake fallito"));
+      ConsoleLog.println(F("[MQTT] TLS handshake fallito"));
       return false;
     }
-    Serial.println(F("[MQTT] TLS OK"));
+    ConsoleLog.println(F("[MQTT] TLS OK"));
   }
   if (mqttConnectAbortRequested()) return false;
 
@@ -2132,13 +2146,13 @@ static bool mqttAttemptConnect() {
   );
 
   if (!ok) {
-    Serial.print(F("[MQTT] Connessione fallita, rc="));
-    Serial.println(mqttClient.state());
+    ConsoleLog.print(F("[MQTT] Connessione fallita, rc="));
+    ConsoleLog.println(mqttClient.state());
     return false;
   }
   if (mqttConnectAbortRequested()) return false;
 
-  Serial.println(F("[MQTT] Connesso al broker!"));
+  ConsoleLog.println(F("[MQTT] Connesso al broker!"));
 
   mqtt_transportId = esp_random();
   if (mqtt_transportId == 0) mqtt_transportId = 1;
@@ -2152,7 +2166,7 @@ static bool mqttAttemptConnect() {
   // does not expose SUBACK. Valid retained/business traffic supplies passive
   // evidence; silence is repaired with bounded resubscribe then reconnect.
   if (!mqttSubscribeInbound()) {
-    Serial.println(F("[MQTT] Subscribe owner/command/ack fallita"));
+    ConsoleLog.println(F("[MQTT] Subscribe owner/command/ack fallita"));
     mqttClient.disconnect();
     return false;
   }
@@ -2160,12 +2174,12 @@ static bool mqttAttemptConnect() {
 
   // Pubblica status online (retained) — include name per discovery dal browser
   if (mqttPublishStatus("online")) {
-    Serial.println(F("[MQTT] Status 'online' pubblicato"));
+    ConsoleLog.println(F("[MQTT] Status 'online' pubblicato"));
   } else {
-    Serial.println(F("[MQTT] Status 'online' non pubblicato"));
+    ConsoleLog.println(F("[MQTT] Status 'online' non pubblicato"));
   }
 
-  Serial.println(F("[MQTT] Subscribed owner + command + ack; watchdog passivo"));
+  ConsoleLog.println(F("[MQTT] Subscribed owner + command + ack; watchdog passivo"));
 
   // From this point the main loop owns normal traffic. Bound TLS reads/writes
   // well below the 8-second loop WDT; connect restores the longer timeout.
@@ -2226,7 +2240,7 @@ static bool mqttStartConnectTask() {
   portENTER_CRITICAL(&mqtt_connectTaskMux);
   mqtt_connectTaskState = MQTT_CONNECT_IDLE;
   portEXIT_CRITICAL(&mqtt_connectTaskMux);
-  Serial.println(F("[MQTT] Task connessione non avviato"));
+  ConsoleLog.println(F("[MQTT] Task connessione non avviato"));
   return false;
 }
 
@@ -2238,12 +2252,15 @@ void mqttSetup() {
     mqtt_scaleId[0] = '\0';
     mqtt_credsLoaded = false;
     mqtt_setupDone = true;
-    Serial.println(F("[MQTT] eFuse MAC non valida; MQTT disabilitato"));
+    ConsoleLog.println(F("[MQTT] eFuse MAC non valida; MQTT disabilitato"));
     return;
   }
   buildTopics();
   mqtt_bootId = esp_random();
   if (mqtt_bootId == 0) mqtt_bootId = 1;
+  char consoleBootId[9];
+  snprintf(consoleBootId, sizeof(consoleBootId), "%08lx", (unsigned long)mqtt_bootId);
+  RemoteConsole::begin(consoleBootId);
   mqtt_transportId = 0;
   mqtt_statusSequence = 0;
   mqtt_statusLastPublishMs = 0;
@@ -2251,11 +2268,11 @@ void mqttSetup() {
   mqtt_statusDirty = true;
   mqttResetInboundHealth();
 
-  Serial.print(F("[MQTT] scale_id = "));
-  Serial.println(mqtt_scaleId);
+  ConsoleLog.print(F("[MQTT] scale_id = "));
+  ConsoleLog.println(mqtt_scaleId);
 
   if (!mqttClient.setBufferSize(MQTT_MAX_PACKET_SIZE)) {
-    Serial.println(F("[MQTT] Buffer 640 alloc fallita; MQTT disabilitato"));
+    ConsoleLog.println(F("[MQTT] Buffer 640 alloc fallita; MQTT disabilitato"));
     mqtt_setupDone = true;
     return;
   }
@@ -2268,20 +2285,20 @@ void mqttSetup() {
   );
 
   if (!mqtt_credsLoaded) {
-    Serial.println(F("[MQTT] ATTENZIONE: credenziali non configurate. Usa la seriale: mqtt set \"host\" \"user\" \"pass\""));
-    Serial.println(F("[MQTT] Setup completato (in attesa di configurazione)"));
+    ConsoleLog.println(F("[MQTT] ATTENZIONE: credenziali non configurate. Usa la seriale: mqtt set \"host\" \"user\" \"pass\""));
+    ConsoleLog.println(F("[MQTT] Setup completato (in attesa di configurazione)"));
     mqtt_setupDone = true;
     return;
   }
 
-  Serial.print(F("[MQTT] Host: "));
-  Serial.println(mqtt_host);
-  Serial.print(F("[MQTT] User: "));
-  Serial.println(mqtt_user);
+  ConsoleLog.print(F("[MQTT] Host: "));
+  ConsoleLog.println(mqtt_host);
+  ConsoleLog.print(F("[MQTT] User: "));
+  ConsoleLog.println(mqtt_user);
 
   // NTP necessario per validazione certificato TLS (ESP32 parte da epoch 1970)
   configTime(3600, 3600, "pool.ntp.org", "time.google.com");  // CET + DST
-  Serial.println(F("[MQTT] NTP configurato (pool.ntp.org)"));
+  ConsoleLog.println(F("[MQTT] NTP configurato (pool.ntp.org)"));
 
   mqttWifiClient.setCACert(MQTT_CA_CERT);
   mqttWifiClient.setConnectionTimeout(MQTT_TCP_CONNECT_TIMEOUT_MS);
@@ -2308,10 +2325,11 @@ void mqttSetup() {
   mqtt_undoWasDetachedApplied = false;
   mqtt_tareRequired = false;
 
-  Serial.println(F("[MQTT] Setup completato"));
+  ConsoleLog.println(F("[MQTT] Setup completato"));
 }
 
 void mqttSuspend(const char* state) {
+  RemoteConsole::transportLost();
   if (!mqtt_setupDone) return;
   if (state && strcmp(state, "offline") == 0 &&
       (mqtt_cmdConnectionId[0] != '\0' || mqtt_responsePending)) {
@@ -2343,7 +2361,7 @@ void mqttSuspend(const char* state) {
   mqtt_lastAttemptMs = 0;
   mqtt_backoffMs = MQTT_BACKOFF_INIT;
   if (hadActiveState) {
-    Serial.println(F("[MQTT] Sospeso"));
+    ConsoleLog.println(F("[MQTT] Sospeso"));
   }
 }
 
@@ -2353,6 +2371,13 @@ bool isMqttConnected() {
 
 bool isMqttConnectInProgress() {
   return mqttConnectTaskIsRunning();
+}
+
+bool mqttPublishConsole(const char* payload, size_t length) {
+  if (!payload || length + strlen(mqtt_topicConsoleResponse) + 8 > MQTT_MAX_PACKET_SIZE ||
+      !mqttClientConnectedForMain()) return false;
+  return mqttClient.publish(mqtt_topicConsoleResponse,
+                           (const uint8_t*)payload, length, false);
 }
 
 const char* getScaleId() {
@@ -2648,9 +2673,9 @@ static void mqttUpdateInternal() {
     mqtt_lastAttemptMs = millis();
     mqtt_backoffMs *= 2;
     if (mqtt_backoffMs > MQTT_BACKOFF_MAX) mqtt_backoffMs = MQTT_BACKOFF_MAX;
-    Serial.print(F("[MQTT] Prossimo tentativo tra "));
-    Serial.print(mqtt_backoffMs / 1000);
-    Serial.println(F("s"));
+    ConsoleLog.print(F("[MQTT] Prossimo tentativo tra "));
+    ConsoleLog.print(mqtt_backoffMs / 1000);
+    ConsoleLog.println(F("s"));
   }
 
   if (!mqtt_identityValid) return;
@@ -2659,13 +2684,14 @@ static void mqttUpdateInternal() {
   if (otaInProgress) return;
 #endif
   if (!WiFi.isConnected()) {
+    RemoteConsole::transportLost();
     // WiFi giù: reset stato MQTT
     if (mqtt_wasPrevConnected) {
       mqtt_wasPrevConnected = false;
       mqttResetOwnerSnapshot();
       mqttResetInboundHealth();
       mqtt_commandSnapshotReady = false;
-      Serial.println(F("[MQTT] WiFi perso, MQTT disconnesso"));
+      ConsoleLog.println(F("[MQTT] WiFi perso, MQTT disconnesso"));
     }
     mqtt_backoffMs = MQTT_BACKOFF_INIT;
     mqtt_lastAttemptMs = 0;
@@ -2676,7 +2702,8 @@ static void mqttUpdateInternal() {
 
   // Transizione: era connesso → disconnesso
   if (mqtt_wasPrevConnected && !connectedNow) {
-    Serial.println(F("[MQTT] Disconnesso dal broker"));
+    RemoteConsole::transportLost();
+    ConsoleLog.println(F("[MQTT] Disconnesso dal broker"));
     mqtt_disconnectBeep = true;  // segnala al .ino per buzzerWarn x2
     mqtt_backoffMs = MQTT_BACKOFF_INIT;
     mqtt_lastAttemptMs = 0;
@@ -2706,6 +2733,7 @@ static void mqttUpdateInternal() {
          (now - mqtt_responseLastPublishMs) >= MQTT_RESPONSE_RETRY_MS)) {
       mqttPublishPendingResponse();
     }
+    RemoteConsole::publishPending();
     return;
   }
 
@@ -2721,9 +2749,9 @@ static void mqttUpdateInternal() {
     mqtt_lastAttemptMs = millis();
     mqtt_backoffMs = mqtt_backoffMs * 2;
     if (mqtt_backoffMs > MQTT_BACKOFF_MAX) mqtt_backoffMs = MQTT_BACKOFF_MAX;
-    Serial.print(F("[MQTT] Prossimo tentativo tra "));
-    Serial.print(mqtt_backoffMs / 1000);
-    Serial.println(F("s"));
+    ConsoleLog.print(F("[MQTT] Prossimo tentativo tra "));
+    ConsoleLog.print(mqtt_backoffMs / 1000);
+    ConsoleLog.println(F("s"));
   }
 }
 
@@ -2808,13 +2836,14 @@ bool mqttPopDetachedUndo() {
 }
 
 void mqttReloadCreds() {
+  RemoteConsole::transportLost();
   if (!mqtt_identityValid) {
-    Serial.println(F("[MQTT] eFuse MAC non valida; reload ignorato"));
+    ConsoleLog.println(F("[MQTT] eFuse MAC non valida; reload ignorato"));
     return;
   }
   if (mqttRequestConnectAbort(MQTT_CONNECT_ABORT_OFFLINE)) {
     mqtt_reloadAfterConnect = true;
-    Serial.println(F("[MQTT] Reload credenziali accodato"));
+    ConsoleLog.println(F("[MQTT] Reload credenziali accodato"));
     return;
   }
   mqtt_reloadAfterConnect = false;
@@ -2832,7 +2861,7 @@ void mqttReloadCreds() {
   }
 
   if (!mqttClient.setBufferSize(MQTT_MAX_PACKET_SIZE)) {
-    Serial.println(F("[MQTT] Buffer 640 alloc fallita"));
+    ConsoleLog.println(F("[MQTT] Buffer 640 alloc fallita"));
     return;
   }
 
@@ -2844,14 +2873,14 @@ void mqttReloadCreds() {
   );
 
   if (!mqtt_credsLoaded) {
-    Serial.println(F("[MQTT] Credenziali non configurate"));
+    ConsoleLog.println(F("[MQTT] Credenziali non configurate"));
     return;
   }
 
-  Serial.print(F("[MQTT] Credenziali ricaricate. Host: "));
-  Serial.println(mqtt_host);
-  Serial.print(F("[MQTT] User: "));
-  Serial.println(mqtt_user);
+  ConsoleLog.print(F("[MQTT] Credenziali ricaricate. Host: "));
+  ConsoleLog.println(mqtt_host);
+  ConsoleLog.print(F("[MQTT] User: "));
+  ConsoleLog.println(mqtt_user);
 
   // Riconfigura il client con il nuovo host
   mqttClient.setServer(mqtt_host, MQTT_PORT);
@@ -2878,7 +2907,7 @@ void mqttReloadCreds() {
   mqttWifiClient.setHandshakeTimeout(MQTT_TLS_HANDSHAKE_TIMEOUT_SEC);
   mqttClient.setCallback(mqttCallback);
 
-  Serial.println(F("[MQTT] Pronto per la riconnessione"));
+  ConsoleLog.println(F("[MQTT] Pronto per la riconnessione"));
 }
 
 bool isMqttConfigured() {
@@ -2889,10 +2918,10 @@ bool isMqttConfigured() {
 
 #if ENABLE_ARDUINO_CLOUD
 void cloudSetup() {
-  Serial.println(F("[CLOUD] initProperties()..."));
+  ConsoleLog.println(F("[CLOUD] initProperties()..."));
   initProperties();
 
-  Serial.println(F("[CLOUD] ArduinoCloud.begin()..."));
+  ConsoleLog.println(F("[CLOUD] ArduinoCloud.begin()..."));
   ArduinoCloud.begin(ArduinoIoTPreferredConnection);
 
   setDebugMessageLevel(2);
@@ -2910,19 +2939,19 @@ void update() {
       bool connectedNow = WiFi.isConnected();
       if (connectedNow && !wifiWasConnected) {
         wifiWasConnected = true;
-        Serial.print(F("[NET] Connesso a: "));
-        Serial.println(WiFi.SSID());
-        Serial.print(F("[NET] IP: "));
-        Serial.println(WiFi.localIP());
+        ConsoleLog.print(F("[NET] Connesso a: "));
+        ConsoleLog.println(WiFi.SSID());
+        ConsoleLog.print(F("[NET] IP: "));
+        ConsoleLog.println(WiFi.localIP());
       } else if (!connectedNow && wifiWasConnected) {
         wifiWasConnected = false;
-        Serial.println(F("[NET] WiFi disconnesso."));
+        ConsoleLog.println(F("[NET] WiFi disconnesso."));
       }
 
       if (otaConfigured && !otaBegun && WiFi.isConnected()) {
         ArduinoOTA.begin();
         otaBegun = true;
-        Serial.println(F("[OTA] Pronto (WiFi connesso). In Arduino IDE seleziona la porta di rete dell'ESP32."));
+        ConsoleLog.println(F("[OTA] Pronto (WiFi connesso). In Arduino IDE seleziona la porta di rete dell'ESP32."));
       }
 
       if (!connectedNow) {

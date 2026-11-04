@@ -1,8 +1,15 @@
 #include <Arduino.h>
+#include "remote_console.h"
 #include "buzzer.h"
+#include "config/config_audio.h"
 
 static const int BUZZER_PIN      = 22;
 static const uint8_t RES_BITS    = 10;   // 10 bit
+
+static bool g_overloadSeen = false;
+static bool g_overloadBeeping = false;
+static bool g_overloadToneOn = false;
+static uint32_t g_overloadStartedMs = 0;
 
 // ---------- SUPPORTO GENERICO ----------
 
@@ -15,7 +22,40 @@ static void buzzerSilence() {
   ledcWriteTone(BUZZER_PIN, 0); // 0 = off
 }
 
+void buzzerCancelOverload() {
+  g_overloadBeeping = false;
+  g_overloadToneOn = false;
+  buzzerSilence();
+}
+
+void buzzerUpdateOverload(bool active, uint32_t nowMs) {
+  if (active && !g_overloadSeen) {
+    g_overloadStartedMs = nowMs;
+    g_overloadBeeping = true;
+    g_overloadToneOn = false;
+  }
+  g_overloadSeen = active;
+  if (!g_overloadBeeping) return;
+
+  const uint32_t secondBeepMs = AudioConfig::OVERLOAD_BEEP_ON_MS +
+    AudioConfig::OVERLOAD_BEEP_GAP_MS;
+  const uint32_t endMs = secondBeepMs + AudioConfig::OVERLOAD_BEEP_ON_MS;
+  const uint32_t elapsed = nowMs - g_overloadStartedMs;
+  if (!active || elapsed >= endMs) {
+    buzzerCancelOverload();
+    return;
+  }
+
+  const bool toneOn = elapsed < AudioConfig::OVERLOAD_BEEP_ON_MS ||
+    elapsed >= secondBeepMs;
+  if (toneOn != g_overloadToneOn) {
+    ledcWriteTone(BUZZER_PIN, toneOn ? AudioConfig::OVERLOAD_BEEP_HZ : 0);
+    g_overloadToneOn = toneOn;
+  }
+}
+
 void playToneHz(uint32_t freq, uint32_t durationMs) {
+  if (g_overloadBeeping) return;
   if (freq == 0 || durationMs == 0) {
     buzzerSilence();
     if (durationMs > 0) delay(durationMs);
@@ -30,11 +70,14 @@ void playToneHz(uint32_t freq, uint32_t durationMs) {
 // ---------- INIZIALIZZAZIONE ----------
 
 void buzzerInit() {
+  g_overloadSeen = false;
+  g_overloadBeeping = false;
+  g_overloadToneOn = false;
   bool ok = ledcAttach(BUZZER_PIN, 4000, RES_BITS); // freq base qualsiasi
   if (!ok) {
-    Serial.println("[BUZZER] ERRORE: ledcAttach fallita");
+    ConsoleLog.println("[BUZZER] ERRORE: ledcAttach fallita");
   } else {
-    Serial.println("[BUZZER] Inizializzato su GPIO22");
+    ConsoleLog.println("[BUZZER] Inizializzato su GPIO22");
   }
   buzzerSilence();
 }
@@ -104,6 +147,7 @@ void buzzerOk() {
 
 // Errore: doppio beep più basso
 void buzzerError() {
+  if (g_overloadBeeping) return;
   for (int i = 0; i < 2; ++i) {
     playToneHz(1500, 120); // 1,5 kHz
     delay(80);
@@ -117,6 +161,7 @@ void buzzerWarn() {
 
 // Ricezione comando MQTT weigh: doppio beep rapido e riconoscibile
 void buzzerMqttRx() {
+  if (g_overloadBeeping) return;
   playToneHz(3200, 45);
   delay(35);
   playToneHz(2400, 65);

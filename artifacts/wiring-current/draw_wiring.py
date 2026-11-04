@@ -427,7 +427,7 @@ def controls():
         d.wire([(390,y),(1270,y)])
     d.text(1531,319,'C1 / 17',18,BLUE,True,'middle')
     d.text(1644,319,'C2 / 5',18,BLUE,True,'middle')
-    for row,labels in enumerate([('SKIP','SLEEP'),('ENTER','CLEAR'),('WIFI','TOTAL'),('MODE','TARE')]):
+    for row,labels in enumerate([('TARE','CLEAR'),('MODE','SLEEP'),('TOTAL','WIFI'),('ENTER','SKIP')]):
         for col,label in enumerate(labels):
             d.rect(1482+col*113,330+row*92,98,70,'#f7f9fa','#9baaaf',8)
             d.text(1531+col*113,373+row*92,label,21,INK,True,'middle')

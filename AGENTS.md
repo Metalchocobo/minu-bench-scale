@@ -14,6 +14,7 @@
 ## 3. DOCUMENTATION MAINTENANCE
 - **Rule:** Documentation is a **state file**, not a log. It must describe the current system, not the history of interventions.
 - **Default:** Agents must keep documentation synchronized with the code/config they change in the same task.
+- **Serial command catalog:** Whenever adding, changing, or removing a serial command or option, update `printHelp()` and the command documentation in the same task. The `help` output must always list every available command and option, respecting compile-time feature flags.
 - **Read before editing:** For firmware behavior, pinout, wiring, commands, MQTT, power, calibration, or build flow, scan the relevant sections of `README.md`, `docs/WIRING.md`, and `firmware/esp32_hx711_serial/README.md` if present.
 - **Auto-Update Trigger:** AFTER any code/config change that affects:
   - pinout, wiring, hardware modules, voltage thresholds, battery/sleep behavior

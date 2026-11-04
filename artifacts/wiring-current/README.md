@@ -198,19 +198,21 @@ La tastiera è una matrice con sei collegamenti. Le coppie GPIO sono state rilev
 
 | Collegamento tastiera | ESP32 | Tasti collegati |
 |---|---|---|
-| **R1** | **GPIO13** | SKIP, SLEEP |
-| **R2** | **GPIO14** | ENTER, CLEAR |
-| **R3** | **GPIO19** | WIFI, TOTAL |
-| **R4** | **GPIO21** | MODE, TARE |
-| **C1** | **GPIO17** | SKIP, ENTER, WIFI, MODE |
-| **C2** | **GPIO5** | SLEEP, CLEAR, TOTAL, TARE |
+| **R1** | **GPIO13** | TARE, CLEAR |
+| **R2** | **GPIO14** | MODE, SLEEP |
+| **R3** | **GPIO19** | TOTAL, WIFI |
+| **R4** | **GPIO21** | ENTER, SKIP |
+| **C1** | **GPIO17** | TARE, MODE, TOTAL, ENTER |
+| **C2** | **GPIO5** | CLEAR, SLEEP, WIFI, SKIP |
 
 | Riga logica | C1 (GPIO17) | C2 (GPIO5) |
 |---|---|---|
-| R1 (GPIO13) | SKIP | SLEEP |
-| R2 (GPIO14) | ENTER | CLEAR |
-| R3 (GPIO19) | WIFI | TOTAL |
-| R4 (GPIO21) | MODE | TARE |
+| R1 (GPIO13) | TARE | CLEAR |
+| R2 (GPIO14) | MODE | SLEEP |
+| R3 (GPIO19) | TOTAL | WIFI |
+| R4 (GPIO21) | ENTER | SKIP |
+
+Il frontale, dall'alto, è **SKIP / OK**, **WIFI / SLEEP**, **X / TOTAL**, **MODE / TARE**; **OK = ENTER**, **X = CLEAR**. Le funzioni delle tabelle e delle tavole SVG/PNG seguono questo orientamento del pannello; i GPIO dei sei fili restano gli stessi.
 
 Le etichette **R1-R6 del ritaglio di schema precedente non definiscono la mappa corrente**. Non numerare i pin del connettore come fili 1-6 senza un orientamento verificato. Per una replica, usare le coppie GPIO della tabella o rilevare la continuità a tastiera scollegata.
 

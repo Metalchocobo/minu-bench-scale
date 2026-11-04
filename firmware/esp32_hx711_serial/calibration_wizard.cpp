@@ -1,4 +1,5 @@
 #include "calibration_wizard.h"
+#include "remote_console.h"
 #include "scale_state.h"
 #include "buzzer.h"
 #include <math.h>
@@ -70,12 +71,12 @@ static bool accumulateSample(uint32_t nowMs) {
 
   // Debug: mostra ogni campione
   if (g_sampleCount <= 5 || g_sampleCount == SAMPLES_NEEDED) {
-    Serial.print(F("[CAL] Sample #"));
-    Serial.print(g_sampleCount);
-    Serial.print(F(": raw="));
-    Serial.print(raw);
-    Serial.print(F(", accum="));
-    Serial.println(g_sampleAccum);
+    ConsoleLog.print(F("[CAL] Sample #"));
+    ConsoleLog.print(g_sampleCount);
+    ConsoleLog.print(F(": raw="));
+    ConsoleLog.print(raw);
+    ConsoleLog.print(F(", accum="));
+    ConsoleLog.println(g_sampleAccum);
   }
 
   return (g_sampleCount >= SAMPLES_NEEDED);
@@ -141,7 +142,7 @@ void abort() {
   g_longPressStartMs = 0;
   g_longPressActive = false;
   buzzerError();
-  Serial.println(F("[CAL] Wizard annullato"));
+  ConsoleLog.println(F("[CAL] Wizard annullato"));
 }
 
 // ========================= LONG PRESS SU SKIP =========================
@@ -189,10 +190,10 @@ bool updateLongPress(uint32_t nowMs) {
         g_longPressStartMs = 0;
         resetSampling();
         buzzerOk();
-        Serial.println(F("[CAL] ========================================"));
-        Serial.println(F("[CAL] Wizard calibrazione avviato (SKIP 5s)"));
-        Serial.println(F("[CAL] STEP 1/4: Piatto vuoto - premi ENTER"));
-        Serial.println(F("[CAL] ========================================"));
+        ConsoleLog.println(F("[CAL] ========================================"));
+        ConsoleLog.println(F("[CAL] Wizard calibrazione avviato (SKIP 5s)"));
+        ConsoleLog.println(F("[CAL] STEP 1/4: Piatto vuoto - premi ENTER"));
+        ConsoleLog.println(F("[CAL] ========================================"));
         return true;
       }
     }
@@ -236,20 +237,20 @@ void update(uint32_t nowMs, KeyCode key) {
     }
 
     if (key == KEY_ENTER) {
-      Serial.print(F("[CAL] ENTER premuto. Campioni: "));
-      Serial.println(g_sampleCount);
+      ConsoleLog.print(F("[CAL] ENTER premuto. Campioni: "));
+      ConsoleLog.println(g_sampleCount);
 
       if (g_sampleCount >= SAMPLES_NEEDED) {
         g_zeroRaw = finalizeSample();
-        Serial.print(F("[CAL] Zero raw = "));
-        Serial.println(g_zeroRaw);
+        ConsoleLog.print(F("[CAL] Zero raw = "));
+        ConsoleLog.println(g_zeroRaw);
         g_step = CAL_STEP_PLACE;
         resetSampling();
         buzzerOk();
-        Serial.println(F("[CAL] STEP 2/4: Appoggia peso riferimento - premi ENTER"));
+        ConsoleLog.println(F("[CAL] STEP 2/4: Appoggia peso riferimento - premi ENTER"));
       } else {
         buzzerWarn();
-        Serial.println(F("[CAL] Attendi, campionamento in corso..."));
+        ConsoleLog.println(F("[CAL] Attendi, campionamento in corso..."));
       }
       return;
     }
@@ -274,7 +275,7 @@ void update(uint32_t nowMs, KeyCode key) {
 
         if (diff < WEIGHT_DETECT_THRESHOLD) {
           buzzerError();
-          Serial.println(F("[CAL] ERRORE: nessun peso rilevato! Appoggia il peso e riprova."));
+          ConsoleLog.println(F("[CAL] ERRORE: nessun peso rilevato! Appoggia il peso e riprova."));
           return;
         }
 
@@ -286,40 +287,40 @@ void update(uint32_t nowMs, KeyCode key) {
         g_lastSeenRaw = 0;
         g_lastSeenRawValid = false;
         buzzerOk();
-        Serial.print(F("[CAL] Peso rilevato (raw="));
-        Serial.print(currentRaw);
-        Serial.println(F("). Campionamento..."));
+        ConsoleLog.print(F("[CAL] Peso rilevato (raw="));
+        ConsoleLog.print(currentRaw);
+        ConsoleLog.println(F("). Campionamento..."));
         return;
       }
 
       // Secondo ENTER: finalizza se campionamento completo
-      Serial.print(F("[CAL] ENTER premuto. Campioni: "));
-      Serial.println(g_sampleCount);
+      ConsoleLog.print(F("[CAL] ENTER premuto. Campioni: "));
+      ConsoleLog.println(g_sampleCount);
 
       if (g_sampleCount >= SAMPLES_NEEDED) {
         g_refRaw = finalizeSample();
 
         long delta = g_refRaw - g_zeroRaw;
-        Serial.print(F("[CAL] Ref raw = "));
-        Serial.print(g_refRaw);
-        Serial.print(F(", Zero raw = "));
-        Serial.print(g_zeroRaw);
-        Serial.print(F(", Delta = "));
-        Serial.println(delta);
+        ConsoleLog.print(F("[CAL] Ref raw = "));
+        ConsoleLog.print(g_refRaw);
+        ConsoleLog.print(F(", Zero raw = "));
+        ConsoleLog.print(g_zeroRaw);
+        ConsoleLog.print(F(", Delta = "));
+        ConsoleLog.println(delta);
 
         if (delta < 0) delta = -delta;
         if (delta < 1000) {
           buzzerError();
-          Serial.println(F("[CAL] ERRORE: differenza raw troppo piccola, peso non rilevato"));
+          ConsoleLog.println(F("[CAL] ERRORE: differenza raw troppo piccola, peso non rilevato"));
           return;
         }
 
         g_step = CAL_STEP_VALUE;
         buzzerOk();
-        Serial.println(F("[CAL] STEP 3/4: Seleziona peso (SKIP=+, TARE=-) - premi ENTER"));
+        ConsoleLog.println(F("[CAL] STEP 3/4: Seleziona peso (SKIP=+, TARE=-) - premi ENTER"));
       } else {
         buzzerWarn();
-        Serial.println(F("[CAL] Attendi, campionamento in corso..."));
+        ConsoleLog.println(F("[CAL] Attendi, campionamento in corso..."));
       }
       return;
     }
@@ -341,47 +342,47 @@ void update(uint32_t nowMs, KeyCode key) {
     if (key == KEY_SKIP) {
       g_refWeightG = stepWeight(g_refWeightG, +1);
       buzzerKeyClick();
-      Serial.print(F("[CAL] Peso ref = "));
-      Serial.print(g_refWeightG);
-      Serial.println(F(" g"));
+      ConsoleLog.print(F("[CAL] Peso ref = "));
+      ConsoleLog.print(g_refWeightG);
+      ConsoleLog.println(F(" g"));
       return;
     }
 
     if (key == KEY_TARE) {
       g_refWeightG = stepWeight(g_refWeightG, -1);
       buzzerKeyClick();
-      Serial.print(F("[CAL] Peso ref = "));
-      Serial.print(g_refWeightG);
-      Serial.println(F(" g"));
+      ConsoleLog.print(F("[CAL] Peso ref = "));
+      ConsoleLog.print(g_refWeightG);
+      ConsoleLog.println(F(" g"));
       return;
     }
 
     if (key == KEY_ENTER) {
       float cpg = (float)(g_refRaw - g_zeroRaw) / (float)g_refWeightG;
 
-      Serial.print(F("[CAL] ENTER premuto. CPG calcolato = "));
-      Serial.println(cpg, 4);
-      Serial.print(F("[CAL]   g_zeroRaw = ")); Serial.println(g_zeroRaw);
-      Serial.print(F("[CAL]   g_refRaw  = ")); Serial.println(g_refRaw);
-      Serial.print(F("[CAL]   delta     = ")); Serial.println(g_refRaw - g_zeroRaw);
-      Serial.print(F("[CAL]   peso      = ")); Serial.println(g_refWeightG);
-      Serial.print(F("[CAL] Range valido: "));
-      Serial.print(CPG_MIN, 0);
-      Serial.print(F(" - "));
-      Serial.println(CPG_MAX, 0);
+      ConsoleLog.print(F("[CAL] ENTER premuto. CPG calcolato = "));
+      ConsoleLog.println(cpg, 4);
+      ConsoleLog.print(F("[CAL]   g_zeroRaw = ")); ConsoleLog.println(g_zeroRaw);
+      ConsoleLog.print(F("[CAL]   g_refRaw  = ")); ConsoleLog.println(g_refRaw);
+      ConsoleLog.print(F("[CAL]   delta     = ")); ConsoleLog.println(g_refRaw - g_zeroRaw);
+      ConsoleLog.print(F("[CAL]   peso      = ")); ConsoleLog.println(g_refWeightG);
+      ConsoleLog.print(F("[CAL] Range valido: "));
+      ConsoleLog.print(CPG_MIN, 0);
+      ConsoleLog.print(F(" - "));
+      ConsoleLog.println(CPG_MAX, 0);
 
       if (!validateCpg(cpg)) {
         buzzerError();
-        Serial.print(F("[CAL] ERRORE: CPG "));
-        Serial.print(cpg, 4);
-        Serial.println(F(" fuori range!"));
-        Serial.println(F("[CAL] Controlla: peso corretto? Bilancia stabile?"));
+        ConsoleLog.print(F("[CAL] ERRORE: CPG "));
+        ConsoleLog.print(cpg, 4);
+        ConsoleLog.println(F(" fuori range!"));
+        ConsoleLog.println(F("[CAL] Controlla: peso corretto? Bilancia stabile?"));
         return;
       }
 
       g_step = CAL_STEP_CONFIRM;
       buzzerOk();
-      Serial.println(F("[CAL] STEP 4/4: Conferma (ENTER=salva, CLEAR=annulla)"));
+      ConsoleLog.println(F("[CAL] STEP 4/4: Conferma (ENTER=salva, CLEAR=annulla)"));
       return;
     }
 
@@ -399,21 +400,21 @@ void update(uint32_t nowMs, KeyCode key) {
       long delta = g_refRaw - g_zeroRaw;
       float cpg = (float)delta / (float)g_refWeightG;
 
-      Serial.println(F("[CAL] ========================================"));
-      Serial.println(F("[CAL] CALCOLO CPG:"));
-      Serial.print(F("[CAL]   Zero raw  = ")); Serial.println(g_zeroRaw);
-      Serial.print(F("[CAL]   Ref raw   = ")); Serial.println(g_refRaw);
-      Serial.print(F("[CAL]   Delta     = ")); Serial.println(delta);
-      Serial.print(F("[CAL]   Peso ref  = ")); Serial.print(g_refWeightG); Serial.println(F(" g"));
-      Serial.print(F("[CAL]   CPG       = ")); Serial.print(delta); Serial.print(F(" / "));
-      Serial.print(g_refWeightG); Serial.print(F(" = ")); Serial.println(cpg, 4);
-      Serial.println(F("[CAL] ========================================"));
+      ConsoleLog.println(F("[CAL] ========================================"));
+      ConsoleLog.println(F("[CAL] CALCOLO CPG:"));
+      ConsoleLog.print(F("[CAL]   Zero raw  = ")); ConsoleLog.println(g_zeroRaw);
+      ConsoleLog.print(F("[CAL]   Ref raw   = ")); ConsoleLog.println(g_refRaw);
+      ConsoleLog.print(F("[CAL]   Delta     = ")); ConsoleLog.println(delta);
+      ConsoleLog.print(F("[CAL]   Peso ref  = ")); ConsoleLog.print(g_refWeightG); ConsoleLog.println(F(" g"));
+      ConsoleLog.print(F("[CAL]   CPG       = ")); ConsoleLog.print(delta); ConsoleLog.print(F(" / "));
+      ConsoleLog.print(g_refWeightG); ConsoleLog.print(F(" = ")); ConsoleLog.println(cpg, 4);
+      ConsoleLog.println(F("[CAL] ========================================"));
 
       if (!validateCpg(cpg)) {
         buzzerError();
-        Serial.print(F("[CAL] ERRORE: CPG ")); Serial.print(cpg, 4);
-        Serial.print(F(" fuori range ")); Serial.print(CPG_MIN, 0);
-        Serial.print(F("-")); Serial.println(CPG_MAX, 0);
+        ConsoleLog.print(F("[CAL] ERRORE: CPG ")); ConsoleLog.print(cpg, 4);
+        ConsoleLog.print(F(" fuori range ")); ConsoleLog.print(CPG_MIN, 0);
+        ConsoleLog.print(F("-")); ConsoleLog.println(CPG_MAX, 0);
         abort();
         return;
       }
@@ -421,7 +422,7 @@ void update(uint32_t nowMs, KeyCode key) {
       long expectedOffset = g_zeroRaw;
       float expectedCpg = cpg;
 
-      ScaleState::setOffsetRaw(expectedOffset);
+      ScaleState::setCalibrationZeroRaw(expectedOffset);
       ScaleState::setScaleCpg(cpg);
       ScaleState::setZtCounts(0);
 
@@ -449,10 +450,10 @@ void update(uint32_t nowMs, KeyCode key) {
       }
 
       // Verifica valori salvati
-      Serial.println((saved && verified) ? F("[CAL] CALIBRAZIONE SALVATA - VERIFICA:") : F("[CAL] ERRORE SALVATAGGIO - VERIFICA:"));
-      Serial.print(F("[CAL]   Offset salvato = ")); Serial.println(ScaleState::getOffsetRaw());
-      Serial.print(F("[CAL]   CPG salvato    = ")); Serial.println(ScaleState::getScaleCpg(), 4);
-      Serial.print(F("[CAL]   ZT counts      = ")); Serial.println(ScaleState::getZtCounts());
+      ConsoleLog.println((saved && verified) ? F("[CAL] CALIBRAZIONE SALVATA - VERIFICA:") : F("[CAL] ERRORE SALVATAGGIO - VERIFICA:"));
+      ConsoleLog.print(F("[CAL]   Offset salvato = ")); ConsoleLog.println(ScaleState::getOffsetRaw());
+      ConsoleLog.print(F("[CAL]   CPG salvato    = ")); ConsoleLog.println(ScaleState::getScaleCpg(), 4);
+      ConsoleLog.print(F("[CAL]   ZT counts      = ")); ConsoleLog.println(ScaleState::getZtCounts());
 
       return;
     }

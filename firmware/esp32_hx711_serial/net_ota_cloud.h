@@ -42,7 +42,7 @@
   // e vengono salvati in NVS (persistono tra aggiornamenti firmware).
   // Comandi: mqtt set "host" "user" "pass", mqtt creds, mqtt clear, mqtt apply
   #define MQTT_PORT       8883          // MQTTS (TLS)
-  #define MQTT_FW_VERSION "1.5.2"
+  #define MQTT_FW_VERSION "1.6.0"
   // Discovery name comes from ScaleIdentity (NVS); technical ID stays the MAC.
 #endif
 
@@ -81,6 +81,9 @@ namespace Net {
   // True se connesso al broker MQTT
   bool isMqttConnected();
   bool isMqttConnectInProgress();
+
+  // Console packets use a separate topic and the existing loop-owned socket.
+  bool mqttPublishConsole(const char* payload, size_t length);
 
   // Stage a confirm for the active command. Session-aware commands stay active
   // until the browser acknowledges the generated response_id.

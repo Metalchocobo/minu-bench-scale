@@ -41,6 +41,12 @@ long   getOffsetRaw();
 void   setScaleCpg(float cpg);
 float  getScaleCpg();
 
+// Empty-plate calibration reference; working tare must never change it.
+void   setCalibrationZeroRaw(long zero);
+long   getCalibrationZeroRaw();
+float  totalLoadGrams(long raw);
+bool   updateOverload(long raw, float netGrams, bool wasOverloaded);
+
 // Zero-tracking counts (compensazione dinamica)
 void   setZtCounts(long counts);
 long   getZtCounts();

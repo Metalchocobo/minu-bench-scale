@@ -24,7 +24,7 @@ static const int OLED_DC_PIN   = 26;
 static const int OLED_RST_PIN  = 27;
 
 // ========================= TASTIERA 4x2 =========================
-// Measured contact groups: SKIP/SLEEP, ENTER/CLEAR, WIFI/TOTAL, MODE/TARE.
+// Front-panel key groups: TARE/CLEAR, MODE/SLEEP, TOTAL/WIFI, ENTER/SKIP.
 static const int KEYPAD_ROW_PINS[4] = { 13, 14, 19, 21 };
 static const int KEYPAD_COL_PINS[2] = { 17, 5 };  // TX2/GPIO17 and GPIO5
 

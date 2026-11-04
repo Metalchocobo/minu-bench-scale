@@ -9,7 +9,7 @@
 static uint32_t nowMs = 100;
 static int levels[40] = {};
 static int modes[40] = {};
-// Independent physical layout measured with the contact-pair diagnostic sketch.
+// Contact-pair wiring with the front-panel orientation specified by Andrea.
 // These values must not be derived from the production configuration under test.
 static const int physicalRows[4] = {13, 14, 19, 21};
 static const int physicalColumns[2] = {17, 5};
@@ -56,14 +56,14 @@ static void setKeys(std::initializer_list<KeyCode> keys) {
   for (auto& row : contacts) for (bool& pressed : row) pressed = false;
   for (KeyCode key : keys) {
     switch (key) {
-      case KEY_SKIP: contacts[0][0] = true; break;
-      case KEY_SLEEP: contacts[0][1] = true; break;
-      case KEY_ENTER: contacts[1][0] = true; break;
-      case KEY_CLEAR: contacts[1][1] = true; break;
-      case KEY_WIFI: contacts[2][0] = true; break;
-      case KEY_TOTAL: contacts[2][1] = true; break;
-      case KEY_MODE: contacts[3][0] = true; break;
-      case KEY_TARE: contacts[3][1] = true; break;
+      case KEY_TARE: contacts[0][0] = true; break;
+      case KEY_CLEAR: contacts[0][1] = true; break;
+      case KEY_MODE: contacts[1][0] = true; break;
+      case KEY_SLEEP: contacts[1][1] = true; break;
+      case KEY_TOTAL: contacts[2][0] = true; break;
+      case KEY_WIFI: contacts[2][1] = true; break;
+      case KEY_ENTER: contacts[3][0] = true; break;
+      case KEY_SKIP: contacts[3][1] = true; break;
       default: require(false, "only physical keys may close matrix contacts");
     }
   }
@@ -350,9 +350,9 @@ int main() {
   for (KeyCode key : {KEY_TARE, KEY_ENTER, KEY_TOTAL, KEY_SLEEP, KEY_SKIP, KEY_CLEAR, KEY_MODE}) {
     testSingleWake(key);
   }
-  testOrdinaryRowPair(KEY_SKIP, KEY_SLEEP);
-  testOrdinaryRowPair(KEY_ENTER, KEY_CLEAR);
-  testOrdinaryRowPair(KEY_MODE, KEY_TARE);
+  testOrdinaryRowPair(KEY_TARE, KEY_CLEAR);
+  testOrdinaryRowPair(KEY_MODE, KEY_SLEEP);
+  testOrdinaryRowPair(KEY_ENTER, KEY_SKIP);
   testStuckCombo();
   testStuckSingle(KEY_WIFI);
   testStuckSingle(KEY_TOTAL);

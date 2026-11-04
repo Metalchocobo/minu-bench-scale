@@ -34,6 +34,10 @@ L'immagine riporta anche SDA accanto a GPIO21 e SCL accanto a GPIO22: sono alias
 
 ## 1) Cella di carico → HX711
 
+La cella montata è da **20 kg nominali**, come riferito da Andrea. Il firmware applica un limite operativo di **15 kg complessivi**, contando contenitore, tutto il contenuto e **500 g stimati per piatto/supporti**. Questa quota è una stima prudenziale indicata da Andrea, non una pesata del gruppo meccanico: la soglia software corrisponde a 14,5 kg di contenitore + contenuto. TARE ed ENTER non azzerano questo conteggio. La protezione software non è un arresto meccanico contro urti o carichi eccessivi.
+
+Lo zero di calibrazione va acquisito con **piatto e supporti montati, senza contenitore né ingredienti**; viene conservato in NVS e resta distinto dalla tara operativa. Sostituendo la cella occorre rifare la calibrazione con un peso noto, secondo la [procedura nel README](../README.md#calibrazione). Il cablaggio dei quattro fili dipende dalla cella effettiva:
+
 - Rosso → **E+**
 - Nero → **E-**
 - Verde → **A+**
@@ -88,25 +92,27 @@ L'INA219 misura la tensione ai morsetti batteria e la corrente diretta al Mini36
 
 ## 5) Tastiera 4x2 → ESP32
 
-La mappa corrente è stata rilevata dagli otto tasti del montaggio e definisce il firmware operativo `esp32_hx711_serial`. I sei fili restano sui GPIO indicati; **TX2 è GPIO17**, distinto da TX0/GPIO1 della seriale USB. Le sigle **R1–R6** del ritaglio di schema non definiscono l'ordine fisico dei contatti sul connettore: identificare le linee tramite le coppie GPIO dei tasti.
+La mappa corrente associa le coppie GPIO rilevate sul montaggio alle funzioni del firmware operativo `esp32_hx711_serial`, tenendo conto dell'orientamento del pannello. I sei fili restano sui GPIO indicati; **TX2 è GPIO17**, distinto da TX0/GPIO1 della seriale USB. Le sigle **R1–R6** del ritaglio di schema non definiscono l'ordine fisico dei contatti sul connettore: identificare le linee tramite le coppie GPIO dei tasti.
 
 | Linea GPIO | Tasti collegati | Ruolo nella scansione |
 |---|---|---|
-| **GPIO13** | SKIP, SLEEP | riga / uscita |
-| **GPIO14** | ENTER, CLEAR | riga / uscita |
-| **GPIO19** | WIFI, TOTAL | riga / uscita |
-| **GPIO21** | MODE, TARE | riga / uscita |
-| **TX2 / GPIO17** | SKIP, ENTER, WIFI, MODE | colonna / ingresso pull-up |
-| **GPIO5** | SLEEP, CLEAR, TOTAL, TARE | colonna / ingresso pull-up |
+| **GPIO13** | TARE, CLEAR | riga / uscita |
+| **GPIO14** | MODE, SLEEP | riga / uscita |
+| **GPIO19** | TOTAL, WIFI | riga / uscita |
+| **GPIO21** | ENTER, SKIP | riga / uscita |
+| **TX2 / GPIO17** | TARE, MODE, TOTAL, ENTER | colonna / ingresso pull-up |
+| **GPIO5** | CLEAR, SLEEP, WIFI, SKIP | colonna / ingresso pull-up |
 
 Righe e colonne sono il raggruppamento logico usato dalla scansione, non la posizione del connettore o dei tasti sul pannello. La matrice è gestita direttamente dal firmware; non collegare le sei linee direttamente a 3V3, 5 V o GND.
 
 | Riga scansione | Colonna GPIO17 | Colonna GPIO5 |
 |---|---|---|
-| GPIO13 | SKIP | SLEEP |
-| GPIO14 | ENTER | CLEAR |
-| GPIO19 | WIFI | TOTAL |
-| GPIO21 | MODE | TARE |
+| GPIO13 | TARE | CLEAR |
+| GPIO14 | MODE | SLEEP |
+| GPIO19 | TOTAL | WIFI |
+| GPIO21 | ENTER | SKIP |
+
+Vista frontale, dall'alto: **SKIP / OK**, **WIFI / SLEEP**, **X / TOTAL**, **MODE / TARE**. **OK = ENTER**, **X = CLEAR**. Questa disposizione fisica è distinta dalle righe elettriche della tabella.
 
 Il firmware attuale pilota la riga selezionata LOW e le altre HIGH; diodi o resistenze serie non sono documentati nella matrice. Con contatti diretti, due tasti della stessa colonna su righe diverse mettono in contesa le uscite. La combinazione prevista WIFI + TOTAL condivide la riga GPIO19. In light-sleep tutte le righe GPIO13, 14, 19 e 21 sono LOW e le colonne GPIO17 e 5 rilevano il wake; il tasto di risveglio viene consumato fino al rilascio.
 

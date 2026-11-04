@@ -84,6 +84,12 @@ static const uint32_t ENTER_FAIL_HOLD_MS               = 2000;
 static const float MAX_DISPLAY_G   = 16000.0f;      // Soglia fault simmetrica ±16 kg
 static const float OVERLOAD_EXIT_G = 15950.0f;      // 50 g hysteresis
 
+// Total supported load, independent from working tare and ingredient commits.
+// Conservative allowance supplied for the plate and its moving supports.
+static const float CAPACITY_DEAD_LOAD_G = 500.0f;
+static const float MAX_TOTAL_LOAD_G     = 15000.0f;
+static const float TOTAL_LOAD_EXIT_G    = 14950.0f;
+
 // ========================= FILTRI =========================
 static const int   MA_DEFAULT      = 6;             // Media mobile (work)
 static const int   MA_FINE         = 4;             // Media mobile (live)

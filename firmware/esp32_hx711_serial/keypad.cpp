@@ -5,13 +5,14 @@
 static const int* const rowPins = KEYPAD_ROW_PINS;
 static const int* const colPins = KEYPAD_COL_PINS;
 
-// Physical contacts measured with keypad_wiring_test; connector order is unknown.
+// Measured contacts mapped to the front panel: SKIP/OK, WIFI/SLEEP,
+// CLEAR/TOTAL, MODE/TARE (top to bottom, left to right).
 static const KeyCode keyMap[4][2] = {
   // GPIO17        GPIO5
-  {KEY_SKIP,  KEY_SLEEP}, // GPIO13
-  {KEY_ENTER, KEY_CLEAR}, // GPIO14
-  {KEY_WIFI,  KEY_TOTAL}, // GPIO19
-  {KEY_MODE,  KEY_TARE}   // GPIO21
+  {KEY_TARE,  KEY_CLEAR}, // GPIO13
+  {KEY_MODE,  KEY_SLEEP}, // GPIO14
+  {KEY_TOTAL, KEY_WIFI},  // GPIO19
+  {KEY_ENTER, KEY_SKIP}   // GPIO21
 };
 
 // Stato interno tastiera.

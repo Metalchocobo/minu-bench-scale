@@ -1,4 +1,5 @@
 #include "battery_monitor.h"
+#include "remote_console.h"
 #include "config/config_battery.h"
 #include "config/config_pins.h"
 
@@ -90,7 +91,7 @@ static void updateUsbPresence(uint32_t nowMs) {
 static void invalidateSample() {
   g_status.valid = false;
   if (!g_invalidLogged) {
-    Serial.println(F("[BATT] Lettura INA219 non valida"));
+    ConsoleLog.println(F("[BATT] Lettura INA219 non valida"));
     g_invalidLogged = true;
   }
 }
@@ -106,7 +107,7 @@ void battery_init() {
   // Si assume che Wire.begin(...) sia già stato chiamato nel setup
   if (!g_ina219.begin()) {
     // Keep USB-presence polling available even when the INA219 is missing.
-    Serial.println(F("[BATT] ERRORE: INA219 non trovato su I2C"));
+    ConsoleLog.println(F("[BATT] ERRORE: INA219 non trovato su I2C"));
     g_status.voltage_V = 0.0f;
     g_status.current_mA = 0.0f;
     g_status.level = BATT_LEVEL_EMPTY;
@@ -132,7 +133,7 @@ void battery_init() {
   g_invalidLogged = false;
   g_inited = true;
 
-  Serial.println(F("[BATT] INA219 inizializzato (32V / 2A, addr 0x40)"));
+  ConsoleLog.println(F("[BATT] INA219 inizializzato (32V / 2A, addr 0x40)"));
 }
 
 bool battery_is_available() {
@@ -202,22 +203,22 @@ bool battery_has_fresh_sample(uint32_t nowMs) {
 }
 
 void battery_debug_print(const BatteryStatus &st) {
-  Serial.print(F("[BATT] V="));
-  Serial.print(st.voltage_V, 3);
-  Serial.print(F(" V  I="));
-  Serial.print(st.current_mA, 0);
-  Serial.print(F(" mA  lvl="));
+  ConsoleLog.print(F("[BATT] V="));
+  ConsoleLog.print(st.voltage_V, 3);
+  ConsoleLog.print(F(" V  I="));
+  ConsoleLog.print(st.current_mA, 0);
+  ConsoleLog.print(F(" mA  lvl="));
 
   switch (st.level) {
-    case BATT_LEVEL_FULL:     Serial.print(F("FULL")); break;
-    case BATT_LEVEL_GOOD:     Serial.print(F("GOOD")); break;
-    case BATT_LEVEL_LOW:      Serial.print(F("LOW")); break;
-    case BATT_LEVEL_CRITICAL: Serial.print(F("CRITICAL")); break;
-    case BATT_LEVEL_EMPTY:    Serial.print(F("EMPTY")); break;
+    case BATT_LEVEL_FULL:     ConsoleLog.print(F("FULL")); break;
+    case BATT_LEVEL_GOOD:     ConsoleLog.print(F("GOOD")); break;
+    case BATT_LEVEL_LOW:      ConsoleLog.print(F("LOW")); break;
+    case BATT_LEVEL_CRITICAL: ConsoleLog.print(F("CRITICAL")); break;
+    case BATT_LEVEL_EMPTY:    ConsoleLog.print(F("EMPTY")); break;
   }
 
-  Serial.print(F("  charging="));
-  Serial.print(st.charging ? F("YES") : F("NO"));
-  Serial.print(F("  valid="));
-  Serial.println(st.valid ? F("YES") : F("NO"));
+  ConsoleLog.print(F("  charging="));
+  ConsoleLog.print(st.charging ? F("YES") : F("NO"));
+  ConsoleLog.print(F("  valid="));
+  ConsoleLog.println(st.valid ? F("YES") : F("NO"));
 }

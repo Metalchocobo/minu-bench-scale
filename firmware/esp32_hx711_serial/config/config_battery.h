@@ -8,6 +8,9 @@
 
 namespace BatteryConfig {
 
+// Serial telemetry cadence; disabled until explicitly enabled at runtime.
+static const uint32_t DEBUG_LOG_PERIOD_MS = 3000;
+
 // Indicative LiFePO4 voltage bands; bars are not state-of-charge percentages.
 static const float V_FULL_MIN            = 6.60f;
 static const float V_GOOD_MIN            = 6.50f;

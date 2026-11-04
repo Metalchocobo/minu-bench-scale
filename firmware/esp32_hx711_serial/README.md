@@ -8,11 +8,27 @@ Le fonti canoniche sono mantenute nella root del repository:
 - `../../docs/WIRING.md` — pinout e cablaggio fisico.
 - [Guida illustrata del cablaggio corrente](../../artifacts/wiring-current/README.md) — panoramica, tavole dei collegamenti e componenti identificati.
 
-La tastiera usa le coppie GPIO rilevate sul montaggio: righe scansione **13 = SKIP/SLEEP, 14 = ENTER/CLEAR, 19 = WIFI/TOTAL, 21 = MODE/TARE**; colonne **17 (TX2) = SKIP/ENTER/WIFI/MODE** e **5 = SLEEP/CLEAR/TOTAL/TARE**. Pin e mappa sono definiti rispettivamente in `config/config_pins.h` e `keypad.cpp`; la combinazione WIFI + TOTAL è ricavata dalla mappa. Il wake usa le stesse righe LOW e le colonne 17/5 con pull-up, senza eseguire l'azione del tasto finché non viene rilasciato.
+La tastiera usa le coppie GPIO rilevate sul montaggio e le funzioni corrispondenti all'orientamento del pannello: righe scansione **13 = TARE/CLEAR, 14 = MODE/SLEEP, 19 = TOTAL/WIFI, 21 = ENTER/SKIP**; colonne **17 (TX2) = TARE/MODE/TOTAL/ENTER** e **5 = CLEAR/SLEEP/WIFI/SKIP**. Il frontale, dall'alto, è **SKIP / OK**, **WIFI / SLEEP**, **X / TOTAL**, **MODE / TARE**, con **OK = ENTER** e **X = CLEAR**. Pin e mappa sono definiti rispettivamente in `config/config_pins.h` e `keypad.cpp`; la combinazione WIFI + TOTAL è ricavata dalla mappa. Il wake usa le stesse righe LOW e le colonne 17/5 con pull-up, senza eseguire l'azione del tasto finché non viene rilasciato.
 
 Per identificare i contatti di una replica senza conoscere l'ordine del connettore, usare lo [sketch separato `keypad_wiring_test`](../keypad_wiring_test/README.md): stampa le coppie GPIO sulla seriale a 115200 baud e non scrive in NVS. Le funzioni della bilancia sono sospese durante il test; terminata la rilevazione, si ricarica questo firmware con la mappa verificata. Le sigle R1–R6 del ritaglio non identificano l'ordine fisico dei pin.
 
 Il **buzzer passivo** usa **GPIO22 → 220 Ω / ¼ W → base BC337-40 NPN**, con emettitore a **GND comune**, collettore al **− del buzzer** e **+ del buzzer a ESP32 3V3**. Il **1N5819** è in parallelo ai terminali del buzzer, con **catodo/fascetta al + / 3V3** e **anodo al − / collettore**. Il firmware resta invariato: PWM LEDC attivo HIGH, silenzio LOW. Cablaggio completo in [WIRING, buzzer](../../docs/WIRING.md#6-buzzer--esp32).
+
+## Comandi e log seriali
+
+A **115200 baud**, `help` ristampa l'elenco completo dei comandi disponibili, mostrato anche al boot. Il log periodico batteria è spento a ogni avvio: `batt status` stampa una sola analisi, `battlog on` la stampa subito e poi ogni 3 secondi, `battlog off` la interrompe; la scelta resta solo in RAM. I messaggi di inizializzazione e di errore reale restano visibili.
+
+Ogni ingresso **WORK UNSTABLE → STABLE** stampa sempre `[STABLE] <grammi> g`, con due decimali del latch e indipendentemente da `hxlog`. In sovraccarico aggiunge `[SOVRACCARICO]` e mantiene il valore reale. Questo log non modifica stack o MQTT. `hxlog on/off` abilita il log continuo HX711, spento di default. Dettagli nel [README principale](../../README.md#comandi-e-log-seriali).
+
+## Portata e calibrazione
+
+Cella montata **20 kg nominali**, come riferito da Andrea. In `config/config_scale.h`, `MAX_TOTAL_LOAD_G = 15000` limita il carico complessivo e `CAPACITY_DEAD_LOAD_G = 500` riserva una quota prudenziale per piatto/supporti: questi 500 g sono una stima indicata da Andrea, non una massa misurata. Il totale è `(raw - zero_calibrazione) / CPG + 500 g`, perciò SOVRACCARICO entra a **14,5 kg di contenitore + contenuto**. Il rientro richiede totale sotto **14.950 g** e valore assoluto del netto sotto **15.950 g**; la guardia indipendente sul netto entra oltre **±16 kg**. TARE/ENTER restano bloccati durante SOVRACCARICO.
+
+Il display mantiene **SOVRACCARICO / Rimuovi peso dal piatto / ENTER e TARA bloccati** finché lo stato resta attivo. All'ingresso il buzzer emette automaticamente un **doppio beep una volta per evento**, con riarmo dopo il rientro: 1.500 Hz, 120 ms per tono e 80 ms di pausa, configurabili in `config/config_audio.h`. Lo scheduler è non bloccante e indipendente da AUDIO ON/OFF e DFPlayer; non occorre aggiungere MP3.
+
+Lo zero di calibrazione in **NVS `hxscale/offset_counts`** è separato dalla tara operativa; TARE, ENTER, undo, zero-tracking, Auto-TARE al boot, sleep e recupero WDT non lo modificano. `cal zero` acquisisce zero calibrazione e operativo con **piatto/supporti montati, senza contenitore né ingredienti**; `cal ref <g>` calcola il CPG da quel riferimento e `cal save` salva la coppia di calibrazione anche dopo una tara operativa. `cal status` mostra entrambi gli zero e il totale stimato.
+
+Dopo il cambio cella rifare la calibrazione, preferibilmente con un riferimento noto da **10 kg**. Se la vecchia calibrazione attiva SOVRACCARICO e blocca ENTER/TARE nel wizard, calibrare prima con **2 kg**, poi ripetere con 10 kg. I comandi seriali `cal` restano disponibili per la ricalibrazione deliberata: seguire la procedura con zero a piatto vuoto. Il wizard si apre con **SKIP tenuto 5 s**; procedura completa e controlli nel [README principale](../../README.md#calibrazione).
 
 ## Codice bilancia e LED voce
 
@@ -36,7 +52,17 @@ Il power-gate audio montato usa **IRF9540 + NPN 2N3904**, con marcatura **H331**
 
 I condensatori restano in gruppi distinti: ingresso Mini360 **220 µF / 16 V + 104**; uscita Mini360 **470 µF / 10 V + 104**; coppia **aggiuntiva sulla PCB custom fra Mini360 ed ESP32, 47 µF / 16 V + 104**, fra 5 V e GND; coppia **presso ESP32**, presente fra VIN/5V e GND con valori fisici ancora ignoti; audio **470 µF / 16 V + 104**. Per la sola coppia presso ESP32 sono consigliati per la replica **47 µF / 16 V + 100 nF (104)**, in parallelo vicino alla scheda, con + dell'elettrolitico a VIN/5V e − a GND. Questi valori consigliati non identificano quelli montati presso ESP32 e non sostituiscono la coppia PCB custom. Pin funzionali, resistenze e riferimenti da confermare sono descritti in [WIRING](../../docs/WIRING.md#7-dfplayer-mini--esp32). L'HX711 resta sulla linea nominale 5 V del Mini360 per il requisito della cella usata. I collegamenti documentati non richiedono una modifica del firmware.
 
-## Riferimento rapido MQTT firmware 1.5.2
+## Console remota MQTT
+
+Il firmware **1.6.0** annuncia `console_version:1` nello status e usa topic dedicati `minu/scale/{id}/console/request` e `/console/response`, non retained. Richiede gateway Manager autorizzato e **ACL broker dedicate prima del rollout**; le credenziali console non vanno al browser. Nessun hardware aggiuntivo. La seriale USB resta necessaria quando rete/firmware non sono operativi.
+
+`probe` rileva la capacità; `open/poll/exec/close` usano boot e sessione esatti, request ID e scadenza futura entro 30 s. Sessione esclusiva con lease di **30 s**, rinnovato soltanto da open della stessa sessione o poll valido. Blocca inattività e SLEEP manuale finché aperta; la protezione batteria conserva priorità. Close/disconnessione/expiry liberano il blocco. Sessioni chiuse mantengono un fence anti-replay bounded di 31 s; una nuova apertura usa un ID nuovo.
+
+I comandi (massimo 127 byte, senza NUL/CR/LF) vengono accodati dal callback ed eseguiti nel loop con `seq` strettamente progressiva; retry esatto non ripete effetti. Diagnostica e configurazione condividono il parser e i guard della USB; `showpass` resta USB-only e le password non entrano nel tee remoto, anche se richieste dalla USB. Mutazioni durante acquisizione/TARE/OTA e cambi rete con receipt pending sono rifiutati busy. Reboot/cambi rete possono perdere l'esito finale.
+
+`remote_console_state.h/.cpp` implementa sessioni, fence e ring RAM 2 KiB; `remote_console.h/.cpp` integra parser JSON, oggetto Print `ConsoleLog` e trasporto. Il ring raccoglie solo con sessione attiva e non pubblica dalle write; poll legge chunk UTF-8 validi con cursori byte, oldest e conteggio perdite. La response è bounded entro il pacchetto runtime da 640 byte. Contratto completo e procedura ACL nel [README principale](../../README.md#console-remota-del-manager).
+
+## Riferimento rapido MQTT firmware 1.6.0
 
 - Un `weigh` può includere `command_id` (8–64 caratteri; lettere ASCII, cifre, `-`, `_`; vuoto solo per legacy). Il firmware lo memorizza con UUID, prodotto, `session_id` e `connection_id`. Se quest'ultima è presente, il comando diventa operativo soltanto con l'owner retained fresco ed esatto e, dopo reconnect, dopo avere processato anche lo snapshot retained `command` corrente.
 - Dopo l'attivazione di un comando tokenizzato e solo quando è realmente azionabile pubblica sul topic `response` un `command_ack` transitorio con `command_id`, `session_id`, `connection_id`, UUID, prodotto e `state=active`. Fallback `LOC`, TARE obbligatoria e convergenza owner/command incompleta non producono ACK. Un replay identico dello stesso ID non reinizializza la pesata, ma riaggancia un eventuale fallback locale, aggiorna la connessione corrente e riemette l'ACK. Un payload business conflittuale viene ignorato senza ACK.
@@ -53,6 +79,8 @@ I condensatori restano in gruppi distinti: ingresso Mini360 **220 µF / 16 V + 1
 - Se ENTER arriva prima della quiete, il firmware emette un beep basso e mostra **ACQUISIZIONE PESO** per massimo 1,5 s. Registra appena raggiunge STABLE; al timeout accetta il centro RAW robusto solo senza deriva continua e usa lo stesso centro per peso e zero. Movimento persistente o campioni non validi producono doppio beep e un avviso leggibile; successo e fallimento si chiudono automaticamente dopo circa 1,3 s e 2 s.
 
 Verifica locale:
+
+`tests/firmware_remote_console_harness.cpp` compila `remote_console_state.cpp` senza Arduino e verifica lease/rollover, sessione esclusiva, boot/scadenze, replay e conflitti di sequenza, fence delle sessioni chiuse senza eviction, comandi vietati, ring/cursori/perdite e UTF-8 invalido/incompleto. Eseguire anche `firmware_mqtt_protocol_harness.cpp`, che include lo status con capability nel limite pacchetto da 640 byte.
 
 Gli harness `tests/firmware_scale_identity_harness.cpp` e `tests/firmware_status_led_harness.cpp` compilano i moduli reali con stub NVS/PWM: verificano persistenza e applicazione del codice al riavvio, errori di storage, input invalidi, sfumature, stop, standby/wake, rollover e fallback senza PWM. Dalla root, con un compilatore C++17:
 

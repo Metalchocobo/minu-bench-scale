@@ -1,4 +1,5 @@
 #include "audio.h"
+#include "remote_console.h"
 #include <Preferences.h>
 
 namespace Audio {
@@ -111,18 +112,18 @@ static void persistUserEnabled() {
 
 static void printDiagCode(uint8_t code) {
   switch (code) {
-    case DIAG_BEGIN:         Serial.print(F("BEGIN")); break;
-    case DIAG_REQUEST:       Serial.print(F("REQ")); break;
-    case DIAG_PLAY:          Serial.print(F("PLAY")); break;
-    case DIAG_NO_BUSY_EDGE:  Serial.print(F("NO_BUSY")); break;
-    case DIAG_TIMEOUT:       Serial.print(F("TIMEOUT")); break;
-    case DIAG_RESET:         Serial.print(F("RESET")); break;
-    case DIAG_READY:         Serial.print(F("READY")); break;
-    case DIAG_POWER_OFF:     Serial.print(F("PWR_OFF")); break;
-    case DIAG_MANUAL_OFF:    Serial.print(F("MAN_OFF")); break;
-    case DIAG_MANUAL_ON:     Serial.print(F("MAN_ON")); break;
-    case DIAG_DROP_DISABLED: Serial.print(F("DROP_OFF")); break;
-    default:                 Serial.print('?'); break;
+    case DIAG_BEGIN:         ConsoleLog.print(F("BEGIN")); break;
+    case DIAG_REQUEST:       ConsoleLog.print(F("REQ")); break;
+    case DIAG_PLAY:          ConsoleLog.print(F("PLAY")); break;
+    case DIAG_NO_BUSY_EDGE:  ConsoleLog.print(F("NO_BUSY")); break;
+    case DIAG_TIMEOUT:       ConsoleLog.print(F("TIMEOUT")); break;
+    case DIAG_RESET:         ConsoleLog.print(F("RESET")); break;
+    case DIAG_READY:         ConsoleLog.print(F("READY")); break;
+    case DIAG_POWER_OFF:     ConsoleLog.print(F("PWR_OFF")); break;
+    case DIAG_MANUAL_OFF:    ConsoleLog.print(F("MAN_OFF")); break;
+    case DIAG_MANUAL_ON:     ConsoleLog.print(F("MAN_ON")); break;
+    case DIAG_DROP_DISABLED: ConsoleLog.print(F("DROP_OFF")); break;
+    default:                 ConsoleLog.print('?'); break;
   }
 }
 
@@ -289,12 +290,12 @@ static void startNow(uint16_t track, uint32_t capSeconds) {
   g_busyPolarityKnown = false;
   g_busyIdleSinceMs = 0;
 
-  Serial.print(F("[MP3] play /MP3/"));
-  if (track < 10)   Serial.print('0');
-  if (track < 100)  Serial.print('0');
-  if (track < 1000) Serial.print('0');
-  Serial.print(track);
-  Serial.println(F(".mp3"));
+  ConsoleLog.print(F("[MP3] play /MP3/"));
+  if (track < 10)   ConsoleLog.print('0');
+  if (track < 100)  ConsoleLog.print('0');
+  if (track < 1000) ConsoleLog.print('0');
+  ConsoleLog.print(track);
+  ConsoleLog.println(F(".mp3"));
   diagRecord(DIAG_PLAY, track);
 
   const uint32_t now = millis();
@@ -487,7 +488,7 @@ void stopNow(bool clearQueue) {
 }
 
 void hardReset(bool clearQueue) {
-  Serial.println(F("[MP3] reset"));
+  ConsoleLog.println(F("[MP3] reset"));
   if (!g_userEnabled) {
     g_userEnabled = true;
     persistUserEnabled();
@@ -502,13 +503,13 @@ bool toggleEnabled() {
     g_userEnabled = false;
     persistUserEnabled();
     powerOffNow();
-    Serial.println(F("[MP3] manual OFF; log salvato"));
+    ConsoleLog.println(F("[MP3] manual OFF; log salvato"));
   } else {
     g_userEnabled = true;
     persistUserEnabled();
     diagRecord(DIAG_MANUAL_ON);
     beginRecovery(true);
-    Serial.println(F("[MP3] manual ON"));
+    ConsoleLog.println(F("[MP3] manual ON"));
   }
   return g_userEnabled;
 }
@@ -606,7 +607,7 @@ void task(uint32_t now) {
     case PLAYING: {
       // Timeout paracadute
       if (g_startMs != 0 && (now - g_startMs) >= g_timeoutMs) {
-        Serial.println(F("[MP3] timeout reset"));
+        ConsoleLog.println(F("[MP3] timeout reset"));
         diagRecord(DIAG_TIMEOUT);
         diagPersist(DIAG_TIMEOUT);
         beginRecovery(true);
@@ -622,7 +623,7 @@ void task(uint32_t now) {
         }
         if (g_busyIdleSinceMs == 0) g_busyIdleSinceMs = now;
         if ((now - g_busyIdleSinceMs) >= AudioConfig::END_STABLE_MS) {
-          Serial.println(F("[MP3] fine"));
+          ConsoleLog.println(F("[MP3] fine"));
           DFPlayer::stop();
           g_lastStopMs = now;
           g_state      = TAILING;
@@ -677,45 +678,45 @@ void queueClear() {
 }
 
 void debugStatus() {
-  Serial.print(F("[MP3] state="));    Serial.print((int)g_state);
-  Serial.print(F(" track="));         Serial.print(g_track);
-  Serial.print(F(" vol="));           Serial.print(g_volume);
-  Serial.print(F(" enabled="));       Serial.print(g_userEnabled ? 1 : 0);
-  Serial.print(F(" pwr="));           Serial.print(g_dfpPowered ? 1 : 0);
-  Serial.print(F(" uart="));          Serial.print(g_dfpUartReady ? 1 : 0);
-  Serial.print(F(" EN="));            Serial.print(digitalRead(DFPLAYER_EN_PIN));
-  Serial.print(F(" BUSY="));          Serial.print(digitalRead(DFPLAYER_BUSY_PIN));
-  Serial.print(F(" idle="));          Serial.print(g_busyIdle);
-  Serial.print(F(" playLvl="));       Serial.print(g_busyPlaying);
-  Serial.print(F(" polKnown="));      Serial.println(g_busyPolarityKnown ? "yes" : "no");
+  ConsoleLog.print(F("[MP3] state="));    ConsoleLog.print((int)g_state);
+  ConsoleLog.print(F(" track="));         ConsoleLog.print(g_track);
+  ConsoleLog.print(F(" vol="));           ConsoleLog.print(g_volume);
+  ConsoleLog.print(F(" enabled="));       ConsoleLog.print(g_userEnabled ? 1 : 0);
+  ConsoleLog.print(F(" pwr="));           ConsoleLog.print(g_dfpPowered ? 1 : 0);
+  ConsoleLog.print(F(" uart="));          ConsoleLog.print(g_dfpUartReady ? 1 : 0);
+  ConsoleLog.print(F(" EN="));            ConsoleLog.print(digitalRead(DFPLAYER_EN_PIN));
+  ConsoleLog.print(F(" BUSY="));          ConsoleLog.print(digitalRead(DFPLAYER_BUSY_PIN));
+  ConsoleLog.print(F(" idle="));          ConsoleLog.print(g_busyIdle);
+  ConsoleLog.print(F(" playLvl="));       ConsoleLog.print(g_busyPlaying);
+  ConsoleLog.print(F(" polKnown="));      ConsoleLog.println(g_busyPolarityKnown ? "yes" : "no");
 }
 
 void printHistory() {
   diagLoadSaved();
 
   if (g_savedValid) {
-    Serial.print(F("[MP3LOG] saved ms=")); Serial.print(g_savedSnapshot.ms);
-    Serial.print(F(" ev=")); printDiagCode(g_savedSnapshot.reason);
-    Serial.print(F(" st=")); Serial.print(g_savedSnapshot.state);
-    Serial.print(F(" tr=")); Serial.print(g_savedSnapshot.track);
-    Serial.print(F(" busy=")); Serial.print(g_savedSnapshot.busy);
-    Serial.print(F(" en=")); Serial.print(g_savedSnapshot.en);
-    Serial.print(F(" enabled=")); Serial.println(g_savedSnapshot.enabled);
+    ConsoleLog.print(F("[MP3LOG] saved ms=")); ConsoleLog.print(g_savedSnapshot.ms);
+    ConsoleLog.print(F(" ev=")); printDiagCode(g_savedSnapshot.reason);
+    ConsoleLog.print(F(" st=")); ConsoleLog.print(g_savedSnapshot.state);
+    ConsoleLog.print(F(" tr=")); ConsoleLog.print(g_savedSnapshot.track);
+    ConsoleLog.print(F(" busy=")); ConsoleLog.print(g_savedSnapshot.busy);
+    ConsoleLog.print(F(" en=")); ConsoleLog.print(g_savedSnapshot.en);
+    ConsoleLog.print(F(" enabled=")); ConsoleLog.println(g_savedSnapshot.enabled);
   } else {
-    Serial.println(F("[MP3LOG] saved none"));
+    ConsoleLog.println(F("[MP3LOG] saved none"));
   }
 
-  Serial.print(F("[MP3LOG] ram count="));
-  Serial.println(g_diagCount);
+  ConsoleLog.print(F("[MP3LOG] ram count="));
+  ConsoleLog.println(g_diagCount);
   uint8_t first = (g_diagCount < DIAG_MAX) ? 0 : g_diagNext;
   for (uint8_t i = 0; i < g_diagCount; i++) {
     const DiagEntry& e = g_diag[(uint8_t)((first + i) % DIAG_MAX)];
-    Serial.print(F("[MP3LOG] ms=")); Serial.print(e.ms);
-    Serial.print(F(" ev=")); printDiagCode(e.code);
-    Serial.print(F(" st=")); Serial.print(e.state);
-    Serial.print(F(" tr=")); Serial.print(e.track);
-    Serial.print(F(" busy=")); Serial.print(e.busy);
-    Serial.print(F(" en=")); Serial.println(e.en);
+    ConsoleLog.print(F("[MP3LOG] ms=")); ConsoleLog.print(e.ms);
+    ConsoleLog.print(F(" ev=")); printDiagCode(e.code);
+    ConsoleLog.print(F(" st=")); ConsoleLog.print(e.state);
+    ConsoleLog.print(F(" tr=")); ConsoleLog.print(e.track);
+    ConsoleLog.print(F(" busy=")); ConsoleLog.print(e.busy);
+    ConsoleLog.print(F(" en=")); ConsoleLog.println(e.en);
   }
 }
 
@@ -732,7 +733,7 @@ void clearHistory() {
     p.remove("last");
     p.end();
   }
-  Serial.println(F("[MP3LOG] cleared"));
+  ConsoleLog.println(F("[MP3LOG] cleared"));
 }
 
 bool hasSavedDiagnostic() {

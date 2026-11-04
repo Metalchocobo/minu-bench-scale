@@ -530,8 +530,8 @@
 <text x="1690" y="1920" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">C1 / 17</text>
 <text x="1820" y="1920" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">R1 / 13</text>
 <text x="1950" y="1920" font-family="Arial,Helvetica,sans-serif" font-size="22" font-weight="700" fill="#226db5" text-anchor="middle">R2 / 14</text>
-<text x="1630" y="2057" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="700" fill="#25323a" text-anchor="middle">R1: SKIP / SLEEP · R2: ENTER / CLEAR</text>
-<text x="1630" y="2091" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="700" fill="#25323a" text-anchor="middle">R3: WIFI / TOTAL · R4: MODE / TARE</text>
+<text x="1630" y="2057" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="700" fill="#25323a" text-anchor="middle">R1: TARE / CLEAR · R2: MODE / SLEEP</text>
+<text x="1630" y="2091" font-family="Arial,Helvetica,sans-serif" font-size="21" font-weight="700" fill="#25323a" text-anchor="middle">R3: TOTAL / WIFI · R4: ENTER / SKIP</text>
 <g transform="translate(2230 2020)"><path d="M-75 0H-42 M42 0H75" stroke="#226db5" stroke-width="6"/><rect x="-42" y="-15" width="84" height="30" rx="11" fill="#edd8ac" stroke="#a99169" stroke-width="2"/><path d="M-24 -13V13 M0 -13V13 M24 -13V13" stroke="#b69c74" stroke-width="6"/></g>
 <text x="2230" y="1992" font-family="Arial,Helvetica,sans-serif" font-size="25" font-weight="700" fill="#25323a" text-anchor="middle">220 Ω · base</text>
 <rect x="2390" y="1970" width="190" height="100" rx="12" fill="#e8f3ee" stroke="#8cab9b" stroke-width="2"/>

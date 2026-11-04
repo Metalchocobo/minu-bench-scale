@@ -33,20 +33,20 @@ Usare il normale upload senza cancellazione completa della flash. Lo sketch di t
 3. Annotare l'etichetta fisica del tasto insieme alla coppia stampata, per esempio `GPIO17 <-> GPIO19`. La coppia non ha un verso: l'ordine non identifica riga o colonna.
 4. Per una replica, raccogliere tutti gli otto risultati e confrontarli con la mappa confermata sotto prima di rimappare il firmware operativo. Se un tasto non stampa nulla o compare l'avviso di contatti multipli, annotarlo insieme al suo nome.
 
-Mappa confermata del montaggio corrente:
+Mappa operativa del montaggio corrente, con le funzioni orientate come sul frontale:
 
 ```text
-TARE  = GPIO5  <-> GPIO21
-ENTER = GPIO17 <-> GPIO14
-WIFI  = GPIO17 <-> GPIO19
-SLEEP = GPIO5  <-> GPIO13
-SKIP  = GPIO17 <-> GPIO13
-TOTAL = GPIO5  <-> GPIO19
-CLEAR = GPIO5  <-> GPIO14
-MODE  = GPIO17 <-> GPIO21
+TARE  = GPIO17 <-> GPIO13
+ENTER = GPIO17 <-> GPIO21
+WIFI  = GPIO5  <-> GPIO19
+SLEEP = GPIO5  <-> GPIO14
+SKIP  = GPIO5  <-> GPIO21
+TOTAL = GPIO17 <-> GPIO19
+CLEAR = GPIO5  <-> GPIO13
+MODE  = GPIO17 <-> GPIO14
 ```
 
-La mappa definisce il cablaggio reale già usato dal firmware operativo: righe scansione GPIO13, 14, 19, 21 e colonne GPIO17, 5. La [mappa operativa](../../docs/WIRING.md#5-tastiera-4x2--esp32) raggruppa i tasti per linea GPIO; le sigle R1–R6 del ritaglio non sono l'ordine fisico del connettore e non sono necessarie per questo test.
+Sul frontale, dall'alto: **SKIP / OK**, **WIFI / SLEEP**, **X / TOTAL**, **MODE / TARE**; **OK = ENTER**, **X = CLEAR**. La mappa definisce le funzioni associate ai contatti nel firmware operativo: righe scansione GPIO13, 14, 19, 21 e colonne GPIO17, 5. La [mappa operativa](../../docs/WIRING.md#5-tastiera-4x2--esp32) raggruppa i tasti per linea GPIO; le sigle R1–R6 del ritaglio non sono l'ordine fisico del connettore e non sono necessarie per questo test.
 
 ## Verifica locale dello scanner
 

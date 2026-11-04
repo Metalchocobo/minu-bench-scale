@@ -1,4 +1,5 @@
 #include "status_led.h"
+#include "remote_console.h"
 
 #include <Arduino.h>
 #include "config/config_led.h"
@@ -28,7 +29,7 @@ static void attachPwm() {
                                   LedConfig::PWM_BITS, LedConfig::PWM_CHANNEL);
   if (!g_pwmAttached) {
     pinMode(SLEEP_LED_PIN, OUTPUT);
-    Serial.println(F("[LED] PWM unavailable"));
+    ConsoleLog.println(F("[LED] PWM unavailable"));
   }
   writeBrightness(0);
 }

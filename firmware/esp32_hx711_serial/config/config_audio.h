@@ -28,6 +28,11 @@ static const uint8_t QUEUE_MAX_SIZE = 16;
 // ========================= ANTI-RETRIGGER =========================
 static const uint32_t REQUEST_GUARD_MS = 250;   // Evita richieste duplicate ravvicinate
 
+// Non-blocking overload buzzer alert, independent from DFPlayer/AUDIO enable.
+static const uint16_t OVERLOAD_BEEP_HZ     = 1500;
+static const uint32_t OVERLOAD_BEEP_ON_MS  = 120;
+static const uint32_t OVERLOAD_BEEP_GAP_MS = 80;
+
 // ========================= TRACK MUST-PLAY (non interrompibili) =========================
 // Questi track non possono essere interrotti e vengono accodati
 inline bool isMustPlayTrack(uint16_t track) {

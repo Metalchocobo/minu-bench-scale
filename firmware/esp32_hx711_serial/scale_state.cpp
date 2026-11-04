@@ -1,4 +1,5 @@
 #include "scale_state.h"
+#include "remote_console.h"
 #include "scale_filters.h"
 #include <Preferences.h>
 #include <math.h>
@@ -7,6 +8,7 @@ namespace ScaleState {
 
 // ========================= STATO INTERNO =========================
 static long  g_offsetRaw    = ScaleConfig::DEFAULT_ZERO_RAW;
+static long  g_calibrationZeroRaw = ScaleConfig::DEFAULT_ZERO_RAW;
 static float g_scaleCpg     = ScaleConfig::defaultCpg();
 static long  g_ztCounts     = 0;
 
@@ -73,6 +75,33 @@ void setOffsetRaw(long offset)   { g_offsetRaw = offset; }
 long getOffsetRaw()              { return g_offsetRaw; }
 void setScaleCpg(float cpg)      { g_scaleCpg = cpg; }
 float getScaleCpg()              { return g_scaleCpg; }
+
+void setCalibrationZeroRaw(long zero) {
+  g_calibrationZeroRaw = zero;
+  g_offsetRaw = zero;
+}
+
+long getCalibrationZeroRaw() { return g_calibrationZeroRaw; }
+
+float totalLoadGrams(long raw) {
+  if (!isfinite(g_scaleCpg) || g_scaleCpg <= 0.01f) return NAN;
+  return (float)((int64_t)raw - (int64_t)g_calibrationZeroRaw) / g_scaleCpg +
+    ScaleConfig::CAPACITY_DEAD_LOAD_G;
+}
+
+bool updateOverload(long raw, float netGrams, bool wasOverloaded) {
+  float total = totalLoadGrams(raw);
+  float net = fabsf(netGrams);
+  if (!isfinite(total) || !isfinite(net) ||
+      total >= ScaleConfig::MAX_TOTAL_LOAD_G || net > ScaleConfig::MAX_DISPLAY_G) {
+    return true;
+  }
+  if (total < ScaleConfig::TOTAL_LOAD_EXIT_G && net < ScaleConfig::OVERLOAD_EXIT_G) {
+    return false;
+  }
+  return wasOverloaded;
+}
+
 void setZtCounts(long counts)    { g_ztCounts = counts; }
 long getZtCounts()               { return g_ztCounts; }
 
@@ -411,9 +440,9 @@ bool trySnapOnUnload(float gLive, float slopeGps, bool quietNow) {
   g_ztQuietStartMs = 0;
   g_lastSnapMs     = now;
 
-  Serial.print(F("[ZT] snap: "));
-  Serial.print(correction, 2);
-  Serial.println(F(" g"));
+  ConsoleLog.print(F("[ZT] snap: "));
+  ConsoleLog.print(correction, 2);
+  ConsoleLog.println(F(" g"));
 
   return true;
 }
@@ -603,8 +632,8 @@ bool tareApplyWorking(long rawOffset, uint32_t nowMs) {
   g_offsetRaw = rawOffset;
   g_ztCounts = 0;
 
-  Serial.print(F("[TARE] WORK off="));
-  Serial.println(g_offsetRaw);
+  ConsoleLog.print(F("[TARE] WORK off="));
+  ConsoleLog.println(g_offsetRaw);
 
   resetFiltersAndState();
   return true;
@@ -628,14 +657,14 @@ TareResult tareUpdate(uint32_t nowMs) {
     g_tareUiEndMs = nowMs + ScaleConfig::TARE_FAIL_HOLD_MS;
 
     (void)tareBuildStableOffset(p, &newOffset, &rangeG, &slopeGps, &useN);
-    Serial.print(F("[TARE] FAIL t="));
-    Serial.print(elapsedMs);
-    Serial.print(F(" n="));
-    Serial.print(g_tareSampleCount);
-    Serial.print(F(" r="));
-    Serial.print(rangeG, 2);
-    Serial.print(F(" s="));
-    Serial.println(slopeGps, 2);
+    ConsoleLog.print(F("[TARE] FAIL t="));
+    ConsoleLog.print(elapsedMs);
+    ConsoleLog.print(F(" n="));
+    ConsoleLog.print(g_tareSampleCount);
+    ConsoleLog.print(F(" r="));
+    ConsoleLog.print(rangeG, 2);
+    ConsoleLog.print(F(" s="));
+    ConsoleLog.println(slopeGps, 2);
     return TARE_RESULT_FAILED;
   }
 
@@ -665,16 +694,16 @@ TareResult tareUpdate(uint32_t nowMs) {
     g_offsetRaw = newOffset;
     g_ztCounts = 0;
 
-    Serial.print(F("[TARE] OK t="));
-    Serial.print(elapsedMs);
-    Serial.print(F(" off="));
-    Serial.print(g_offsetRaw);
-    Serial.print(F(" n="));
-    Serial.print(useN);
-    Serial.print(F(" r="));
-    Serial.print(rangeG, 2);
-    Serial.print(F(" s="));
-    Serial.println(slopeGps, 2);
+    ConsoleLog.print(F("[TARE] OK t="));
+    ConsoleLog.print(elapsedMs);
+    ConsoleLog.print(F(" off="));
+    ConsoleLog.print(g_offsetRaw);
+    ConsoleLog.print(F(" n="));
+    ConsoleLog.print(useN);
+    ConsoleLog.print(F(" r="));
+    ConsoleLog.print(rangeG, 2);
+    ConsoleLog.print(F(" s="));
+    ConsoleLog.println(slopeGps, 2);
 
     resetFiltersAndState();
     return TARE_RESULT_APPLIED;
@@ -756,23 +785,25 @@ static Preferences g_prefs;
 void loadFromNVS() {
   g_prefs.begin("hxscale", true);
   g_offsetRaw = g_prefs.getLong("offset_counts", ScaleConfig::DEFAULT_ZERO_RAW);
+  g_calibrationZeroRaw = g_offsetRaw;
   g_scaleCpg  = g_prefs.getFloat("scale_cpg", ScaleConfig::defaultCpg());
   g_prefs.end();
 
-  Serial.print(F("[NVS] OFFSET="));
-  Serial.print(g_offsetRaw);
-  Serial.print(F(" CPG="));
-  Serial.println(g_scaleCpg, 4);
+  ConsoleLog.print(F("[NVS] OFFSET="));
+  ConsoleLog.print(g_offsetRaw);
+  ConsoleLog.print(F(" CPG="));
+  ConsoleLog.println(g_scaleCpg, 4);
 }
 
 bool saveToNVS() {
   g_prefs.begin("hxscale", false);
-  size_t wroteOffset = g_prefs.putLong("offset_counts", g_offsetRaw);
+  // Persist the empty-plate reference, never an Auto-TARE/TARE/ENTER offset.
+  size_t wroteOffset = g_prefs.putLong("offset_counts", g_calibrationZeroRaw);
   size_t wroteScale  = g_prefs.putFloat("scale_cpg", g_scaleCpg);
   g_prefs.end();
 
   bool ok = (wroteOffset > 0 && wroteScale > 0);
-  Serial.println(ok ? F("[NVS] Salvato") : F("[NVS] ERRORE save"));
+  ConsoleLog.println(ok ? F("[NVS] Salvato") : F("[NVS] ERRORE save"));
   return ok;
 }
 
@@ -786,14 +817,14 @@ void setMode(const char* mode) {
     g_ztEnable = false;
     ScaleFilters::setMA(ScaleConfig::MA_FINE);
     g_deadbandUnstable = ScaleConfig::DB_UNSTABLE_F;
-    Serial.println(F("[MODE] LIVE"));
+    ConsoleLog.println(F("[MODE] LIVE"));
   } else {
     // Default: work
     g_stEnable = true;
     g_ztEnable = true;
     ScaleFilters::setMA(ScaleConfig::MA_DEFAULT);
     g_deadbandUnstable = ScaleConfig::DB_UNSTABLE_N;
-    Serial.println(F("[MODE] WORK"));
+    ConsoleLog.println(F("[MODE] WORK"));
   }
 
   resetFiltersAndState();
