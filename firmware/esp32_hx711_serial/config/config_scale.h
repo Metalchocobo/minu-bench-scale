@@ -147,7 +147,7 @@ static const float    LIVE_EMA_ALPHA          = 0.45f;
 static const uint8_t  DISP_LIVE_HALF_WIN_N    = 16;     // ~600 ms at 80 SPS / N=3
 static const float    DISP_LIVE_HALF_LOW_RATIO  = 0.30f;
 static const float    DISP_LIVE_HALF_HIGH_RATIO = 0.70f;
-static const float    DISP_LIVE_HALF_STICKY_G = 0.08f;  // Hysteresis around half-step midpoint
+static const float    DISP_LIVE_HALF_STICKY_G = 0.12f;  // Hysteresis around half-step midpoint
 
 // WORK
 static const float    DISP_ZERO_ENTER_WORK_G  = 1.30f;

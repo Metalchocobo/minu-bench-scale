@@ -166,12 +166,12 @@ La scheda montata usa **30 terminali, 15 per fila**. Nella vista di riferimento 
 | SPI CS | OLED SSD1322 | 25 | |
 | SPI DC | OLED SSD1322 | 26 | |
 | SPI RST | OLED SSD1322 | 27 | |
-| Tastiera riga TARE / CLEAR | Keypad | 13 | uscita scansione |
-| Tastiera riga MODE / SLEEP | Keypad | 14 | uscita scansione |
+| Tastiera riga TARE / riservato | Keypad | 13 | uscita scansione |
+| Tastiera riga MODE / UNDO | Keypad | 14 | uscita scansione |
 | Tastiera riga TOTAL / WIFI | Keypad | 19 | uscita scansione |
 | Tastiera riga ENTER / SKIP | Keypad | 21 | uscita scansione |
 | Tastiera colonna TARE / MODE / TOTAL / ENTER | Keypad | 17 | ingresso pull-up; terminale TX2 |
-| Tastiera colonna CLEAR / SLEEP / WIFI / SKIP | Keypad | 5 | ingresso pull-up |
+| Tastiera colonna riservato / UNDO / WIFI / SKIP | Keypad | 5 | ingresso pull-up |
 | Buzzer | buzzer passivo tramite BC337-40 | 22 | PWM LEDC → 220 Ω → base NPN; alimentazione buzzer 3V3 |
 | DFPlayer TX | DFPlayer RX | 4 | resistenza 1 kΩ in serie nello schema corrente |
 | DFPlayer RX | DFPlayer TX | 34 | collegato nello schema; input-only, opzionale per il firmware |
@@ -186,12 +186,12 @@ Disposizione frontale dei tasti, dall'alto verso il basso:
 
 ```text
 SKIP | OK
-WIFI | SLEEP
-X    | TOTAL
+WIFI | UNDO
+DONE | TOTAL
 MODE | TARE
 ```
 
-**OK** corrisponde a **ENTER**, **X** a **CLEAR** (annulla l'ultima pesata; la pressione lunga svuota lo stack locale). La mappa software tiene conto dell'orientamento del pannello; i sei collegamenti GPIO restano quelli indicati.
+**OK** corrisponde a **ENTER**. **UNDO** usa il contatto GPIO14/GPIO5, annulla l'ultima pesata al rilascio e commuta AUDIO ON/OFF se tenuto per 2 secondi. **DONE**, al posto di CLEAR, usa GPIO13/GPIO5: nella pesatura collegata al Manager, un click breve imposta la produzione su **Pesato** e apre il riepilogo completo; una pressione di **2 secondi** imposta **Fatto** e torna al piano di lavoro. La mappa software tiene conto dell'orientamento del pannello; i sei collegamenti GPIO restano quelli indicati.
 
 Il buzzer passivo è adatto all'alimentazione a **3,3 V** e al circuito di pilotaggio: **GPIO22 → 220 Ω / ¼ W → base BC337-40**, emettitore a **GND comune**, collettore al **− del buzzer**, **+ del buzzer a ESP32 3V3**. Il diodo **1N5819** collega gli stessi due terminali del buzzer: **catodo con fascetta al + / 3V3**, **anodo al − / collettore**. Il firmware resta invariato: PWM attivo HIGH, silenzio LOW. Dettagli in [WIRING, buzzer](docs/WIRING.md#6-buzzer--esp32).
 
@@ -261,7 +261,7 @@ WORK e LIVE usano due visualizzazioni diverse:
    - frazione bassa / prevalenza bassa (`<= 30%` verso l'intero alto) -> mostra `N.0`
    - zona centrale / oscillazione bilanciata (`31-69%`) -> mostra `N.5`
    - frazione alta / prevalenza alta (`>= 70%`) -> mostra `N+1.0`
-   - sticky band da ~`0.08 g` sui confini `.0/.5/1.0` per evitare rimbalzi continui
+   - sticky band da ~`0.12 g` sui confini `.0/.5/1.0` per evitare rimbalzi continui
 4) **WORK**: resta quantizzato a grammo intero con banda zero a `1.3 g` / `0.9 g` e isteresi tra interi.
 
 ### Anti-spike guard (RAW)
@@ -307,7 +307,7 @@ Zero di lavoro post-**ENTER**:
 - se il gate normale non è pronto, emette un beep basso e mostra **ACQUISIZIONE PESO** con barra di avanzamento per un massimo di **1,5 s**; appena il peso diventa quieto registra e tara senza attendere la fine della barra
 - al timeout calcola un centro robusto sui campioni RAW successivi alla pressione. Il range resta diagnostico per tollerare l'oscillazione dei liquidi; una deriva oltre **4 g/s**, campioni insufficienti o non freschi rifiutano l'operazione. Il valore robusto deve inoltre rispettare sia il campo netto ±16 kg sia il limite complessivo di 15 kg
 - nel fallback applica come nuovo zero lo stesso centro RAW da cui ricava i grammi registrati
-- registra nello stack anche offset/zero-tracking precedenti e, per un comando session-aware, UUID, `product_id`, sessione e receipt del `confirm`; questi dati rendono reversibile il commit con CLEAR breve
+- registra nello stack anche offset/zero-tracking precedenti e, per un comando session-aware, UUID, `product_id`, sessione e receipt del `confirm`; questi dati rendono reversibile il commit con UNDO breve
 - solo dopo il nuovo zero registra il peso nello stack e prepara il `confirm` MQTT; la response resta in retry finché Laravel l'ha persistita e il browser completa clear + ACK
 - durante l'attesa ricontrolla sensore, calibrazione, offset e identità esatta del comando MQTT; se una condizione cambia, oppure MQTT va offline con un comando attivo, offset, stack e comando restano invariati
 - non azzera lo stack e non aggiorna la tara di riferimento della sessione
@@ -386,7 +386,7 @@ Comportamento:
 - Prima della disconnessione pulita MQTT viene pubblicato retained lo stato `sleeping`, così il gestionale non conserva uno status `online` mentre la bilancia dorme.
 - Anti-troncamento audio (DFPlayer): applicato un gap ~200 ms tra stop → play e ignorati i primi ~300 ms di BUSY=idle dopo il play (evita tagli tipo 0001→0002).
   - Nota HW: BUSY su GPIO39 non ha pull-up interno; se il BUSY resta instabile, aggiungere pull-up esterno verso 3V3 (10k..47k).
-- Wake: premendo un tasto la tastiera risveglia l'ESP32; quel tasto viene consumato fino al rilascio e non può avviare anche TARE, ENTER, CLEAR, SKIP o un nuovo sleep
+- Wake: premendo un tasto la tastiera risveglia l'ESP32; quel tasto viene consumato fino al rilascio e non può avviare anche TARE, ENTER, UNDO o SKIP
 
 ---
 
@@ -404,8 +404,8 @@ Caratteristiche:
 - Il tasto che provoca il wake viene ignorato come comando finché non viene rilasciato.
 - **Nessun reset** dello stato/pesata: riprende esattamente dove era.
 - WiFi/OTA vengono sospesi prima dello sleep e riattivati dopo il wake **solo se l'utente ha lasciato il WiFi ON**.
-- **SLEEP breve**: al rilascio avvia la sequenza di standby manuale (schermata **Zzz...** per ~5 s + audio 0003), poi light-sleep anche se è presente un semplice comando `weigh` MQTT. Se il worker MQTT sta connettendo, la richiesta resta accodata e lo sleep parte appena il trasporto viene rilasciato, senza richiedere una seconda pressione. Una response ancora nel lock operatore, un upload OTA o il sovraccarico continuano invece a bloccarlo; una response già detached no.
-- **SLEEP tenuto per 2 secondi**: non entra in standby; commuta il DFPlayer tra **AUDIO OFF** e **AUDIO ON**, salva la scelta in NVS e la mantiene dopo riavvii e spegnimenti completi, con conferma sul display e buzzer.
+- Non esiste uno standby manuale da tastiera: restano lo sleep per inattività e la protezione per batteria scarica.
+- **UNDO tenuto per 2 secondi** commuta il DFPlayer tra **AUDIO OFF** e **AUDIO ON**, salva la scelta in NVS e la mantiene dopo riavvii e spegnimenti completi, con conferma sul display e buzzer. La pressione lunga non annulla una pesata.
 
 ### Indicatore esterno audio e sleep (LED)
 Lo stesso LED indica la riproduzione audio e lo standby:
@@ -415,7 +415,7 @@ Il LED montato è un normale LED rosso del kit Arduino. La resistenza da **1 kΩ
 
 - Durante una riproduzione confermata dal segnale **BUSY** il LED genera pulsazioni sfumate di durata e intensità diverse. È un effetto voce simulato: BUSY indica riproduzione/idle, non il volume o le sillabe del file.
 - A riproduzione terminata, su stop, AUDIO OFF o power-off del player il LED si spegne. Non si anima soltanto perché un brano è in coda o il modulo è in inizializzazione.
-- Durante lo **standby manuale o per inattività/light-sleep** il LED resta **acceso fisso**, anche con AUDIO OFF; al wake torna alla gestione audio. Lo sleep di protezione per batteria scarica lo lascia spento.
+- Durante lo **standby per inattività/light-sleep** il LED resta **acceso fisso**, anche con AUDIO OFF; al wake torna alla gestione audio. Lo sleep di protezione per batteria scarica lo lascia spento.
 
 Il PWM è **5 kHz, 8 bit**, sul canale LEDC **8**, separato dal gruppo usato dal buzzer. L'inviluppo viene aggiornato a timestamp, senza attese aggiunte al loop. Prima dello standby il PWM viene sganciato e GPIO15 pilotato come uscita fissa; viene riagganciato al wake. Parametri e sequenza delle pulsazioni sono in `config/config_led.h`. Se l'allocazione PWM fallisce, il firmware lo segnala in seriale e usa un lampeggio digitale come fallback. Intensità e resa visiva richiedono verifica sulla bilancia fisica.
 
@@ -559,9 +559,12 @@ Response firmware:
 {"type":"confirm","uuid":"...","product_id":123,"session_id":"...","command_id":"...","response_id":"a1b2c3d40000012300000001","actual_weight":448.0}
 {"type":"skip","uuid":"...","product_id":123,"session_id":"...","command_id":"...","response_id":"a1b2c3d40000012300000002"}
 {"type":"undo","uuid":"...","product_id":123,"session_id":"...","response_id":"a1b2c3d40000012300000003","undo_of_response_id":"a1b2c3d40000012300000001"}
+{"type":"done","uuid":"...","product_id":123,"session_id":"...","command_id":"...","response_id":"a1b2c3d40000012300000004","production_status":2}
 ```
 
-`confirm` e `skip` riportano il `command_id` originale quando il comando lo possiede. `undo` è prodotto soltanto da un CLEAR breve su una voce session-aware reversibile: non inventa un nuovo `command_id`, perché la correlazione durabile è già espressa da `undo_of_response_id`, che punta alla receipt del `confirm` originario. Una voce locale o legacy priva di tale receipt viene annullata soltanto sul firmware.
+`confirm` e `skip` riportano il `command_id` originale quando il comando lo possiede. `undo` è prodotto soltanto da un UNDO breve su una voce session-aware reversibile: non inventa un nuovo `command_id`, perché la correlazione durabile è già espressa da `undo_of_response_id`, che punta alla receipt del `confirm` originario. Una voce locale o legacy priva di tale receipt viene annullata soltanto sul firmware.
+
+`done` è prodotto esclusivamente dal tasto DONE nella pesatura gestita. L'owner fresco espone `production_id` soltanto per la produzione aperta e autorizzata; con un comando `weigh` il prodotto deve coincidere, senza ingrediente serve `expected_command_id=""` esplicito. Senza `weigh`, `uuid` è vuoto e `command_id` è omesso. `production_status=2` imposta Pesato e apre il riepilogo completo, `3` imposta Fatto e torna al piano. Usa lo stesso outbox immutabile e la sequenza REST → clear retained/PUBACK → response_ack/PUBACK; non registra pesi né modifica ingredienti. La receipt include lo stato richiesto nella fingerprint: replay identico idempotente, riuso dell'ID con stato diverso respinto. Solo l'ACK esatto richiama 0022/0023, una volta; un reject segnala errore senza audio di successo.
 
 ACK browser:
 
@@ -570,7 +573,7 @@ ACK browser:
 {"type":"response_reject","response_id":"a1b2c3d40000012300000001","reason":"manager_incident"}
 ```
 
-Il firmware conserva una sola response session-aware in RAM e la ripubblica ogni **1 secondo** finché riceve un esito terminale con la stessa `response_id`. `response_ack` significa mutazione applicata; `response_reject` è accettato esclusivamente con `reason=manager_incident`, elimina l'outbox senza simulare un successo e resta idempotente sui replay. Il payload staged, inclusi `session_id`, l'eventuale `command_id` e `response_id`, resta byte-per-byte immutabile. Il lock fisico di consegna è limitato a **10 secondi**, termina prima su `pagehide` fenced/owner scaduto e viene sganciato immediatamente se l'operatore preme fisicamente TARE o ENTER. L'outbox continua in background, mentre quell'input e i successivi TARE/ENTER diventano esclusivamente locali. SKIP/CLEAR remoto, nuovi `weigh` e nuove response restano serializzati sul singolo outbox. Un `confirm` quarantinato viene ripristinato localmente una sola volta soltanto se la sua receipt è ancora l'ultima voce e il lock operatore non era stato sganciato; altrimenti stack e riferimento vengono invalidati, senza creare successi, undo o ACK per una receipt inesistente. Un `undo` rifiutato prima del detach lascia lo stack invariato. Se il restore detached era già stato applicato, un reject tardivo non tenta una compensazione pericolosa: invalida stack/riferimento locali, mostra `SYNC ERROR — Premi TARA`, blocca ENTER/SKIP/CLEAR e richiede una TARE fisica. Fino alla TARE riuscita lo status espone `tare_required=true`, la modalità resta locale e un eventuale comando raw viene conservato ma non è azionabile né riceve `command_ack`; dopo la TARE lo stesso contesto valido può essere riattivato e confermato una sola volta.
+Il firmware conserva una sola response session-aware in RAM e la ripubblica ogni **1 secondo** finché riceve un esito terminale con la stessa `response_id`. `response_ack` significa mutazione applicata; `response_reject` è accettato esclusivamente con `reason=manager_incident`, elimina l'outbox senza simulare un successo e resta idempotente sui replay. Il payload staged, inclusi `session_id`, l'eventuale `command_id` e `response_id`, resta byte-per-byte immutabile. Il lock fisico di consegna è limitato a **10 secondi**, termina prima su `pagehide` fenced/owner scaduto e viene sganciato immediatamente se l'operatore preme fisicamente TARE o ENTER. L'outbox continua in background, mentre quell'input e i successivi TARE/ENTER diventano esclusivamente locali. SKIP/UNDO remoto, nuovi `weigh` e nuove response restano serializzati sul singolo outbox. Un `confirm` quarantinato viene ripristinato localmente una sola volta soltanto se la sua receipt è ancora l'ultima voce e il lock operatore non era stato sganciato; altrimenti stack e riferimento vengono invalidati, senza creare successi, undo o ACK per una receipt inesistente. Un `undo` rifiutato prima del detach lascia lo stack invariato. Se il restore detached era già stato applicato, un reject tardivo non tenta una compensazione pericolosa: invalida stack/riferimento locali, mostra `SYNC ERROR — Premi TARA`, blocca ENTER, SKIP breve e UNDO breve e richiede una TARE fisica. Fino alla TARE riuscita lo status espone `tare_required=true`, la modalità resta locale e un eventuale comando raw viene conservato ma non è azionabile né riceve `command_ack`; dopo la TARE lo stesso contesto valido può essere riattivato e confermato una sola volta.
 
 Outbox e cache dei due esiti terminali sono RAM: un reboot le perde, e più di due request terminali diversi possono espellere il più vecchio. Il Manager normale mantiene una sola richiesta irrisolta per scheda; una garanzia attraverso reboot o publisher concorrenti richiederebbe un journal persistente dedicato.
 
@@ -601,7 +604,9 @@ La console richiede **identità MQTT distinte e ACL broker applicate prima del f
 
 Ogni request JSON contiene `v:1`, `action`, `request_id`, `session_id`, `boot_id` ed `expires_at` (epoch Unix). `probe` può omettere sessione/boot ed è privo di effetti; `open`, `poll`, `exec` e `close` richiedono sessione e boot esatti. Gli ID sono stringhe ASCII di massimo 64 caratteri tra lettere, cifre, `-`, `_`. La scadenza deve essere futura ed entro 30 secondi dal clock NTP della bilancia; il gateway usa normalmente 10 secondi. Le response riportano `v`, `type:console`, azione/ID/boot/bilancia, `state` (`ok`, `done`, `busy`, `rejected`), `error` e `console_version:1`. Il probe esatto prova la capacità; un timeout su una bilancia online indica capacità non confermata, non bilancia offline.
 
-Una sola sessione può essere aperta per bilancia. Soltanto `open` della stessa sessione e `poll` valido rinnovano il **lease monotono di 30 secondi**; il gateway rinnova mentre la console resta aperta. La chiusura, la perdita trasporto o la scadenza disabilitano la cattura log e liberano il blocco standby. **SLEEP breve e inattività sono bloccati mentre la sessione è attiva**, incluso un countdown già iniziato; la protezione di batteria scarica resta prioritaria. Dopo il rilascio riparte il timer di inattività. Una nuova apertura dopo chiusura/scadenza usa un `session_id` nuovo; fino a quattro sessioni chiuse mantengono un fence di replay per 31 secondi, senza espellere fence ancora validi.
+Il gateway Manager legge lo status dello stesso MAC e usa `published_at + 10 s + tempo monotono dalla ricezione`, finalizzando la busta dopo TLS ed entrambi i SUBACK. Il boot dello status vincola anche il probe; non serve allineare al secondo gli orologi Linux ed ESP32. La risposta correlata resta necessaria: uno status retained vecchio non prova presenza e può produrre `expired`. I rifiuti temporali sono mostrati come `console_clock_mismatch`, senza consumare la sequenza o ritentare automaticamente il comando. Il contratto firmware 1.6.0 e il limite di 30 s restano gli stessi. La prova PHP/C++ riproducibile è descritta nella [verifica locale firmware](firmware/esp32_hx711_serial/README.md#verifica-contratto-clock-console-managerfirmware).
+
+Una sola sessione può essere aperta per bilancia. Soltanto `open` della stessa sessione e `poll` valido rinnovano il **lease monotono di 30 secondi**; il gateway rinnova mentre la console resta aperta. La chiusura, la perdita trasporto o la scadenza disabilitano la cattura log e liberano il blocco standby. **Lo sleep per inattività è bloccato mentre la sessione è attiva**, incluso un countdown già iniziato; la protezione di batteria scarica resta prioritaria. Dopo il rilascio riparte il timer di inattività. Una nuova apertura dopo chiusura/scadenza usa un `session_id` nuovo; fino a quattro sessioni chiuse mantengono un fence di replay per 31 secondi, senza espellere fence ancora validi.
 
 `exec` aggiunge `seq` (da 1, incrementi esatti di 1) e `command` (1–127 byte UTF-8, senza NUL/CR/LF). Il callback accoda una sola richiesta e il parser seriale la esegue nel loop, senza accedere al client quando il worker rete lo possiede. Lo stesso ID/sequenza/comando restituisce lo stato precedente senza ripetere effetti; una fingerprint conflittuale è rifiutata. `done` significa che il parser ha terminato: l'esito del comando è nel log. Un rifiuto definitivo del comando consuma la sequenza; errori envelope/boot/sessione non la consumano. `busy/executing` è transitorio. Le mutazioni incompatibili con acquisizione/TARE/OTA, e i cambi trasporto durante una receipt pending, restituiscono `rejected/busy` senza restare in attesa. Restano attivi i guard esistenti su calibrazione e stack. Reboot, `wifi apply` e `mqtt apply` possono interrompere la risposta: il gateway mostra esito non verificato e non inventa un nuovo comando di retry.
 
@@ -644,8 +649,8 @@ Cambio e disassociazione bilancia sono bloccati finché una `confirm_request` è
 - **Conferma dal Manager**: con firmware 1.4+ richiama lo stesso flusso di ENTER. La pagina non cambia ingrediente su `accepted`/`staged` né su errore; avanza soltanto dopo la persistenza durable della pesata e l'ACK end-to-end
 - **SKIP breve**: scatta al rilascio e prepara `skip` per il comando attivo; senza comando emette un buzzer di avviso
 - **SKIP tenuto 5 secondi**: apre il wizard calibrazione senza inviare prima uno `skip`
-- **CLEAR breve**: annulla subito una voce locale; per una voce con receipt session-aware prepara `undo` e ripristina offset/zero-tracking soltanto al relativo ACK
-- Finché il lock remoto è attaccato SKIP/CLEAR vengono rifiutati. Una pressione fisica di TARE/ENTER forza invece il fallback e prosegue localmente; non crea una seconda response
+- **UNDO breve**: al rilascio annulla subito una voce locale; per una voce con receipt session-aware prepara `undo` e ripristina offset/zero-tracking al relativo ACK. Il Manager rimuove il peso registrato e riapre l'ingrediente annullato
+- Finché il lock remoto è attaccato SKIP breve e UNDO breve vengono rifiutati; UNDO lungo mantiene il controllo AUDIO ON/OFF. Una pressione fisica di TARE/ENTER forza invece il fallback e prosegue localmente; non crea una seconda response
 
 ### Display MQTT
 
@@ -679,7 +684,7 @@ Il firmware sincronizza l'orologio via NTP (`pool.ntp.org`) all'avvio, necessari
 
 ## 13) Weigh Stack — Stack pesate locale
 
-Stack pesate in RAM (LIFO, max 50 elementi). Ogni voce conserva grammi, offset e zero-tracking precedenti; le pesate session-aware conservano inoltre UUID, `product_id`, sessione e `response_id` del confirm. Lo stack sopravvive al light-sleep ma viene azzerato a ogni reboot, incluso un reset WDT.
+Stack pesate in RAM (LIFO, max 50 elementi). Ogni voce conserva grammi, offset e zero-tracking precedenti; le pesate session-aware conservano inoltre UUID, `product_id`, sessione e `response_id` del confirm. Lo stack sopravvive al light-sleep ma viene azzerato da una TARE manuale riuscita, da `stack clear` e a ogni reboot, incluso un reset WDT. UNDO può annullare soltanto le voci ancora presenti nello stack.
 
 ### Workflow tipico
 
@@ -687,8 +692,8 @@ Stack pesate in RAM (LIFO, max 50 elementi). Ogni voce conserva grammi, offset e
 2. Aggiungi ingrediente e premi **ENTER** sulla bilancia oppure **Conferma** nel Manager → se è già quieto accetta subito; altrimenti mostra la barra **ACQUISIZIONE PESO** fino a 1,5 s, poi accetta appena STABLE o usa il centro robusto se non c'è deriva. A quel punto applica lo zero di lavoro, registra nello stack e prepara il `confirm` MQTT
 3. Ripeti per ogni ingrediente
 4. **TOTAL** (breve, al rilascio) → mostra overlay di controllo con **Registrato**, **Effettivo** e **Differenza** (10 secondi)
-5. **CLEAR** (breve) → annulla realmente l'ultima pesata: subito se locale, oppure dopo receipt/ACK dell'`undo` se associata a Laravel; a quel punto ripristina offset/zero-tracking e rimuove la voce LIFO
-6. **CLEAR** (2 secondi) → svuota soltanto lo stack locale, senza produrre una serie di undo remoti
+5. **UNDO** (breve, al rilascio) → annulla realmente l'ultima pesata: subito se locale, oppure dopo receipt/ACK dell'`undo` se associata a Laravel; a quel punto ripristina offset/zero-tracking e rimuove la voce LIFO. Il Manager rimuove il peso registrato e riapre l'ingrediente. Con il carico ancora sul piatto torna visibile il peso rispetto alla tara precedente
+6. Dopo ogni annullamento concluso, **UNDO** può annullare la voce precedente, una per volta. Tenendolo **2 secondi** si commuta invece AUDIO ON/OFF, senza annullare né svuotare lo stack
 
 ### Tasti
 
@@ -697,7 +702,8 @@ Stack pesate in RAM (LIFO, max 50 elementi). Ogni voce conserva grammi, offset e
 | **TARE** | Tara manuale; se riesce azzera stack e salva riferimento | — |
 | **ENTER** | Valida peso + zero di lavoro + push + MQTT confirm | — |
 | **TOTAL** | Al rilascio mostra overlay confronto: Registrato / Effettivo / Differenza | Con WIFI tenuto: lettura batteria |
-| **CLEAR** | Avvia undo LIFO; per una voce remota applica il ripristino dello zero dopo l'ACK | Svuota solo lo stack locale |
+| **UNDO** | Al rilascio avvia undo LIFO; per una voce remota applica il ripristino dello zero dopo l'ACK | Commuta AUDIO ON/OFF, senza undo |
+| **DONE** | Solo nella pesatura Manager: imposta **Pesato** e apre il riepilogo completo | Imposta **Fatto** e torna al piano di lavoro |
 
 **Note:**
 - ENTER con peso <= 0: ignorato (nessun push, nessuna tara, nessun MQTT)
@@ -706,7 +712,9 @@ Stack pesate in RAM (LIFO, max 50 elementi). Ogni voce conserva grammi, offset e
 - Lo zero di lavoro post-ENTER NON azzera lo stack e NON aggiorna il riferimento
 - Se la tara manuale fallisce per deriva reale o campioni insufficienti, offset, riferimento e stack restano invariati
 - Le overlay si chiudono dopo 10 secondi; l'overlay TOTAL si chiude anche con TOTAL, TARE o ENTER
-- Long press "solido" usato su CLEAR: l'azione breve scatta al rilascio solo se la soglia non è stata raggiunta. Il clear lungo è una manutenzione locale e non annulla in massa le azioni già persistite in Laravel.
+- L'azione breve di UNDO scatta al rilascio solo se la soglia di 2 secondi non è stata raggiunta. Non esiste un tasto per svuotare tutto lo stack.
+- DONE breve scatta al rilascio; a 2 secondi scatta soltanto l'azione lunga. Funziona anche nel riepilogo senza ingrediente attivo, con il contesto produzione trasmesso dal Manager. Fuori dalla pesatura gestita, durante TARE, acquisizione ENTER, calibrazione o consegna di una response è inattivo. Un cambio di produzione, ingrediente o connessione durante la pressione annulla il gesto. Non cancella stack o tara. Dopo il salvataggio confermato dal Manager riproduce **0022** per Pesato oppure **0023** per Fatto; un errore non produce audio di successo.
+- Un annullamento locale riuscito richiama subito **`SD:/MP3/0021.mp3`**; per una voce registrata nel Manager l'audio parte soltanto dopo il suo ACK di successo, anche se il fail-safe ha già ripristinato la tara localmente. AUDIO ON/OFF e priorità del player restano validi. Stack vuoto, annullamento non possibile o rifiutato producono soltanto il bip d'errore del buzzer, senza 0021.
 
 ### Comandi seriali
 
@@ -718,10 +726,10 @@ Stack pesate in RAM (LIFO, max 50 elementi). Ogni voce conserva grammi, offset e
 
 - ENTER session-aware esegue: validazione → zero di lavoro → push reversibile → staging del `confirm` → associazione della receipt generata alla voce. Se lo staging non riesce, push e zero vengono annullati.
 - La richiesta remota del Manager non duplica questa logica: viene consumata nel loop, rispetta lo stesso lock TARE e chiama lo stesso helper di ENTER. Un fallimento non genera `confirm`, quindi Laravel e la pagina restano sull'ingrediente corrente.
-- CLEAR breve legge la voce senza rimuoverla. Se contiene una receipt remota, prepara un nuovo outbox `undo` con `undo_of_response_id`; offset/zero-tracking vengono ripristinati e la voce viene rimossa soltanto dopo l'ACK browser, quindi dopo la persistenza Laravel. Se il primo publish QoS 0 fallisce, lo stato locale resta invariato e l'outbox continua i retry.
+- UNDO breve legge la voce senza rimuoverla. Se contiene una receipt remota, prepara un nuovo outbox `undo` con `undo_of_response_id`; offset/zero-tracking vengono ripristinati e la voce viene rimossa dopo l'ACK browser, quindi dopo la persistenza Laravel. Se il primo publish QoS 0 fallisce, lo stato locale resta invariato e l'outbox continua i retry. Se l'operatore viene sganciato dal Manager durante l'attesa, si applica il ripristino locale una sola volta e la sincronizzazione prosegue in background; l'ACK tardivo non ripete il ripristino e richiama una sola volta l'audio 0021. Un rifiuto non produce l'audio di successo.
 - Una voce locale o legacy senza receipt viene annullata subito e solo localmente; non viene inventato un undo Laravel non correlabile.
-- Una response in attesa continua a serializzare SKIP, CLEAR e le mutazioni del wizard. TARE ed ENTER non vengono mai scartati: la prima pressione fisica forza lo sgancio locale immediato, mentre senza input il fail-safe scatta comunque entro 10 secondi. Il payload remoto continua il retry immutabile e le mutazioni seriali/calibrazione restano serializzate sul singolo outbox.
-- Il payload MQTT `clear` inviato dal browser non equivale al tasto CLEAR: pulisce soltanto UUID, target e sessione del comando retained e non modifica lo stack.
+- Una response in attesa continua a serializzare SKIP breve, UNDO breve e le mutazioni del wizard. TARE ed ENTER non vengono mai scartati: la prima pressione fisica forza lo sgancio locale immediato, mentre senza input il fail-safe scatta comunque entro 10 secondi. Il payload remoto continua il retry immutabile e le mutazioni seriali/calibrazione restano serializzate sul singolo outbox.
+- Il payload MQTT `clear` inviato dal browser resta parte del protocollo: pulisce soltanto UUID, target e sessione del comando retained e non modifica lo stack.
 
 ---
 
@@ -812,10 +820,10 @@ Comportamento attuale:
 - La riproduzione MP3 è progettata per essere **non bloccante**: mentre l’audio suona, la bilancia continua a leggere HX711 e ad aggiornare UI/log.
 - I comandi UART verso DFPlayer vengono inviati senza `flush()` bloccanti: se il modulo audio o UART1 si pianta, il firmware non resta fermo in attesa infinita dello svuotamento TX.
 - **Gestione priorità audio**: alcuni MP3 sono **non interrompibili** e, se richiesti mentre un altro non interrompibile sta suonando, vengono messi in **coda FIFO** (solo fra loro). Tutti gli altri MP3 sono **interrompibili**: interrompono l’audio interrompibile in corso e ripartono subito, **senza accodarsi**. Se è in corso un non interrompibile, le richieste interrompibili vengono ignorate (resta il **bip** del buzzer sui tasti).
-  - Non interrompibili: **0002, 0007, 0008, 0012, 0013, 0014, 0015, 0016**.
+  - Non interrompibili: **0002, 0007, 0008, 0012, 0013, 0014, 0015, 0016, 0021, 0022, 0023**. Le conferme UNDO e DONE si accodano alle altre voci non interrompibili, così un loro avviso in corso non scarta la conferma di un'azione riuscita.
 - Durante l’uso resta alimentato, salvo recovery automatico/manuale.
 - Se un brano supera il timeout di riproduzione, il firmware fa un **hard reset non bloccante** del DFPlayer: chiude UART, porta GPIO2 LOW per ~800 ms, riaccende il modulo, reinizializza UART/volume e svuota la coda audio.
-- **SLEEP tenuto per 2 secondi** commuta manualmente il DFPlayer:
+- **UNDO tenuto per 2 secondi** commuta manualmente il DFPlayer:
   - da ON a OFF: chiude UART, svuota la coda, taglia VCC via GPIO2 e salva uno snapshot diagnostico;
   - da OFF a ON: esegue un power-cycle non bloccante e mostra prima `RIAVVIO MODULO...`, poi `DFPLAYER PRONTO`;
   - la scelta ON/OFF viene salvata nella NVS `minu_audio` e ripristinata dopo light-sleep, reboot e interruzioni di alimentazione; sui dispositivi senza preferenza salvata il valore predefinito resta ON.
@@ -890,10 +898,10 @@ Il wizard si attiva tenendo premuto **SKIP** per 5 secondi.
 
 | Step | Schermata | Azione | Tasti |
 |---:|---|---|---|
-| 1/4 | ZERO | Piatto montato e vuoto, senza contenitore: acquisisci zero calibrazione | **ENTER** = conferma, **CLEAR** = annulla |
-| 2/4 | PLACE | Appoggia peso di riferimento | **ENTER** = conferma, **CLEAR** = annulla |
-| 3/4 | VALUE | Seleziona peso in grammi | **SKIP** = +, **TARE** = -, **ENTER** = vai a conferma |
-| 4/4 | CONFIRM | Verifica CPG calcolato | **ENTER** = salva in NVS, **CLEAR** = annulla |
+| 1/4 | ZERO | Piatto montato e vuoto, senza contenitore: acquisisci zero calibrazione | **ENTER** = conferma, **UNDO** = annulla |
+| 2/4 | PLACE | Appoggia peso di riferimento | **ENTER** = conferma, **UNDO** = annulla |
+| 3/4 | VALUE | Seleziona peso in grammi | **SKIP** = +, **TARE** = -, **ENTER** = vai a conferma, **UNDO** = annulla |
+| 4/4 | CONFIRM | Verifica CPG calcolato | **ENTER** = salva in NVS, **UNDO** = annulla |
 
 **Selezione peso:**
 - Da 500 g a 20 kg selezionabili; usare un riferimento compatibile con il limite operativo corrente, preferibilmente 10 kg
@@ -940,7 +948,7 @@ Metti i file in **SD:/MP3/** con nome a 4 cifre (es. `0001.mp3`).
 |---:|---|
 | 0001.mp3 | Avvio bilancia |
 | 0002.mp3 | Boot completato |
-| 0003.mp3 | Entrata risparmio energetico (standby manuale o automatico: schermata Zzz... 5s prima del light-sleep) |
+| 0003.mp3 | Entrata risparmio energetico per inattività: schermata Zzz... 5s prima del light-sleep |
 | 0004.mp3 | Uscita risparmio energetico (wake) |
 | 0005.mp3 | Wi‑Fi **modulo ON** (toggle manuale) |
 | 0006.mp3 | Wi‑Fi **modulo OFF** (toggle manuale) |
@@ -954,6 +962,9 @@ Metti i file in **SD:/MP3/** con nome a 4 cifre (es. `0001.mp3`).
 | 0016.mp3 | Tara non eseguita, riprovare (errore tecnico al boot o movimento reale nella tara manuale; il buzzer suona comunque) |
 | 0017.mp3 | Modalità WORK |
 | 0018.mp3 | Modalità LIVE |
+| 0021.mp3 | Ultima pesata annullata con successo da UNDO, anche in modalità locale |
+| 0022.mp3 | DONE breve: produzione impostata su Pesato dal Manager, apertura riepilogo |
+| 0023.mp3 | DONE lungo: produzione impostata su Fatto dal Manager, ritorno al piano di lavoro |
 
 
 ### Comandi e log seriali
@@ -985,7 +996,5 @@ Dopo un wake il tasto che ha risvegliato la bilancia resta soppresso fino al ril
 **Long press:**
 - **SKIP breve**: l'azione scatta al rilascio
 - **SKIP tenuto per 5 secondi**: avvia il wizard di calibrazione on-display senza eseguire prima lo SKIP breve/MQTT
-- **CLEAR breve**: al rilascio avvia l'undo LIFO reale
-- **CLEAR tenuto per 2 secondi**: svuota soltanto lo stack locale, senza undo Laravel multipli
-- **SLEEP breve**: entra in standby al rilascio
-- **SLEEP tenuto per 2 secondi**: commuta DFPlayer AUDIO OFF/ON, salva il log quando passa a OFF e annulla lo standby
+- **UNDO breve**: al rilascio avvia l'undo LIFO reale; 0021 soltanto a esito positivo, solo buzzer d'errore se non è possibile annullare
+- **UNDO tenuto per 2 secondi**: commuta DFPlayer AUDIO OFF/ON, salva il log quando passa a OFF e non esegue l'undo

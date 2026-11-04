@@ -5,12 +5,12 @@
 static const int* const rowPins = KEYPAD_ROW_PINS;
 static const int* const colPins = KEYPAD_COL_PINS;
 
-// Measured contacts mapped to the front panel: SKIP/OK, WIFI/SLEEP,
-// CLEAR/TOTAL, MODE/TARE (top to bottom, left to right).
+// Measured contacts mapped to the front panel: SKIP/OK, WIFI/UNDO,
+// DONE/TOTAL, MODE/TARE (top to bottom, left to right).
 static const KeyCode keyMap[4][2] = {
   // GPIO17        GPIO5
-  {KEY_TARE,  KEY_CLEAR}, // GPIO13
-  {KEY_MODE,  KEY_SLEEP}, // GPIO14
+  {KEY_TARE,  KEY_DONE},  // GPIO13
+  {KEY_MODE,  KEY_UNDO},  // GPIO14
   {KEY_TOTAL, KEY_WIFI},  // GPIO19
   {KEY_ENTER, KEY_SKIP}   // GPIO21
 };
@@ -91,7 +91,7 @@ static KeyCode keypad_scan_once() {
     for (int c = 0; c < 2; c++) {
       if (pressed[c]) {
         KeyCode key = keyMap[r][c];
-        if (isSuppressed(key)) {
+        if (key == KEY_NONE || isSuppressed(key)) {
           continue;
         }
         return key;

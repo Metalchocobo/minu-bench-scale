@@ -97,7 +97,6 @@ enum InactivityStage : uint8_t { INACT_NONE = 0, INACT_ZZZ = 1 };
 static InactivityStage g_inactivitySleepStage = INACT_NONE;
 static uint32_t g_inactivityStageStartMs = 0;
 static bool     g_inactivitySleepArmed = true;
-static bool     g_manualSleepRequested = false;
 
 // WiFi
 #if ENABLE_WIFI_OTA
@@ -113,19 +112,23 @@ static const uint32_t WIFI_ERR_COOLDOWN_MS = 60000;
 // ========================= WEIGH STACK: LONG PRESS & OVERLAY =========================
 static const uint32_t LONG_PRESS_MS = 2000;  // 2 seconds for long press
 
-// CLEAR key long press tracking
-static uint32_t g_clearPressStartMs   = 0;
-static bool     g_clearLongPressFired = false;
+// UNDO key: short release restores the last commit; 2s toggles audio.
+static uint32_t g_undoPressStartMs   = 0;
+static bool     g_undoLongPressFired = false;
 
-// SLEEP key: short release starts standby; 2s toggles DFPlayer power.
-static uint32_t g_sleepPressStartMs   = 0;
-static bool     g_sleepLongPressFired = false;
+#if ENABLE_MQTT
+// DONE is armed only in the same live Manager production context throughout
+// the gesture. A held key never crosses reconnects or ingredient changes.
+static uint32_t g_donePressStartMs = 0;
+static uint32_t g_doneProductId = 0;
+static char g_doneCommandId[65] = {0};
+static char g_doneConnectionId[65] = {0};
+#endif
 
-// Overlay state (temporary display for TOTAL/NET/CLEAR feedback)
+// Overlay state (temporary display for totals, audio and battery)
 enum OverlayType : uint8_t {
   OVERLAY_NONE = 0,
   OVERLAY_STACK_COMPARE,
-  OVERLAY_CLEAR_FEEDBACK,
   OVERLAY_AUDIO_STATUS,
   OVERLAY_BATTERY
 };
@@ -137,7 +140,6 @@ static const uint32_t OVERLAY_TIMEOUT_MS = 10000; // 10 seconds auto-dismiss
 static long g_overlayTotal    = 0;
 static long g_overlayNet      = 0;
 static int  g_overlayCount    = 0;
-static char g_overlayMsg[12]  = {0};
 static bool g_overlayAudioEnabled = true;
 
 // ENTER: bounded, non-blocking acquisition when the normal STABLE gate is not
@@ -179,6 +181,7 @@ static uint32_t g_tareKeyLockUntilMs = 0;
 static bool g_skipShortPending = false;
 static bool g_skipBlockedUntilRelease = false;
 static bool g_remoteUndoAwaitingAck = false;
+static bool g_remoteUndoRestoredDetached = false;
 static char g_remoteUndoConfirmId[WeighStack::RESPONSE_ID_CAP] = {0};
 static KeyCode g_deferredLocalKey = KEY_NONE;
 static bool g_detachedUndoKeyGuard = false;
@@ -230,9 +233,8 @@ static bool restoreTopStackEntryAfterUndo(uint32_t nowMs) {
   gLiveEmaPrevStEnable = stEnable;
   if (!WeighStack::pop()) return false;
 
-  g_overlayType = OVERLAY_CLEAR_FEEDBACK;
-  g_overlayStartMs = nowMs;
-  strlcpy(g_overlayMsg, "POP", sizeof(g_overlayMsg));
+  // Return directly to the weight display with the restored tare.
+  g_overlayType = OVERLAY_NONE;
   g_overlayCount = WeighStack::count();
   g_tareKeyLockUntilMs = nowMs + TARE_OK_HOLD_MS;
   g_lastKeyPressMs = nowMs;
@@ -254,6 +256,7 @@ static bool applyDetachedUndoNow() {
     strcmp(top->confirmResponseId, g_remoteUndoConfirmId) == 0;
   bool restored = matchingEntry && restoreTopStackEntryAfterUndo(millis());
   Net::mqttReportDetachedUndoApplied(restored);
+  g_remoteUndoRestoredDetached = restored;
   g_remoteUndoAwaitingAck = false;
   g_remoteUndoConfirmId[0] = '\0';
   g_detachedUndoKeyGuard = restored;
@@ -263,11 +266,31 @@ static bool applyDetachedUndoNow() {
   return true;
 }
 
+static void completeRemoteUndo(uint32_t nowMs) {
+  if (!Net::mqttPopUndoAck()) return;
+  const WeighStack::Entry* top = WeighStack::peek();
+  bool matchingEntry = g_remoteUndoAwaitingAck && top &&
+    strcmp(top->confirmResponseId, g_remoteUndoConfirmId) == 0;
+  bool restored = g_remoteUndoRestoredDetached ||
+    (matchingEntry && restoreTopStackEntryAfterUndo(nowMs));
+  g_remoteUndoAwaitingAck = false;
+  g_remoteUndoRestoredDetached = false;
+  g_remoteUndoConfirmId[0] = '\0';
+  if (restored) {
+    buzzerOk();
+    Audio::requestPlayMp3(Track::UNDO_SUCCESS);
+  } else {
+    ConsoleLog.println(F("[STACK] ACK undo senza entry staged"));
+    buzzerError();
+  }
+}
+
 static void enterSyncIncidentTareGate(
     const __FlashStringHelper* logMessage) {
   WeighStack::clear();
   WeighStack::clearReference();
   g_remoteUndoAwaitingAck = false;
+  g_remoteUndoRestoredDetached = false;
   g_remoteUndoConfirmId[0] = '\0';
   g_detachedUndoKeyGuard = false;
   g_deferredLocalKey = KEY_NONE;
@@ -277,8 +300,6 @@ static void enterSyncIncidentTareGate(
   if (CalWizard::isActive()) CalWizard::abort();
   g_skipShortPending = false;
   g_skipBlockedUntilRelease = keypad_is_pressed(KEY_SKIP);
-  g_clearPressStartMs = 0;
-  g_clearLongPressFired = false;
   g_overlayType = OVERLAY_NONE;
   lastOledMs = 0;
   ConsoleLog.println(logMessage);
@@ -591,7 +612,6 @@ void parseCommand(const char* cmd) {
       }
       return;
     }
-
     if (strncmp(arg, "creds", 5) == 0) {
       char s1[64], p1[64], s2[64], p2[64];
       WifiStore::loadSlot(1, s1, 64, p1, 64);
@@ -1421,7 +1441,135 @@ static bool isTareBehaviorLocked(uint32_t nowMs) {
   return g_manualTareArmed || ScaleState::isTareActive() || timedTareLock;
 }
 
+static void performUndoAction(uint32_t nowMs) {
+  // Recheck at release: network, tare or acquisition state may have changed
+  // while the key was held. Audio toggling never mutates the weighing stack.
+  bool blocked = g_syncIncidentNeedsTare ||
+    g_enterUiState != ENTER_UI_IDLE || isTareBehaviorLocked(nowMs) ||
+    CalWizard::isActive() || CalWizard::isLongPressInProgress();
+#if ENABLE_MQTT
+  blocked = blocked || Net::isMqttResponsePending();
+#endif
+  if (blocked) {
+    buzzerError();
+    return;
+  }
+  const WeighStack::Entry* top = WeighStack::peek();
+  if (!top) {
+    ConsoleLog.println(F("[STACK] UNDO: stack empty"));
+    buzzerError();
+    return;
+  }
+#if ENABLE_MQTT
+  if (top->confirmResponseId[0] != '\0') {
+    const char* sessionId = Net::getMqttLastSessionId();
+    if (!sessionId || sessionId[0] == '\0') sessionId = top->sessionId;
+    if (Net::mqttStageUndo(top->uuid, top->productId,
+                           top->confirmResponseId, sessionId)) {
+      g_remoteUndoAwaitingAck = true;
+      g_remoteUndoRestoredDetached = false;
+      strlcpy(g_remoteUndoConfirmId, top->confirmResponseId,
+              sizeof(g_remoteUndoConfirmId));
+      ConsoleLog.println(F("[STACK] UNDO remoto staged; attendo ACK REST"));
+    } else {
+      buzzerError();
+    }
+    return;
+  }
+#endif
+  if (restoreTopStackEntryAfterUndo(nowMs)) {
+    buzzerOk();
+    Audio::requestPlayMp3(Track::UNDO_SUCCESS);
+  } else {
+    buzzerError();
+  }
+}
+
+#if ENABLE_MQTT
+static bool isDoneBehaviorReady(uint32_t nowMs) {
+  return !g_syncIncidentNeedsTare && g_enterUiState == ENTER_UI_IDLE &&
+    !isTareBehaviorLocked(nowMs) && !CalWizard::isActive() &&
+    !CalWizard::isLongPressInProgress() && Net::isMqttDoneActionable();
+}
+
+static void startDoneKey(uint32_t nowMs) {
+  g_donePressStartMs = 0;
+  if (!isDoneBehaviorReady(nowMs)) return;
+  g_doneProductId = Net::getMqttDoneProductId();
+  strlcpy(g_doneCommandId, Net::getMqttDoneCommandId(), sizeof(g_doneCommandId));
+  strlcpy(g_doneConnectionId, Net::getMqttDoneConnectionId(), sizeof(g_doneConnectionId));
+  g_donePressStartMs = nowMs;
+}
+
+static void updateDoneKey(uint32_t nowMs) {
+  if (g_donePressStartMs == 0) return;
+  if (!isDoneBehaviorReady(nowMs) ||
+      g_doneProductId != Net::getMqttDoneProductId() ||
+      strcmp(g_doneCommandId, Net::getMqttDoneCommandId()) != 0 ||
+      strcmp(g_doneConnectionId, Net::getMqttDoneConnectionId()) != 0) {
+    g_donePressStartMs = 0;
+    return;
+  }
+  bool longPress = (uint32_t)(nowMs - g_donePressStartMs) >= LONG_PRESS_MS;
+  if (!longPress && keypad_is_pressed(KEY_DONE)) return;
+  g_donePressStartMs = 0;
+  if (!Net::mqttDoneActiveProduction(longPress ? 3 : 2)) buzzerError();
+}
+
+static void completeRemoteDone() {
+  uint8_t status = Net::mqttPopDoneAck();
+  if (status == 2 || status == 3) {
+    buzzerOk();
+    Audio::requestPlayMp3(status == 2 ? Track::DONE_WEIGHED : Track::DONE_FINISHED);
+  }
+  if (Net::mqttPopDoneReject()) buzzerError();
+}
+#endif
+
+static void updateUndoKey(uint32_t nowMs) {
+  if (g_undoPressStartMs == 0) return;
+  if (CalWizard::isActive()) {
+    g_undoPressStartMs = 0;
+    g_undoLongPressFired = false;
+    return;
+  }
+  // A slow iteration may observe the release just after the threshold.
+  // It must still select the long action, never undo a weighing by mistake.
+  if (!g_undoLongPressFired &&
+      (uint32_t)(nowMs - g_undoPressStartMs) >= LONG_PRESS_MS) {
+    g_undoLongPressFired = true;
+    g_inactivitySleepStage = INACT_NONE;
+    g_inactivityStageStartMs = 0;
+    g_lastKeyPressMs = nowMs;
+    g_overlayAudioEnabled = Audio::toggleEnabled();
+    g_overlayType = OVERLAY_AUDIO_STATUS;
+    g_overlayStartMs = nowMs;
+    ui_renderAudioStatus(g_overlayAudioEnabled, Audio::isReady(),
+                         Audio::hasSavedDiagnostic());
+    if (g_overlayAudioEnabled) buzzerOk();
+    else buzzerWarn();
+    lastOledMs = 0;
+  }
+  if (!keypad_is_pressed(KEY_UNDO)) {
+    if (!g_undoLongPressFired) performUndoAction(nowMs);
+    g_undoPressStartMs = 0;
+    g_undoLongPressFired = false;
+  }
+}
+
 void handleKeyEvent(KeyCode key) {
+  if (key == KEY_DONE) {
+#if ENABLE_MQTT
+    startDoneKey(millis());
+#endif
+    return;
+  }
+  if (key == KEY_UNDO) {
+    // Defer both outcomes until release/threshold, with no success click.
+    g_undoPressStartMs = millis();
+    g_undoLongPressFired = false;
+    return;
+  }
   if (g_enterUiState != ENTER_UI_IDLE) {
     ConsoleLog.println(F("[KEYPAD] Ignorato durante ENTER"));
     return;
@@ -1430,7 +1578,7 @@ void handleKeyEvent(KeyCode key) {
   // ENTER events, tare restarts, and stack changes during the real operation.
   uint32_t keyNow = millis();
 #if ENABLE_MQTT
-  bool pendingRemoteOnlyKey = key == KEY_SKIP || key == KEY_CLEAR;
+  bool pendingRemoteOnlyKey = key == KEY_SKIP;
   bool localOverrideKey = key == KEY_TARE || key == KEY_ENTER;
   if (g_syncIncidentNeedsTare && key != KEY_TARE &&
       (key == KEY_ENTER || pendingRemoteOnlyKey)) {
@@ -1540,14 +1688,6 @@ void handleKeyEvent(KeyCode key) {
     }
 #endif
 
-    case KEY_SLEEP: {
-      ConsoleLog.println(F("[KEYPAD] SLEEP pressed (tracking)"));
-      buzzerKeyClick();
-      g_sleepPressStartMs = millis();
-      g_sleepLongPressFired = false;
-      break;
-    }
-
     case KEY_ENTER: {
       ConsoleLog.println(F("[KEYPAD] ENTER pressed"));
       beginEnterAction(millis(), true);
@@ -1597,14 +1737,6 @@ void handleKeyEvent(KeyCode key) {
         showStackCompareOverlay(millis());
         Audio::requestPlayMp3(Track::TOTAL_PRESSED);
       }
-      break;
-
-    case KEY_CLEAR:
-      ConsoleLog.println(F("[KEYPAD] CLEAR pressed (tracking long press)"));
-      buzzerKeyClick();
-      // Start long press tracking; short/long action handled in loop
-      g_clearPressStartMs = millis();
-      g_clearLongPressFired = false;
       break;
 
     default:
@@ -2285,10 +2417,9 @@ void loop() {
   if (!tareCritical && Net::mqttPopActivity()) {
     uint32_t activityNow = millis();
     g_lastKeyPressMs = activityNow;
-    if (g_inactivitySleepStage != INACT_NONE && !g_manualSleepRequested) {
+    if (g_inactivitySleepStage != INACT_NONE) {
       g_inactivitySleepStage = INACT_NONE;
       g_inactivityStageStartMs = 0;
-      g_manualSleepRequested = false;
       Audio::stopNow(true);
       lastOledMs = 0;
     }
@@ -2327,26 +2458,18 @@ void loop() {
     }
     if (Net::mqttPopUndoReject()) {
       g_remoteUndoAwaitingAck = false;
+      g_remoteUndoRestoredDetached = false;
       g_remoteUndoConfirmId[0] = '\0';
       g_detachedUndoKeyGuard = false;
       ConsoleLog.println(F("[STACK] UNDO quarantined; local stack unchanged"));
-      buzzerWarn();
+      buzzerError();
     }
     (void)applyDetachedUndoNow();
   }
 
-  if (!tareCritical && g_enterUiState == ENTER_UI_IDLE && Net::mqttPopUndoAck()) {
-    const WeighStack::Entry* top = WeighStack::peek();
-    bool matchingEntry = g_remoteUndoAwaitingAck && top &&
-      strcmp(top->confirmResponseId, g_remoteUndoConfirmId) == 0;
-    bool restored = matchingEntry && restoreTopStackEntryAfterUndo(millis());
-    g_remoteUndoAwaitingAck = false;
-    g_remoteUndoConfirmId[0] = '\0';
-    if (restored) buzzerOk();
-    else {
-      ConsoleLog.println(F("[STACK] ACK undo senza entry staged"));
-      buzzerError();
-    }
+  if (!tareCritical && g_enterUiState == ENTER_UI_IDLE) {
+    completeRemoteUndo(millis());
+    completeRemoteDone();
   }
 
   // Due bip di avviso se MQTT si disconnette (WiFi ancora up)
@@ -2465,9 +2588,7 @@ void loop() {
     if (CalWizard::isActive()) CalWizard::abort();
     g_skipShortPending = false;
     if (keypad_is_pressed(KEY_SKIP)) g_skipBlockedUntilRelease = true;
-    g_clearPressStartMs = 0;
-    g_clearLongPressFired = false;
-    if (key == KEY_ENTER || key == KEY_SKIP || key == KEY_CLEAR) {
+    if (key == KEY_ENTER || key == KEY_SKIP) {
       ConsoleLog.println(F("[KEYPAD] Bloccato: verifica peso/TARA richiesta"));
       buzzerError();
       key = KEY_NONE;
@@ -2476,7 +2597,7 @@ void loop() {
     CalWizard::cancelLongPress();
     g_skipShortPending = false;
     if (keypad_is_pressed(KEY_SKIP)) g_skipBlockedUntilRelease = true;
-    if (key != KEY_NONE) {
+    if (key != KEY_NONE && key != KEY_UNDO) {
       ConsoleLog.println(F("[KEYPAD] Ignorato durante ENTER"));
       key = KEY_NONE;
     }
@@ -2497,7 +2618,7 @@ void loop() {
       }
     }
 #endif
-    bool remoteOnlyKey = key == KEY_SKIP || key == KEY_CLEAR;
+    bool remoteOnlyKey = key == KEY_SKIP;
     if ((mqttOperatorLocked &&
          (key == KEY_TARE || key == KEY_ENTER || remoteOnlyKey)) ||
         (mqttLocalFallback && remoteOnlyKey)) {
@@ -2529,6 +2650,7 @@ void loop() {
   }
 
   // Aggiorna state machine del wizard, passando l'evento tastiera
+  bool wizardWasActive = CalWizard::isActive();
   CalWizard::update(now, key);
 
   if (g_skipShortPending) {
@@ -2540,7 +2662,6 @@ void loop() {
       if (g_inactivitySleepStage != INACT_NONE) {
         g_inactivitySleepStage = INACT_NONE;
         g_inactivityStageStartMs = 0;
-        g_manualSleepRequested = false;
         Audio::stopNow(true);
         lastOledMs = 0;
       }
@@ -2549,15 +2670,14 @@ void loop() {
   }
 
   // Se il wizard è attivo, i tasti vengono gestiti da CalWizard::update()
-  bool wizardHandledKey = CalWizard::isActive() &&
-    (key == KEY_TARE || key == KEY_ENTER || key == KEY_SKIP || key == KEY_CLEAR);
+  bool wizardHandledKey = wizardWasActive &&
+    (key == KEY_TARE || key == KEY_ENTER || key == KEY_SKIP || key == KEY_UNDO);
 
   if (key != KEY_NONE && !wizardHandledKey) {
     g_lastKeyPressMs = now;
     if (g_inactivitySleepStage != INACT_NONE) {
       g_inactivitySleepStage = INACT_NONE;
       g_inactivityStageStartMs = 0;
-      g_manualSleepRequested = false;
       Audio::stopNow(true);
       lastOledMs = 0;
     }
@@ -2593,128 +2713,11 @@ void loop() {
     g_lastKeyPressMs = now;
   }
 
-  // ====================== WEIGH STACK: CLEAR LONG PRESS ======================
-
-  // CLEAR key: long press detection (2s -> clear all)
-  if (g_clearPressStartMs != 0) {
-    if (keypad_is_pressed(KEY_CLEAR)) {
-      // Still held
-      if (!g_clearLongPressFired && (int32_t)(now - g_clearPressStartMs) >= (int32_t)LONG_PRESS_MS) {
-        g_clearLongPressFired = true;
+  // UNDO: a short release restores one commit; holding 2s only toggles audio.
+  updateUndoKey(now);
 #if ENABLE_MQTT
-        if (Net::isMqttResponsePending()) {
-          ConsoleLog.println(F("[STACK] CLEAR ALL bloccato (response ACK pending)"));
-          buzzerWarn();
-        } else
+  updateDoneKey(now);
 #endif
-        {
-        // Long CLEAR abandons local history only; it does not change the zero.
-        WeighStack::clear();
-        ConsoleLog.println(F("[STACK] CLEAR long press -> stack cleared"));
-
-        g_overlayType = OVERLAY_CLEAR_FEEDBACK;
-        g_overlayStartMs = now;
-        strlcpy(g_overlayMsg, "CLEAR ALL", sizeof(g_overlayMsg));
-        g_overlayCount = 0;
-        lastOledMs = 0;
-
-        buzzerOk();
-        delay(80);
-        buzzerOk();  // double beep for clear all
-        Audio::requestPlayMp3(Track::CLEAR_PRESSED);
-        }
-      }
-    } else {
-      // Released
-      if (!g_clearLongPressFired) {
-        const WeighStack::Entry* top = WeighStack::peek();
-        if (top) {
-          bool remoteUndo = top->confirmResponseId[0] != '\0';
-#if ENABLE_MQTT
-          if (remoteUndo) {
-            const char* sessionId = Net::getMqttLastSessionId();
-            if (!sessionId || sessionId[0] == '\0') sessionId = top->sessionId;
-            if (Net::mqttStageUndo(top->uuid, top->productId,
-                                   top->confirmResponseId, sessionId)) {
-              g_remoteUndoAwaitingAck = true;
-              strlcpy(g_remoteUndoConfirmId, top->confirmResponseId,
-                      sizeof(g_remoteUndoConfirmId));
-              ConsoleLog.println(F("[STACK] UNDO remoto staged; attendo ACK REST"));
-            } else {
-              ConsoleLog.println(F("[STACK] UNDO remoto non staged"));
-              buzzerError();
-            }
-          } else
-#endif
-          {
-            if (restoreTopStackEntryAfterUndo(now)) buzzerKeyClick();
-            else buzzerError();
-          }
-        } else {
-          ConsoleLog.println(F("[STACK] POP: stack empty"));
-          buzzerWarn();
-        }
-        Audio::requestPlayMp3(Track::CLEAR_PRESSED);
-      }
-      g_clearPressStartMs = 0;
-    }
-  }
-
-  // SLEEP: short release starts standby; 2s toggles DFPlayer OFF/ON.
-  if (g_sleepPressStartMs != 0) {
-    if (keypad_is_pressed(KEY_SLEEP)) {
-      if (!g_sleepLongPressFired && (int32_t)(now - g_sleepPressStartMs) >= (int32_t)LONG_PRESS_MS) {
-        g_sleepLongPressFired = true;
-        g_inactivitySleepStage = INACT_NONE;
-        g_inactivityStageStartMs = 0;
-        g_manualSleepRequested = false;
-        g_lastKeyPressMs = now;
-
-        g_overlayAudioEnabled = Audio::toggleEnabled();
-        g_overlayType = OVERLAY_AUDIO_STATUS;
-        g_overlayStartMs = now;
-        ui_renderAudioStatus(
-          g_overlayAudioEnabled,
-          Audio::isReady(),
-          Audio::hasSavedDiagnostic()
-        );
-
-        if (g_overlayAudioEnabled) {
-          buzzerOk();
-        } else {
-          buzzerWarn();
-        }
-        lastOledMs = 0;
-      }
-    } else {
-      if (!g_sleepLongPressFired) {
-        bool sleepBlocked = g_overloadActive || mqttOperatorLocked;
-#if ENABLE_MQTT
-        sleepBlocked = sleepBlocked || RemoteConsole::active();
-#endif
-#if ENABLE_WIFI_OTA
-        sleepBlocked = sleepBlocked || Net::isOtaInProgress();
-#endif
-        if (sleepBlocked) {
-          ConsoleLog.println(F("[KEYPAD] SLEEP short bloccato (safety lock)"));
-          g_manualSleepRequested = false;
-          g_inactivitySleepStage = INACT_NONE;
-          g_inactivityStageStartMs = 0;
-          buzzerWarn();
-        } else {
-          ConsoleLog.println(F("[KEYPAD] SLEEP short -> standby manuale"));
-          g_manualSleepRequested = true;
-          ui_renderSleepZzz();
-          Audio::requestPlayMp3(Track::SLEEP_ENTER);
-          g_inactivitySleepStage = INACT_ZZZ;
-          g_inactivityStageStartMs = now;
-          lastOledMs = 0;
-        }
-      }
-      g_sleepPressStartMs = 0;
-      g_sleepLongPressFired = false;
-    }
-  }
 
   // Battery diagnostics last only while the chord is held. Sampling and
   // low-voltage protection keep running normally below.
@@ -2730,12 +2733,6 @@ void loop() {
     if ((int32_t)(now - g_overlayStartMs) >= (int32_t)OVERLAY_TIMEOUT_MS) {
       g_overlayType = OVERLAY_NONE;
       lastOledMs = 0;  // force redraw of normal screen
-    }
-    // Any key dismisses overlay (already handled in TARE/ENTER/TOTAL above)
-    // CLEAR has dedicated short/long handling
-    if (key != KEY_NONE && key != KEY_CLEAR) {
-      // Non-CLEAR keys dismiss immediately
-      // (CLEAR already starts its own tracking)
     }
   }
 
@@ -3041,9 +3038,7 @@ void loop() {
   // timestamp can start a standby countdown in this same iteration.
   if (RemoteConsole::popClosed()) g_lastKeyPressMs = now;
 #endif
-  bool manualSleepCountdown = g_manualSleepRequested &&
-    g_inactivitySleepStage == INACT_ZZZ;
-  bool allowInactivitySleep = g_inactivitySleepArmed || manualSleepCountdown;
+  bool allowInactivitySleep = g_inactivitySleepArmed;
 #if ENABLE_MQTT
   if (RemoteConsole::active()) allowInactivitySleep = false;
 #endif
@@ -3052,11 +3047,11 @@ void loop() {
 #if ENABLE_MQTT
   if (Net::isMqttResponseOperatorLocked()) allowInactivitySleep = false;
   bool mqttConnectBusy = Net::isMqttConnectInProgress();
-  if (mqttConnectBusy && !manualSleepCountdown) allowInactivitySleep = false;
+  if (mqttConnectBusy) allowInactivitySleep = false;
   bool mqttCommandBlocksSleep = Net::isMqttCommandActive() &&
     !Net::isMqttLocalFallbackActive() &&
     (!Net::isMqttConnected() || Net::isMqttCommandActionable());
-  if (!manualSleepCountdown && mqttCommandBlocksSleep) allowInactivitySleep = false;
+  if (mqttCommandBlocksSleep) allowInactivitySleep = false;
 #endif
 #if ENABLE_WIFI_OTA
   if (Net::isOtaInProgress()) allowInactivitySleep = false;
@@ -3066,7 +3061,6 @@ void loop() {
     bool cancelledCountdown = g_inactivitySleepStage != INACT_NONE;
     g_inactivitySleepStage = INACT_NONE;
     g_inactivityStageStartMs = 0;
-    g_manualSleepRequested = false;
     if (cancelledCountdown) {
       Audio::stopNow(true);
       lastOledMs = 0;
@@ -3074,7 +3068,6 @@ void loop() {
   } else {
     if (g_inactivitySleepStage == INACT_NONE) {
       if ((now - g_lastKeyPressMs) >= INACTIVITY_SLEEP_MS) {
-        g_manualSleepRequested = false;
         ui_renderSleepZzz();
         Audio::requestPlayMp3(Track::SLEEP_ENTER);
         g_inactivitySleepStage = INACT_ZZZ;
@@ -3084,15 +3077,13 @@ void loop() {
     } else {
       if ((now - g_inactivityStageStartMs) >= INACTIVITY_ZZZ_MS) {
 #if ENABLE_MQTT
-        // A manual request remains queued while the connect worker releases
-        // the transport; the operator never needs to press SLEEP twice.
+        // The connect worker must release its transport before sleep.
         if (Net::isMqttConnectInProgress()) {
           return;
         }
 #endif
         g_inactivitySleepStage = INACT_NONE;
         g_inactivityStageStartMs = 0;
-        g_manualSleepRequested = false;
         enterInactivityLightSleep();
         return;
       }
@@ -3180,9 +3171,6 @@ void loop() {
         switch (g_overlayType) {
           case OVERLAY_STACK_COMPARE:
             ui_renderStackCompare(g_overlayTotal, g_overlayNet, g_overlayCount);
-            break;
-          case OVERLAY_CLEAR_FEEDBACK:
-            ui_renderStackClear(g_overlayMsg, g_overlayCount);
             break;
           case OVERLAY_AUDIO_STATUS:
             ui_renderAudioStatus(

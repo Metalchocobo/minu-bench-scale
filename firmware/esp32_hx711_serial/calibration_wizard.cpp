@@ -231,7 +231,7 @@ void update(uint32_t nowMs, KeyCode key) {
 
   // ========== STEP_ZERO: Acquisisci zero ==========
   if (g_step == CAL_STEP_ZERO) {
-    if (key == KEY_CLEAR) {
+    if (key == KEY_UNDO) {
       abort();
       return;
     }
@@ -261,7 +261,7 @@ void update(uint32_t nowMs, KeyCode key) {
 
   // ========== STEP_PLACE: Appoggia peso di riferimento ==========
   if (g_step == CAL_STEP_PLACE) {
-    if (key == KEY_CLEAR) {
+    if (key == KEY_UNDO) {
       abort();
       return;
     }
@@ -334,7 +334,7 @@ void update(uint32_t nowMs, KeyCode key) {
 
   // ========== STEP_VALUE: Seleziona valore peso ==========
   if (g_step == CAL_STEP_VALUE) {
-    if (key == KEY_CLEAR) {
+    if (key == KEY_UNDO) {
       abort();
       return;
     }
@@ -382,7 +382,7 @@ void update(uint32_t nowMs, KeyCode key) {
 
       g_step = CAL_STEP_CONFIRM;
       buzzerOk();
-      ConsoleLog.println(F("[CAL] STEP 4/4: Conferma (ENTER=salva, CLEAR=annulla)"));
+      ConsoleLog.println(F("[CAL] STEP 4/4: Conferma (ENTER=salva, UNDO=annulla)"));
       return;
     }
 
@@ -391,7 +391,7 @@ void update(uint32_t nowMs, KeyCode key) {
 
   // ========== STEP_CONFIRM: Conferma e salva ==========
   if (g_step == CAL_STEP_CONFIRM) {
-    if (key == KEY_CLEAR) {
+    if (key == KEY_UNDO) {
       abort();
       return;
     }

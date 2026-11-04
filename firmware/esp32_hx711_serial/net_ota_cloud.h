@@ -94,6 +94,17 @@ namespace Net {
   // Stage/publish a skip for the active command.
   bool mqttSkipActiveCommand();
 
+  // DONE is scoped to an explicitly advertised production on the weighing
+  // page, including its final recap where no ingredient command remains.
+  bool isMqttDoneActionable();
+  uint32_t getMqttDoneProductId();
+  const char* getMqttDoneCommandId();
+  const char* getMqttDoneConnectionId();
+  bool mqttDoneActiveProduction(uint8_t productionStatus);
+  // Success feedback is emitted only after the durable Manager ACK.
+  uint8_t mqttPopDoneAck();  // 0 = none, 2 = weighed, 3 = finished.
+  bool mqttPopDoneReject();
+
   // A confirm_request is queued by the MQTT callback and consumed by the main
   // loop so the remote action follows the exact same ENTER path as the keypad.
   bool mqttPopConfirmRequest();
@@ -141,7 +152,8 @@ namespace Net {
   // True once for every weigh activation or clear that changes active state.
   bool mqttPopActivity();
 
-  // True once after the browser ACKs a durable undo REST commit.
+  // True once after the browser ACKs a durable undo REST commit, including
+  // a detached undo whose local restore was already applied.
   bool mqttPopUndoAck();
 
   // True once when the Manager quarantines an undo after committing an

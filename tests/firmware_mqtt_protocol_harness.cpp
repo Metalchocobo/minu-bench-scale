@@ -1848,6 +1848,11 @@ void testMaximumPayloadsFitBuffers() {
     "\",\"session_id\":\"" + sessionId + "\",\"connection_id\":\"" +
     connectionId + "\",\"command_id\":\"" + commandId +
     "\",\"uuid\":\"" + uuid + "\",\"product_id\":4294967295}";
+  const std::string done =
+    "{\"type\":\"done\",\"uuid\":\"" + uuid +
+    "\",\"product_id\":4294967295,\"session_id\":\"" + sessionId +
+    "\",\"command_id\":\"" + commandId + "\",\"response_id\":\"" +
+    responseId + "\",\"production_status\":3}";
   const std::string confirmRequestAck =
     "{\"type\":\"confirm_request_ack\",\"request_id\":\"" + requestId +
     "\",\"command_id\":\"" + commandId + "\",\"connection_id\":\"" +
@@ -1859,7 +1864,7 @@ void testMaximumPayloadsFitBuffers() {
     "\",\"session_id\":\"" + sessionId + "\",\"connection_id\":\"" +
     connectionId + "\",\"lease_id\":\"" + std::string(64, 'l') +
     "\",\"expected_command_id\":\"" + commandId +
-    "\",\"timestamp\":4294967295}";
+    "\",\"production_id\":4294967295,\"timestamp\":4294967295}";
   const std::string responseReject =
     "{\"type\":\"response_reject\",\"response_id\":\"" + responseId +
     "\",\"reason\":\"manager_incident\"}";
@@ -1879,12 +1884,14 @@ void testMaximumPayloadsFitBuffers() {
 
   assert(commandAck.size() < 384);
   assert(confirm.size() < 384);
+  assert(done.size() < 384);
   assert(confirmRequestAck.size() < 384);
   constexpr size_t mqttPacketBufferSize = 640;
   assert(status.size() < 544);
   // MQTT_MAX_PACKET_SIZE also includes topic and packet framing.
   assert(topic.size() + commandAck.size() + 8 < mqttPacketBufferSize);
   assert(topic.size() + confirm.size() + 8 < mqttPacketBufferSize);
+  assert(topic.size() + done.size() + 8 < mqttPacketBufferSize);
   assert(topic.size() + confirmRequestAck.size() + 8 < mqttPacketBufferSize);
   assert(commandTopic.size() + confirmRequest.size() + 8 < mqttPacketBufferSize);
   assert(ackTopic.size() + responseReject.size() + 8 < mqttPacketBufferSize);

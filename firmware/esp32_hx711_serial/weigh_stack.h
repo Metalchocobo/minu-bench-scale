@@ -6,7 +6,7 @@
 // WEIGH_STACK.H - Local weigh stack (LIFO), RAM only, not persistent
 // =============================================================================
 // Stores individual ingredient weights pushed via ENTER key.
-// Stack resets on TARE (new session) or CLEAR long press.
+// Stack resets on TARE (new session) or the serial stack clear command.
 // Lost on reboot — this is correct behavior.
 
 namespace WeighStack {

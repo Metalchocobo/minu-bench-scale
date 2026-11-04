@@ -57,9 +57,9 @@ static void setKeys(std::initializer_list<KeyCode> keys) {
   for (KeyCode key : keys) {
     switch (key) {
       case KEY_TARE: contacts[0][0] = true; break;
-      case KEY_CLEAR: contacts[0][1] = true; break;
+      case KEY_DONE: contacts[0][1] = true; break;
       case KEY_MODE: contacts[1][0] = true; break;
-      case KEY_SLEEP: contacts[1][1] = true; break;
+      case KEY_UNDO: contacts[1][1] = true; break;
       case KEY_TOTAL: contacts[2][0] = true; break;
       case KEY_WIFI: contacts[2][1] = true; break;
       case KEY_ENTER: contacts[3][0] = true; break;
@@ -337,6 +337,20 @@ static void testOtherKeyDuringSuppression() {
   expectEvents({KEY_ENTER});
 }
 
+static void testDoneContact() {
+  reset("DONE uses the former CLEAR contact");
+  setKeys({KEY_DONE});
+  advance(45);
+  require(keypad_is_pressed(KEY_DONE), "GPIO13/GPIO5 must be DONE");
+  expectEvents({KEY_DONE});
+  advance(2500);
+  expectEvents({});
+  setKeys({});
+  advance(45);
+  require(!keypad_is_pressed(KEY_DONE), "DONE release must clear held state");
+  expectEvents({});
+}
+
 int main() {
   testExportedPins();
   testSingleRelease(KEY_WIFI);
@@ -347,19 +361,20 @@ int main() {
   testWake(false);
   testWake(true);
   // WIFI is already covered by testWake(false); cover each other physical key.
-  for (KeyCode key : {KEY_TARE, KEY_ENTER, KEY_TOTAL, KEY_SLEEP, KEY_SKIP, KEY_CLEAR, KEY_MODE}) {
+  for (KeyCode key : {KEY_TARE, KEY_ENTER, KEY_TOTAL, KEY_UNDO, KEY_SKIP, KEY_MODE, KEY_DONE}) {
     testSingleWake(key);
   }
-  testOrdinaryRowPair(KEY_TARE, KEY_CLEAR);
-  testOrdinaryRowPair(KEY_MODE, KEY_SLEEP);
+  testOrdinaryRowPair(KEY_MODE, KEY_UNDO);
   testOrdinaryRowPair(KEY_ENTER, KEY_SKIP);
+  testOrdinaryRowPair(KEY_TARE, KEY_DONE);
   testStuckCombo();
   testStuckSingle(KEY_WIFI);
   testStuckSingle(KEY_TOTAL);
-  for (KeyCode key : {KEY_TARE, KEY_ENTER, KEY_SLEEP, KEY_SKIP, KEY_CLEAR, KEY_MODE}) {
+  for (KeyCode key : {KEY_TARE, KEY_ENTER, KEY_UNDO, KEY_SKIP, KEY_MODE, KEY_DONE}) {
     testOrdinaryKey(key);
   }
   testOtherKeyDuringSuppression();
+  testDoneContact();
   std::cout << "PASS: production keypad matrix/chord harness (" << scenarios << " scenarios)\n";
   return 0;
 }

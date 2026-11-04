@@ -848,7 +848,7 @@ void ui_renderCalStepZero(uint8_t progress) {
 
   // Hint in basso
   oled.setFont(u8g2_font_5x8_tr);
-  oled.drawStr(4, 62, "CLEAR=annulla");
+  oled.drawStr(4, 62, "UNDO=annulla");
 
   oled.sendBuffer();
 }
@@ -866,7 +866,7 @@ void ui_renderCalStepPlace(uint8_t progress) {
   drawProgressBar(40, 52, 176, 8, progress);
 
   oled.setFont(u8g2_font_5x8_tr);
-  oled.drawStr(4, 62, "CLEAR=annulla");
+  oled.drawStr(4, 62, "UNDO=annulla");
 
   oled.sendBuffer();
 }
@@ -899,7 +899,7 @@ void ui_renderCalStepValue(uint16_t refWeightG) {
 
   // Istruzioni
   oled.setFont(u8g2_font_5x8_tr);
-  oled.drawStr(4, 62, "SKIP=+ TARE=- ENTER=ok");
+  oled.drawStr(4, 62, "SKIP=+ TARE=- ENTER=ok UNDO=annulla");
 
   oled.sendBuffer();
 }
@@ -922,7 +922,7 @@ void ui_renderCalStepConfirm(uint16_t refWeightG, float cpg) {
   drawCenteredText(line2, 48);
 
   oled.setFont(u8g2_font_5x8_tr);
-  oled.drawStr(4, 62, "ENTER=salva  CLEAR=annulla");
+  oled.drawStr(4, 62, "ENTER=salva  UNDO=annulla");
 
   oled.sendBuffer();
 }
@@ -1027,22 +1027,6 @@ void ui_renderStackCompare(long gTotal, long gNet, int count) {
   oled.drawStr(gX, Y3, "g");
 
   (void)count;
-
-  oled.sendBuffer();
-}
-
-void ui_renderStackClear(const char* msg, int remaining) {
-  oled.clearBuffer();
-
-  // Messaggio grande al centro
-  oled.setFont(u8g2_font_logisoso24_tf);
-  drawCenteredText(msg, 32);
-
-  // Info rimanenti
-  oled.setFont(u8g2_font_6x12_tr);
-  char info[24];
-  snprintf(info, sizeof(info), "Stack: %d", remaining);
-  drawCenteredText(info, 52);
 
   oled.sendBuffer();
 }

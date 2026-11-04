@@ -96,23 +96,23 @@ La mappa corrente associa le coppie GPIO rilevate sul montaggio alle funzioni de
 
 | Linea GPIO | Tasti collegati | Ruolo nella scansione |
 |---|---|---|
-| **GPIO13** | TARE, CLEAR | riga / uscita |
-| **GPIO14** | MODE, SLEEP | riga / uscita |
+| **GPIO13** | TARE, DONE | riga / uscita |
+| **GPIO14** | MODE, UNDO | riga / uscita |
 | **GPIO19** | TOTAL, WIFI | riga / uscita |
 | **GPIO21** | ENTER, SKIP | riga / uscita |
 | **TX2 / GPIO17** | TARE, MODE, TOTAL, ENTER | colonna / ingresso pull-up |
-| **GPIO5** | CLEAR, SLEEP, WIFI, SKIP | colonna / ingresso pull-up |
+| **GPIO5** | DONE, UNDO, WIFI, SKIP | colonna / ingresso pull-up |
 
 Righe e colonne sono il raggruppamento logico usato dalla scansione, non la posizione del connettore o dei tasti sul pannello. La matrice è gestita direttamente dal firmware; non collegare le sei linee direttamente a 3V3, 5 V o GND.
 
 | Riga scansione | Colonna GPIO17 | Colonna GPIO5 |
 |---|---|---|
-| GPIO13 | TARE | CLEAR |
-| GPIO14 | MODE | SLEEP |
+| GPIO13 | TARE | DONE |
+| GPIO14 | MODE | UNDO |
 | GPIO19 | TOTAL | WIFI |
 | GPIO21 | ENTER | SKIP |
 
-Vista frontale, dall'alto: **SKIP / OK**, **WIFI / SLEEP**, **X / TOTAL**, **MODE / TARE**. **OK = ENTER**, **X = CLEAR**. Questa disposizione fisica è distinta dalle righe elettriche della tabella.
+Vista frontale, dall'alto: **SKIP / OK**, **WIFI / UNDO**, **DONE / TOTAL**, **MODE / TARE**. **OK = ENTER**. Il contatto GPIO14/GPIO5 è UNDO; GPIO13/GPIO5 è DONE, al posto di CLEAR. Solo nella pesatura collegata al Manager, DONE breve imposta Pesato e apre il riepilogo, DONE tenuto 2 s imposta Fatto e torna al piano. Nessuna funzione CLEAR è associata al tasto. Questa disposizione funzionale è distinta dalle righe elettriche della tabella e non richiede spostamenti dei sei fili. Le etichette effettivamente montate sul pannello vanno adeguate separatamente.
 
 Il firmware attuale pilota la riga selezionata LOW e le altre HIGH; diodi o resistenze serie non sono documentati nella matrice. Con contatti diretti, due tasti della stessa colonna su righe diverse mettono in contesa le uscite. La combinazione prevista WIFI + TOTAL condivide la riga GPIO19. In light-sleep tutte le righe GPIO13, 14, 19 e 21 sono LOW e le colonne GPIO17 e 5 rilevano il wake; il tasto di risveglio viene consumato fino al rilascio.
 
@@ -173,7 +173,7 @@ Il LED montato è un normale **LED rosso del kit Arduino**. La resistenza **1 k�
 
 Il firmware usa logica active-high. Durante una riproduzione confermata dal **BUSY DFPlayer su GPIO39**, lo stesso GPIO15 genera pulsazioni morbide tramite **PWM LEDC a 5 kHz, 8 bit**. È un effetto voce simulato, non la misura dell'ampiezza audio: BUSY fornisce soltanto riproduzione/idle. Non serve aggiungere hardware per la sfumatura e la resistenza **1 kΩ resta in serie**.
 
-Durante lo standby manuale o per inattività/light-sleep, il firmware sgancia il PWM e mantiene il LED **acceso fisso**; al wake ripristina il PWM. Lo sleep di protezione per batteria scarica lo lascia spento. Il canale LEDC **8** è separato dal gruppo del buzzer, così il cambio delle sue frequenze non altera il LED. Il collegamento BUSY deve essere presente e affidabile per attivare l'effetto; con player spento, AUDIO OFF o riproduzione non confermata il LED resta spento durante il normale funzionamento.
+Durante lo standby per inattività/light-sleep, il firmware sgancia il PWM e mantiene il LED **acceso fisso**; al wake ripristina il PWM. Lo sleep di protezione per batteria scarica lo lascia spento. Il canale LEDC **8** è separato dal gruppo del buzzer, così il cambio delle sue frequenze non altera il LED. Il collegamento BUSY deve essere presente e affidabile per attivare l'effetto; con player spento, AUDIO OFF o riproduzione non confermata il LED resta spento durante il normale funzionamento.
 
 ## 9) Alimentazione e masse
 

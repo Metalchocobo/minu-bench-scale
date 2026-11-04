@@ -6,11 +6,11 @@ enum KeyCode {
   KEY_TARE,
   KEY_ENTER,
   KEY_WIFI,
-  KEY_SLEEP,
+  KEY_UNDO,
   KEY_SKIP,
   KEY_TOTAL,
-  KEY_CLEAR,
   KEY_MODE,
+  KEY_DONE,
   KEY_BATTERY  // Virtual key: WIFI + TOTAL on the same matrix row.
 };
 

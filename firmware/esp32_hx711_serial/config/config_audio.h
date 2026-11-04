@@ -38,7 +38,8 @@ static const uint32_t OVERLOAD_BEEP_GAP_MS = 80;
 inline bool isMustPlayTrack(uint16_t track) {
   return (track == 2  || track == 7  || track == 8  ||
           track == 12 || track == 13 || track == 14 ||
-          track == 15 || track == 16);
+          track == 15 || track == 16 || track == 21 ||
+          track == 22 || track == 23);
 }
 
 // ========================= LEGENDA MP3 =========================
@@ -58,6 +59,9 @@ inline bool isMustPlayTrack(uint16_t track) {
 // 0016 = Tare not completed (boot or manual)
 // 0017 = Modalità WORK
 // 0018 = Modalità LIVE
+// 0021 = Successful UNDO (local restore or durable Manager ACK)
+// 0022 = Production weighed (durable Manager DONE ACK)
+// 0023 = Production completed (durable Manager DONE ACK)
 
 namespace Track {
   static const uint16_t BOOT_START      = 1;
@@ -79,7 +83,9 @@ namespace Track {
   static const uint16_t MODE_WORK      = 17;
   static const uint16_t MODE_LIVE      = 18;
   static const uint16_t TOTAL_PRESSED  = 20;
-  static const uint16_t CLEAR_PRESSED  = 21;
+  static const uint16_t UNDO_SUCCESS   = 21;
+  static const uint16_t DONE_WEIGHED   = 22;
+  static const uint16_t DONE_FINISHED  = 23;
 }
 
 } // namespace AudioConfig

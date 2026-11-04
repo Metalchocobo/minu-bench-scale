@@ -96,7 +96,3 @@ void ui_renderCalLongPress(uint8_t progress);
 // gTotal: somma stack, gNet: peso netto reale, count: elementi stack
 void ui_renderStackCompare(long gTotal, long gNet, int count);
 
-// Overlay: feedback CLEAR (pop/clear all)
-// msg: "POP" o "CLEAR ALL", remaining: elementi rimasti nello stack
-void ui_renderStackClear(const char* msg, int remaining);
-

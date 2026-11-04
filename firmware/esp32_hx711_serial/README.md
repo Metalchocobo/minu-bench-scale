@@ -8,7 +8,11 @@ Le fonti canoniche sono mantenute nella root del repository:
 - `../../docs/WIRING.md` — pinout e cablaggio fisico.
 - [Guida illustrata del cablaggio corrente](../../artifacts/wiring-current/README.md) — panoramica, tavole dei collegamenti e componenti identificati.
 
-La tastiera usa le coppie GPIO rilevate sul montaggio e le funzioni corrispondenti all'orientamento del pannello: righe scansione **13 = TARE/CLEAR, 14 = MODE/SLEEP, 19 = TOTAL/WIFI, 21 = ENTER/SKIP**; colonne **17 (TX2) = TARE/MODE/TOTAL/ENTER** e **5 = CLEAR/SLEEP/WIFI/SKIP**. Il frontale, dall'alto, è **SKIP / OK**, **WIFI / SLEEP**, **X / TOTAL**, **MODE / TARE**, con **OK = ENTER** e **X = CLEAR**. Pin e mappa sono definiti rispettivamente in `config/config_pins.h` e `keypad.cpp`; la combinazione WIFI + TOTAL è ricavata dalla mappa. Il wake usa le stesse righe LOW e le colonne 17/5 con pull-up, senza eseguire l'azione del tasto finché non viene rilasciato.
+La tastiera usa le coppie GPIO rilevate sul montaggio e le funzioni corrispondenti all'orientamento del pannello: righe scansione **13 = TARE/DONE, 14 = MODE/UNDO, 19 = TOTAL/WIFI, 21 = ENTER/SKIP**; colonne **17 (TX2) = TARE/MODE/TOTAL/ENTER** e **5 = DONE/UNDO/WIFI/SKIP**. Il frontale funzionale, dall'alto, è **SKIP / OK**, **WIFI / UNDO**, **DONE / TOTAL**, **MODE / TARE**, con **OK = ENTER**. DONE sostituisce CLEAR sul contatto GPIO13/GPIO5; i sei fili non cambiano. Pin e mappa sono definiti rispettivamente in `config/config_pins.h` e `keypad.cpp`; la combinazione WIFI + TOTAL è ricavata dalla mappa. Il wake usa le stesse righe LOW e le colonne 17/5 con pull-up, senza eseguire l'azione del tasto finché non viene rilasciato.
+
+**UNDO breve**, al rilascio, annulla l'ultima pesata nello stack e ripristina la tara precedente: subito per una voce locale, dopo l'ACK di persistenza per una voce registrata nel Manager. Il Manager rimuove il peso registrato e riapre l'ingrediente. **`SD:/MP3/0021.mp3`** viene richiamato soltanto a esito positivo: subito dopo il ripristino locale, oppure all'ACK Manager riuscito anche se il fail-safe ha già ripristinato la tara durante lo sgancio. AUDIO ON/OFF resta valido e 0021 è non interrompibile: si accoda alle altre voci non interrompibili. Se l'annullamento non è possibile, suona soltanto il buzzer d'errore. Gli annullamenti consecutivi procedono una voce per volta, dopo il completamento del precedente; la cronologia è in RAM, viene azzerata da TARE manuale riuscita, `stack clear` o reboot. **UNDO tenuto 2 s** commuta AUDIO ON/OFF senza annullare. Nel wizard UNDO annulla la calibrazione, senza commutare l'audio. Lo standby manuale non è disponibile: restano inattività di 5 minuti e protezione batteria. Dettagli nel [workflow stack](../../README.md#13-weigh-stack--stack-pesate-locale).
+
+**DONE** agisce solo nella pesatura collegata al Manager, anche nel riepilogo senza ingrediente attivo: al rilascio breve imposta **Pesato** e apre il riepilogo completo; tenuto **2 s** imposta **Fatto** e torna al piano di lavoro. I file **`SD:/MP3/0022.mp3`** e **`0023.mp3`** vengono richiamati rispettivamente dopo l'ACK di salvataggio riuscito, una volta; entrambi sono non interrompibili e rispettano AUDIO ON/OFF. DONE non modifica tara o stack e non ha funzioni locali/CLEAR. Durante TARE, acquisizione ENTER, calibrazione o una response pending resta inattivo; un cambio contesto durante la pressione annulla il gesto. Owner `production_id`, response `done` e receipt dello stato sono descritti nel [protocollo](../../README.md#12-mqtt--integrazione-gestionale).
 
 Per identificare i contatti di una replica senza conoscere l'ordine del connettore, usare lo [sketch separato `keypad_wiring_test`](../keypad_wiring_test/README.md): stampa le coppie GPIO sulla seriale a 115200 baud e non scrive in NVS. Le funzioni della bilancia sono sospese durante il test; terminata la rilevazione, si ricarica questo firmware con la mappa verificata. Le sigle R1–R6 del ritaglio non identificano l'ordine fisico dei pin.
 
@@ -34,7 +38,7 @@ Dopo il cambio cella rifare la calibrazione, preferibilmente con un riferimento 
 
 Da seriale a **115200 baud**: `scale code 00-S` salva il codice in **NVS `minu_identity`, chiave `code`**; **al prossimo riavvio** il nome diventa **Ronin 00-S**, visibile dalla prima schermata OLED e nel campo `name` degli status/LWT MQTT. `scale status` mostra nome attivo e codice salvato; `scale reset` salva il default **00**. Sono ammessi **1–12 caratteri ASCII A-Z, a-z, 0-9, `-`, `_`**, con zeri iniziali mantenuti. Il nome attivo resta immutabile fino al riavvio, anche per il worker MQTT. Il `scale_id` tecnico resta il MAC; i record già registrati nel Manager non vengono rinominati automaticamente dalla discovery. Implementazione: `scale_identity.h/.cpp`; flusso completo nel [README principale](../../README.md#codice-e-nome-della-bilancia).
 
-Il LED esistente su **GPIO15 + 1 kΩ** pulsa con sfumature software mentre il DFPlayer conferma la riproduzione via **BUSY GPIO39**. L'effetto simula la voce senza seguirne l'ampiezza o le sillabe; player spento, AUDIO OFF, idle e sola coda non lo attivano. In standby manuale/per inattività il PWM viene sganciato e il LED resta fisso; al wake viene ripristinato. Lo sleep per batteria scarica lo lascia spento. `status_led.h/.cpp` gestisce l'effetto non bloccante, con parametri in `config/config_led.h`: **5 kHz, 8 bit, canale LEDC 8** separato dal gruppo del buzzer. Non occorrono modifiche al cablaggio; la resa visiva va verificata sulla bilancia. Riferimento in [WIRING](../../docs/WIRING.md#8-led-audio-e-standby--esp32).
+Il LED esistente su **GPIO15 + 1 kΩ** pulsa con sfumature software mentre il DFPlayer conferma la riproduzione via **BUSY GPIO39**. L'effetto simula la voce senza seguirne l'ampiezza o le sillabe; player spento, AUDIO OFF, idle e sola coda non lo attivano. In standby per inattività il PWM viene sganciato e il LED resta fisso; al wake viene ripristinato. Lo sleep per batteria scarica lo lascia spento. `status_led.h/.cpp` gestisce l'effetto non bloccante, con parametri in `config/config_led.h`: **5 kHz, 8 bit, canale LEDC 8** separato dal gruppo del buzzer. Non occorrono modifiche al cablaggio; la resa visiva va verificata sulla bilancia. Riferimento in [WIRING](../../docs/WIRING.md#8-led-audio-e-standby--esp32).
 
 ## Ingresso presenza USB: PC817
 
@@ -56,7 +60,7 @@ I condensatori restano in gruppi distinti: ingresso Mini360 **220 µF / 16 V + 1
 
 Il firmware **1.6.0** annuncia `console_version:1` nello status e usa topic dedicati `minu/scale/{id}/console/request` e `/console/response`, non retained. Richiede gateway Manager autorizzato e **ACL broker dedicate prima del rollout**; le credenziali console non vanno al browser. Nessun hardware aggiuntivo. La seriale USB resta necessaria quando rete/firmware non sono operativi.
 
-`probe` rileva la capacità; `open/poll/exec/close` usano boot e sessione esatti, request ID e scadenza futura entro 30 s. Sessione esclusiva con lease di **30 s**, rinnovato soltanto da open della stessa sessione o poll valido. Blocca inattività e SLEEP manuale finché aperta; la protezione batteria conserva priorità. Close/disconnessione/expiry liberano il blocco. Sessioni chiuse mantengono un fence anti-replay bounded di 31 s; una nuova apertura usa un ID nuovo.
+`probe` rileva la capacità; `open/poll/exec/close` usano boot e sessione esatti, request ID e scadenza futura entro 30 s. Sessione esclusiva con lease di **30 s**, rinnovato soltanto da open della stessa sessione o poll valido. Blocca lo sleep per inattività finché aperta; la protezione batteria conserva priorità. Close/disconnessione/expiry liberano il blocco. Sessioni chiuse mantengono un fence anti-replay bounded di 31 s; una nuova apertura usa un ID nuovo.
 
 I comandi (massimo 127 byte, senza NUL/CR/LF) vengono accodati dal callback ed eseguiti nel loop con `seq` strettamente progressiva; retry esatto non ripete effetti. Diagnostica e configurazione condividono il parser e i guard della USB; `showpass` resta USB-only e le password non entrano nel tee remoto, anche se richieste dalla USB. Mutazioni durante acquisizione/TARE/OTA e cambi rete con receipt pending sono rifiutati busy. Reboot/cambi rete possono perdere l'esito finale.
 
@@ -71,7 +75,7 @@ I comandi (massimo 127 byte, senza NUL/CR/LF) vengono accodati dal callback ed e
 - Una response durable `confirm` o `skip` conserva il `command_id` originale. L'`undo` usa `undo_of_response_id` e non inventa un nuovo command ID.
 - Se l'owner scade, un comando moderno viene conservato raw in RAM ma reso non operativo e non visibile. Da 1.4.2 la bilancia passa alla modalità locale: TARE e ENTER fisici funzionano senza creare nuove response MQTT; un nuovo `weigh` valido riaggancia il Manager. Da 1.4.4 il loop elabora prima un burst limitato a quattro pacchetti MQTT già disponibili e soltanto dopo valuta la scadenza. Da 1.5.0 la presenza usa 25 secondi dall'arrivo di un owner valido, tollerando un heartbeat da 10 secondi saltato. Solo un timestamp strettamente avanzato sullo stesso lease, con età entro 10 secondi, ottiene fino a 5 secondi di clock/jitter grace; replay uguali e lease scaduti non vengono estesi. Da 1.5.2 il takeover da `LOC` non dipende più dal confronto tra epoch tablet ed ESP32: una nuova connessione/lease diventa un candidato inattivo e soltanto un secondo heartbeat con timestamp strettamente avanzato sulla stessa generazione prova che il tablet è vivo. Gli snapshot retained iniziali e i replay uguali non diventano freschi.
 - Il watchdog passivo valida le subscription con i soli owner heartbeat, retained command ed esiti ACK già previsti dal protocollo. Non pubblica probe sui topic business e non richiede nuove ACL. Da 1.5.1 un messaggio `command` ricevuto prova il canale anche quando il suo stato non coincide ancora con `expected_command_id`: la bilancia resta non azionabile fino alla convergenza, ma non risottoscrive né riconnette un socket sano. Un `weigh` moderno valido arrivato prima dell'owner esatto apre una grace owner monotona e deduplicata per comando/connessione; un successivo PUBLISH owner prova il topic anche se il payload è business-divergente. Solo la vera assenza avvia le subscribe bounded ogni 2,5 secondi e al massimo un reconnect per fingerprint; al secondo esaurimento resta `LOC` senza socket churn. L'evidenza owner deve appartenere al trasporto corrente e nuovi ID durante una grace non ne prorogano la scadenza. La grace command parte dal cambio effettivo dell'aspettativa e non viene estesa da heartbeat uguali. Un owner fresco con `expected_command_id=""` pulisce autorevolmente il raw RAM anche senza retained clear, salvo response o `confirm_request` pendenti, e ignora weigh tardivi finché attende clear. Manager legacy senza il campo resta invariato. Per la stessa response l'ACK timeout causa un solo reconnect e resta diagnosticato come `ack_timeout`.
-- L'outbox durable resta immutabile e continua il retry ogni secondo fino al `response_ack` esatto o al terminale `response_reject/manager_incident`, ma non può bloccare indefinitamente l'operatore. Il lock fisico dura al massimo 10 secondi, termina prima su `clear` con `lifecycle=pagehide`/perdita owner e viene sganciato immediatamente dalla prima pressione fisica di TARE o ENTER. Un owner/snapshot remoto mai ricevuto usa la stessa grace. DNS, TCP, TLS e MQTT CONNECT vengono eseguiti da un worker FreeRTOS separato: il loop continua sempre a campionare tastiera e bilancia. TARE/ENTER diventano locali; SKIP/CLEAR remoto e nuovi outbox restano serializzati. Un `confirm` quarantinato viene rollbackato una sola volta solo con receipt esatta ancora in testa e operatore non sganciato; altrimenti la cronologia viene invalidata, senza fake success, undo o ACK. Un undo rifiutato prima del detach non cambia lo stack; se era già stato applicato localmente, il firmware invalida stack/riferimento, mostra `SYNC ERROR` e attiva lo stesso gate cross-layer. Lo status espone `tare_required=true`, resta `operational_mode=local` e conserva un eventuale comando raw senza renderlo azionabile o ACKarlo. Solo una TARE fisica riuscita rimuove entrambi i gate e consente allo stesso comando valido di riattivarsi con un singolo `command_ack`.
+- L'outbox durable resta immutabile e continua il retry ogni secondo fino al `response_ack` esatto o al terminale `response_reject/manager_incident`, ma non può bloccare indefinitamente l'operatore. Il lock fisico dura al massimo 10 secondi, termina prima su `clear` con `lifecycle=pagehide`/perdita owner e viene sganciato immediatamente dalla prima pressione fisica di TARE o ENTER. Un owner/snapshot remoto mai ricevuto usa la stessa grace. DNS, TCP, TLS e MQTT CONNECT vengono eseguiti da un worker FreeRTOS separato: il loop continua sempre a campionare tastiera e bilancia. TARE/ENTER diventano locali; SKIP/UNDO remoto e nuovi outbox restano serializzati. Un `confirm` quarantinato viene rollbackato una sola volta solo con receipt esatta ancora in testa e operatore non sganciato; altrimenti la cronologia viene invalidata, senza fake success, undo o ACK. Un undo rifiutato prima del detach non cambia lo stack; se era già stato applicato localmente, il firmware invalida stack/riferimento, mostra `SYNC ERROR` e attiva lo stesso gate cross-layer. Lo status espone `tare_required=true`, resta `operational_mode=local` e conserva un eventuale comando raw senza renderlo azionabile o ACKarlo. Solo una TARE fisica riuscita rimuove entrambi i gate e consente allo stesso comando valido di riattivarsi con un singolo `command_ack`.
 - Lo status retained viene aggiornato ogni 5 secondi con epoch, boot/transport ID, sequenza, modalità, `tare_required`, causa fallback, ultimo errore, mask owner/command/ack e response pending. Il buffer PubSubClient runtime è 640 byte; il Manager limita `user_name` owner a 48 byte UTF-8 e gli ID a 64 caratteri.
 - Rollout base 1.5 raccomandato: prima il firmware, poi Manager/backend che pubblicano/interpretano i nuovi campi e possono emettere `response_reject`. Per le patch 1.5.1/1.5.2 su un impianto già 1.5.0, distribuire prima il bundle Manager con recovery owner fenced a doppia prova e poi aggiornare la bilancia. Il firmware precedente tollera la seconda pubblicazione; il firmware 1.5.2 la usa per rimuovere la dipendenza dall'epoch locale durante il takeover da `LOC`. Non serve modificare le ACL MQTT della bilancia.
 - Con un owner vivo ENTER richiede un comando attivo. Senza consumer remoto usa il percorso standalone anche se MQTT è ancora connesso; con MQTT disconnesso e un comando remoto non ancora dichiarato stale attende al massimo la stessa finestra di 10 secondi.
@@ -81,6 +85,61 @@ I comandi (massimo 127 byte, senza NUL/CR/LF) vengono accodati dal callback ed e
 Verifica locale:
 
 `tests/firmware_remote_console_harness.cpp` compila `remote_console_state.cpp` senza Arduino e verifica lease/rollover, sessione esclusiva, boot/scadenze, replay e conflitti di sequenza, fence delle sessioni chiuse senza eviction, comandi vietati, ring/cursori/perdite e UTF-8 invalido/incompleto. Eseguire anche `firmware_mqtt_protocol_harness.cpp`, che include lo status con capability nel limite pacchetto da 640 byte.
+
+### Verifica contratto clock console Manager/firmware
+
+`tests/firmware_console_clock_bridge.cpp` collega il core C++ reale
+`remote_console_state.cpp` a encoder, clock e decoder PHP del repository Manager.
+`tests/check_console_clock_contract.php` riproduce il rifiuto con ESP32 avanti
+di 12 s, poi verifica scarti ±120 s, snapshot vecchio di 5 s, apertura/poll/comando/
+chiusura, replay e rifiuto di retained troppo vecchi. Non usa database, broker o
+hardware; non sostituisce una compilazione ESP32 né il parser/trasporto Arduino.
+
+Prerequisiti: dipendenze Composer del Manager installate, PHP, compilatore C++17
+e header ArduinoJson 7 della libreria firmware. Su Windows aprire **x64 Native
+Tools Command Prompt**, entrare nella root di questo repository ed eseguire ogni
+riga separatamente (adattare il percorso ArduinoJson se diverso):
+
+```bat
+if not exist "%TEMP%\minu-console-clock" mkdir "%TEMP%\minu-console-clock"
+cl /nologo /std:c++17 /EHsc /W4 /WX /I"C:\Users\shado\Documents\Arduino\libraries\ArduinoJson\src" tests\firmware_console_clock_bridge.cpp firmware\esp32_hx711_serial\remote_console_state.cpp /Fe:"%TEMP%\minu-console-clock\console-clock.exe" /Fo:"%TEMP%\minu-console-clock/"
+php tests\check_console_clock_contract.php --manager-root="D:\xampp\htdocs\minu\manager" --bridge="%TEMP%\minu-console-clock\console-clock.exe"
+```
+
+L'esito atteso è `PASS console clock wire contract`. Per gateway TLS reale,
+permessi e sessioni, dalla root Manager eseguire `composer test:domain -- scale`
+con `.env.testing` e solo `manager_test`; istruzioni complete in
+`docs/agent-knowledge/06c-scale-console.md` del Manager. Queste prove non attestano
+deploy Forge o comportamento della bilancia fisica.
+
+### Verifica controlli UNDO
+
+`tests/check_undo_controls.py` compila gli helper di produzione estratti dal file
+`.ino` con i moduli reali stack e scala: verifica 21 scenari e 122 assert su
+annullamento locale/remoto, ripristino tara, ACK, errori e pressione lunga.
+Non usa hardware né database. Dalla root del repository, su Windows:
+
+```powershell
+python tests/check_undo_controls.py --vcvars "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
+```
+
+Su altre piattaforme omettere `--vcvars`: lo script trova automaticamente `g++`
+o `clang++`. Il ripristino della tara mostra subito il peso, senza un overlay
+UNDO che lo copra. Il test non sostituisce la compilazione ESP32 o la verifica
+della bilancia fisica.
+
+### Verifica controlli DONE
+
+`tests/check_done_controls.py` estrae i veri helper del gesto e del feedback dal `.ino`: verifica breve/lungo, azione singola, annullamento al cambio contesto, blocchi TARE/ENTER/wizard, rollover e audio soltanto all'ACK. `tests/check_done_network.py` verifica staging/outbox e il ramo ACK/reject reali, inclusi riepilogo senza `weigh`, gate owner/prodotto, retry e immutabilità. Usano lo stesso compilatore host della verifica UNDO:
+
+```powershell
+python tests/check_done_controls.py --vcvars "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
+python tests/check_done_network.py --vcvars "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
+```
+
+Le prove host non attestano flash, deploy Manager o comportamento fisico.
+
+### Altri harness firmware
 
 Gli harness `tests/firmware_scale_identity_harness.cpp` e `tests/firmware_status_led_harness.cpp` compilano i moduli reali con stub NVS/PWM: verificano persistenza e applicazione del codice al riavvio, errori di storage, input invalidi, sfumature, stop, standby/wake, rollover e fallback senza PWM. Dalla root, con un compilatore C++17:
 

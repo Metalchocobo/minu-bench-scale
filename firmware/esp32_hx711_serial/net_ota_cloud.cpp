@@ -359,6 +359,7 @@ static char     mqtt_ownerConnectionId[65] = {0};
 static char     mqtt_ownerLeaseId[65] = {0};
 static bool     mqtt_ownerHasExpectedCommand = false;
 static char     mqtt_ownerExpectedCommandId[65] = {0};
+static uint32_t mqtt_ownerProductionId = 0;
 static uint32_t mqtt_ownerTimestamp = 0;
 static uint32_t mqtt_ownerReceivedMs = 0;
 static uint32_t mqtt_ownerRemainingMs = 0;
@@ -384,7 +385,9 @@ enum MqttResponseKind : uint8_t {
   MQTT_RESPONSE_NONE = 0,
   MQTT_RESPONSE_CONFIRM,
   MQTT_RESPONSE_SKIP,
-  MQTT_RESPONSE_UNDO
+  MQTT_RESPONSE_UNDO,
+  MQTT_RESPONSE_DONE_WEIGHED,
+  MQTT_RESPONSE_DONE_FINISHED
 };
 static bool     mqtt_responsePending = false;
 static MqttResponseKind mqtt_responseKind = MQTT_RESPONSE_NONE;
@@ -546,6 +549,8 @@ static bool     mqtt_activityFlag    = false;
 static bool     mqtt_undoAckFlag     = false;
 static bool     mqtt_undoRejectFlag  = false;
 static bool     mqtt_undoDetachedRejectFlag = false;
+static uint8_t  mqtt_doneAckStatus = 0;
+static bool     mqtt_doneRejectFlag = false;
 static bool     mqtt_confirmRejectFlag = false;
 static bool     mqtt_confirmRejectRollbackSafe = false;
 static char     mqtt_confirmRejectResponseId[25] = {0};
@@ -707,6 +712,7 @@ static void mqttResetOwnerSnapshot() {
   mqtt_ownerLeaseId[0] = '\0';
   mqtt_ownerHasExpectedCommand = false;
   mqtt_ownerExpectedCommandId[0] = '\0';
+  mqtt_ownerProductionId = 0;
   mqtt_ownerTimestamp = 0;
   mqtt_ownerReceivedMs = 0;
   mqtt_ownerRemainingMs = 0;
@@ -716,6 +722,7 @@ static void mqttResetOwnerSnapshot() {
 static void mqttDeactivateOwnerSnapshot() {
   mqtt_ownerKnown = true;
   mqtt_ownerActive = false;
+  mqtt_ownerProductionId = 0;
   mqtt_ownerReceivedMs = millis();
   mqtt_ownerRemainingMs = 0;
   mqtt_statusDirty = true;
@@ -894,6 +901,8 @@ static bool mqttHandleOwner(const JsonDocument& doc) {
   strlcpy(mqtt_ownerConnectionId, connectionId, sizeof(mqtt_ownerConnectionId));
   strlcpy(mqtt_ownerLeaseId, leaseId, sizeof(mqtt_ownerLeaseId));
   mqtt_ownerHasExpectedCommand = hasExpectedCommand;
+  mqtt_ownerProductionId = !released && doc["production_id"].is<uint32_t>()
+    ? doc["production_id"].as<uint32_t>() : 0;
   strlcpy(
     mqtt_ownerExpectedCommandId, expectedCommandId,
     sizeof(mqtt_ownerExpectedCommandId));
@@ -1657,9 +1666,10 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length) {
       ConsoleLog.print(F("[MQTT] Response ACK: "));
       ConsoleLog.println(responseId);
       if (mqtt_responseKind == MQTT_RESPONSE_UNDO) {
-        if (!mqtt_localFallbackActive && !mqtt_undoWasDetachedApplied) {
-          mqtt_undoAckFlag = true;
-        } else if (mqtt_undoWasDetachedApplied) {
+        // ACK also completes the success feedback after a detached restore.
+        // The main loop tracks whether the local pop was already applied.
+        mqtt_undoAckFlag = true;
+        if (mqtt_undoWasDetachedApplied) {
           mqtt_detachedUndoFlag = false;
         }
         // If detach was requested but the main loop has not consumed it yet,
@@ -1667,6 +1677,11 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length) {
         // restore even though its outbox is now terminal.
       } else {
         mqtt_detachedUndoFlag = false;
+      }
+      if (mqtt_responseKind == MQTT_RESPONSE_DONE_WEIGHED) {
+        mqtt_doneAckStatus = 2;
+      } else if (mqtt_responseKind == MQTT_RESPONSE_DONE_FINISHED) {
+        mqtt_doneAckStatus = 3;
       }
       mqtt_undoWasDetachedApplied = false;
       mqttResetPendingResponse();
@@ -1679,6 +1694,10 @@ static void mqttCallback(char* topic, byte* payload, unsigned int length) {
       mqttMarkInboundTopic(MQTT_RX_ACK);
       const bool rejectedUndo = mqtt_responseKind == MQTT_RESPONSE_UNDO;
       const bool rejectedConfirm = mqtt_responseKind == MQTT_RESPONSE_CONFIRM;
+      if (mqtt_responseKind == MQTT_RESPONSE_DONE_WEIGHED ||
+          mqtt_responseKind == MQTT_RESPONSE_DONE_FINISHED) {
+        mqtt_doneRejectFlag = true;
+      }
       const bool rejectedAfterDetachedApply =
         rejectedUndo && mqtt_undoWasDetachedApplied;
       ConsoleLog.print(F("[MQTT] Response quarantined: "));
@@ -2319,6 +2338,8 @@ void mqttSetup() {
   mqtt_undoAckFlag = false;
   mqtt_undoRejectFlag = false;
   mqtt_undoDetachedRejectFlag = false;
+  mqtt_doneAckStatus = 0;
+  mqtt_doneRejectFlag = false;
   mqtt_confirmRejectFlag = false;
   mqtt_confirmRejectRollbackSafe = false;
   mqtt_confirmRejectResponseId[0] = '\0';
@@ -2578,6 +2599,79 @@ bool mqttSkipActiveCommand() {
   mqtt_responseStartedMs = millis();
   mqtt_responseLastPublishMs = 0;
   mqttPublishPendingResponse();
+  return true;
+}
+
+bool isMqttDoneActionable() {
+  if (!isMqttManagerAttached() || mqtt_ownerProductionId == 0 ||
+      mqtt_responsePending ||
+      mqtt_confirmRequestState == MQTT_CONFIRM_REQUEST_QUEUED ||
+      mqtt_confirmRequestState == MQTT_CONFIRM_REQUEST_RUNNING ||
+      mqtt_confirmRequestState == MQTT_CONFIRM_REQUEST_STAGED) return false;
+  if (mqtt_cmdActive) {
+    return mqttCommandIsActionable() &&
+      mqtt_cmdProductId == mqtt_ownerProductionId &&
+      mqttOwnerAuthorizes(mqtt_cmdSessionId, mqtt_cmdConnectionId);
+  }
+  // An explicit idle expectation is the authoritative no-ingredient context;
+  // a merely missing retained command cannot authorize production changes.
+  return mqtt_ownerHasExpectedCommand &&
+    mqtt_ownerExpectedCommandId[0] == '\0';
+}
+
+uint32_t getMqttDoneProductId() {
+  return mqtt_ownerProductionId;
+}
+
+const char* getMqttDoneCommandId() {
+  return mqtt_cmdActive ? mqtt_cmdCommandId : "";
+}
+
+const char* getMqttDoneConnectionId() {
+  return mqtt_ownerConnectionId;
+}
+
+bool mqttDoneActiveProduction(uint8_t productionStatus) {
+  if ((productionStatus != 2 && productionStatus != 3) ||
+      !isMqttDoneActionable()) return false;
+
+  mqttGenerateResponseId();
+  const char* commandId = getMqttDoneCommandId();
+  const char* uuid = mqtt_cmdActive ? mqtt_cmdUuid : "";
+  int written = commandId[0] != '\0'
+    ? snprintf(mqtt_responsePayload, sizeof(mqtt_responsePayload),
+        "{\"type\":\"done\",\"uuid\":\"%s\",\"product_id\":%lu,\"session_id\":\"%s\",\"command_id\":\"%s\",\"response_id\":\"%s\",\"production_status\":%u}",
+        uuid, (unsigned long)mqtt_ownerProductionId, mqtt_ownerSessionId,
+        commandId, mqtt_responseId, (unsigned int)productionStatus)
+    : snprintf(mqtt_responsePayload, sizeof(mqtt_responsePayload),
+        "{\"type\":\"done\",\"uuid\":\"%s\",\"product_id\":%lu,\"session_id\":\"%s\",\"response_id\":\"%s\",\"production_status\":%u}",
+        uuid, (unsigned long)mqtt_ownerProductionId, mqtt_ownerSessionId,
+        mqtt_responseId, (unsigned int)productionStatus);
+  if (written < 0 || written >= (int)sizeof(mqtt_responsePayload)) {
+    mqttResetPendingResponse();
+    return false;
+  }
+  mqtt_responseKind = productionStatus == 2
+    ? MQTT_RESPONSE_DONE_WEIGHED : MQTT_RESPONSE_DONE_FINISHED;
+  mqtt_doneAckStatus = 0;
+  mqtt_doneRejectFlag = false;
+  mqtt_responseAckReconnectDone = false;
+  mqtt_responsePending = true;
+  mqtt_responseStartedMs = millis();
+  mqtt_responseLastPublishMs = 0;
+  mqttPublishPendingResponse();
+  return true;
+}
+
+uint8_t mqttPopDoneAck() {
+  uint8_t status = mqtt_doneAckStatus;
+  mqtt_doneAckStatus = 0;
+  return status;
+}
+
+bool mqttPopDoneReject() {
+  if (!mqtt_doneRejectFlag) return false;
+  mqtt_doneRejectFlag = false;
   return true;
 }
 
