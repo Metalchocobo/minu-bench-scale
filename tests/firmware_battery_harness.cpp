@@ -278,9 +278,9 @@ static void testSensorCadenceAndVoltageReconstruction() {
 static void testBarBoundaries() {
   struct ExpectedBand { float voltage; BatteryLevel level; };
   const ExpectedBand bands[] = {
-    {6.60f, BATT_LEVEL_FULL}, {6.599f, BATT_LEVEL_GOOD},
-    {6.50f, BATT_LEVEL_GOOD}, {6.499f, BATT_LEVEL_LOW},
-    {6.35f, BATT_LEVEL_LOW}, {6.349f, BATT_LEVEL_CRITICAL},
+    {6.50f, BATT_LEVEL_FULL}, {6.499f, BATT_LEVEL_GOOD},
+    {6.38f, BATT_LEVEL_GOOD}, {6.379f, BATT_LEVEL_LOW},
+    {6.26f, BATT_LEVEL_LOW}, {6.259f, BATT_LEVEL_CRITICAL},
     {6.10f, BATT_LEVEL_CRITICAL}, {6.099f, BATT_LEVEL_EMPTY}
   };
   for (const ExpectedBand& band : bands) {

@@ -345,13 +345,13 @@ Se il sensore è assente o la lettura è invalida/scaduta, appare il relativo me
 
 ### 8.2 Soglie tacche (default firmware, tensione filtrata)
 Fasce iniziali LiFePO4 definite in `config/config_battery.h`, da verificare durante una scarica reale:
-- **4 tacche (FULL)**: ≥ **6,60 V**
-- **3 tacche (GOOD)**: **6,50 V ≤ V < 6,60 V**
-- **2 tacche (LOW)**: **6,35 V ≤ V < 6,50 V**
-- **1 tacca (CRITICAL)**: **6,10 V ≤ V < 6,35 V**
+- **4 tacche (FULL)**: ≥ **6,50 V**
+- **3 tacche (GOOD)**: **6,38 V ≤ V < 6,50 V**
+- **2 tacche (LOW)**: **6,26 V ≤ V < 6,38 V**
+- **1 tacca (CRITICAL)**: **6,10 V ≤ V < 6,26 V**
 - **0 tacche (EMPTY)**: < **6,10 V**
 
-FULL indica la fascia alta, non certifica una carica completa. La lettura riferita di **6,63–6,64 V** dopo 15 minuti con USB scollegata rientra nella fascia alta; le soglie inferiori non derivano ancora da una scarica misurata. Restano il filtro di tensione e i tempi esistenti, senza nuova isteresi o debounce delle tacche.
+FULL indica la fascia alta, non certifica una carica completa. La fascia alta parte da **6,50 V**, con un riferimento alto di circa **6,65 V** riportato da Andrea. Questi riferimenti non costituiscono una stima calibrata dello stato di carica; le soglie inferiori non derivano ancora da una scarica misurata. Restano il filtro di tensione e i tempi esistenti, senza nuova isteresi o debounce delle tacche.
 
 Nota: c'è un **cuscinetto** tra 0 tacche e il light-sleep per batteria scarica. La sequenza di countdown parte a **≤ 5,80 V** dopo il debounce previsto.
 
@@ -713,7 +713,7 @@ Stack pesate in RAM (LIFO, max 50 elementi). Ogni voce conserva grammi, offset e
 - Se la tara manuale fallisce per deriva reale o campioni insufficienti, offset, riferimento e stack restano invariati
 - Le overlay si chiudono dopo 10 secondi; l'overlay TOTAL si chiude anche con TOTAL, TARE o ENTER
 - L'azione breve di UNDO scatta al rilascio solo se la soglia di 2 secondi non è stata raggiunta. Non esiste un tasto per svuotare tutto lo stack.
-- DONE breve scatta al rilascio; a 2 secondi scatta soltanto l'azione lunga. Funziona anche nel riepilogo senza ingrediente attivo, con il contesto produzione trasmesso dal Manager. Fuori dalla pesatura gestita, durante TARE, acquisizione ENTER, calibrazione o consegna di una response è inattivo. Un cambio di produzione, ingrediente o connessione durante la pressione annulla il gesto. Non cancella stack o tara. Dopo il salvataggio confermato dal Manager riproduce **0022** per Pesato oppure **0023** per Fatto; un errore non produce audio di successo.
+- DONE breve scatta al rilascio; a 2 secondi scatta soltanto l'azione lunga. Funziona in tutte le schermate della pesatura Manager, incluso il riepilogo senza ingrediente attivo e gli avvisi di errore/scostamento peso, con il contesto produzione trasmesso dal Manager. Fuori dalla pesatura gestita, senza permesso o con produzione già Fatto, durante TARE, acquisizione ENTER, calibrazione o consegna di una response non esegue l'azione e dà il **bip d'errore**, come UNDO. Anche un cambio di produzione, ingrediente o connessione durante la pressione annulla il gesto con un solo segnale d'errore, senza ripeterlo al rilascio. Non cancella stack o tara. Dopo il salvataggio confermato dal Manager riproduce **0022** per Pesato oppure **0023** per Fatto; un errore non produce audio di successo.
 - Un annullamento locale riuscito richiama subito **`SD:/MP3/0021.mp3`**; per una voce registrata nel Manager l'audio parte soltanto dopo il suo ACK di successo, anche se il fail-safe ha già ripristinato la tara localmente. AUDIO ON/OFF e priorità del player restano validi. Stack vuoto, annullamento non possibile o rifiutato producono soltanto il bip d'errore del buzzer, senza 0021.
 
 ### Comandi seriali

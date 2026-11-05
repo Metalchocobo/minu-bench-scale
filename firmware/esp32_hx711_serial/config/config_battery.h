@@ -12,9 +12,9 @@ namespace BatteryConfig {
 static const uint32_t DEBUG_LOG_PERIOD_MS = 3000;
 
 // Indicative LiFePO4 voltage bands; bars are not state-of-charge percentages.
-static const float V_FULL_MIN            = 6.60f;
-static const float V_GOOD_MIN            = 6.50f;
-static const float V_LOW_MIN             = 6.35f;
+static const float V_FULL_MIN            = 6.50f;
+static const float V_GOOD_MIN            = 6.38f;
+static const float V_LOW_MIN             = 6.26f;
 static const float V_CRITICAL_MIN        = 6.10f;
 
 // PC817 USB-presence indication; never bypasses low-voltage protection.

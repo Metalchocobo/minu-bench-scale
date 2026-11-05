@@ -1494,7 +1494,10 @@ static bool isDoneBehaviorReady(uint32_t nowMs) {
 
 static void startDoneKey(uint32_t nowMs) {
   g_donePressStartMs = 0;
-  if (!isDoneBehaviorReady(nowMs)) return;
+  if (!isDoneBehaviorReady(nowMs)) {
+    buzzerError();
+    return;
+  }
   g_doneProductId = Net::getMqttDoneProductId();
   strlcpy(g_doneCommandId, Net::getMqttDoneCommandId(), sizeof(g_doneCommandId));
   strlcpy(g_doneConnectionId, Net::getMqttDoneConnectionId(), sizeof(g_doneConnectionId));
@@ -1508,6 +1511,7 @@ static void updateDoneKey(uint32_t nowMs) {
       strcmp(g_doneCommandId, Net::getMqttDoneCommandId()) != 0 ||
       strcmp(g_doneConnectionId, Net::getMqttDoneConnectionId()) != 0) {
     g_donePressStartMs = 0;
+    buzzerError();
     return;
   }
   bool longPress = (uint32_t)(nowMs - g_donePressStartMs) >= LONG_PRESS_MS;
@@ -1561,6 +1565,8 @@ void handleKeyEvent(KeyCode key) {
   if (key == KEY_DONE) {
 #if ENABLE_MQTT
     startDoneKey(millis());
+#else
+    buzzerError();
 #endif
     return;
   }
@@ -2581,8 +2587,8 @@ void loop() {
   bool mqttLocalFallback = false;
 #endif
 
-  // ENTER acquisition/results are self-closing and ignore every key so a
-  // second press cannot create a duplicate commit or dismiss the feedback.
+  // ENTER acquisition/results suppress weight-changing keys. DONE reaches
+  // its own preflight so an unavailable action still reports an error.
   if (g_syncIncidentNeedsTare) {
     CalWizard::cancelLongPress();
     if (CalWizard::isActive()) CalWizard::abort();
@@ -2597,7 +2603,7 @@ void loop() {
     CalWizard::cancelLongPress();
     g_skipShortPending = false;
     if (keypad_is_pressed(KEY_SKIP)) g_skipBlockedUntilRelease = true;
-    if (key != KEY_NONE && key != KEY_UNDO) {
+    if (key != KEY_NONE && key != KEY_UNDO && key != KEY_DONE) {
       ConsoleLog.println(F("[KEYPAD] Ignorato durante ENTER"));
       key = KEY_NONE;
     }

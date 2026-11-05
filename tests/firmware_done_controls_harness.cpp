@@ -86,7 +86,7 @@ int main() {
   reset(); startDoneKey(1000); pressed = false; updateDoneKey(3050);
   require(Net::stages == std::vector<uint8_t>{3}, "slow loop must preserve long gesture");
 
-  // Each preflight blocker prevents arming and remains silent outside weighing.
+  // An unavailable gesture reports an error once, even when held/released.
   for (int blocker = 0; blocker < 7; ++blocker) {
     reset();
     if (blocker == 0) Net::actionable = false;
@@ -96,12 +96,22 @@ int main() {
     if (blocker == 4) CalWizard::active = true;
     if (blocker == 5) CalWizard::longPress = true;
     if (blocker == 6) g_enterUiState = ENTER_UI_ACQUIRING;
-    startDoneKey(1000); shortRelease();
-    require(Net::stages.empty() && errors == 0, "blocked gesture must remain inactive");
+    startDoneKey(1000);
+    updateDoneKey(3100);
+    shortRelease();
+    require(Net::stages.empty() && errors == 1 && Audio::requests.empty(),
+            "blocked gesture must report one error without a success action");
+    Net::actionable = true; Net::pending = false;
+    g_syncIncidentNeedsTare = tareLocked = false;
+    CalWizard::active = CalWizard::longPress = false;
+    g_enterUiState = ENTER_UI_IDLE;
+    updateDoneKey(4000);
+    require(Net::stages.empty() && errors == 1,
+            "restored readiness must not rearm a blocked gesture");
   }
 
   // Context loss is sticky for this gesture, even if readiness later returns.
-  for (int change = 0; change < 6; ++change) {
+  for (int change = 0; change < 9; ++change) {
     reset(); startDoneKey(1000);
     if (change == 0) Net::actionable = false;
     if (change == 1) Net::pending = true;
@@ -109,10 +119,15 @@ int main() {
     if (change == 3) Net::commandId = "command-2";
     if (change == 4) Net::connectionId = "connection-2";
     if (change == 5) tareLocked = true;
+    if (change == 6) CalWizard::active = true;
+    if (change == 7) CalWizard::longPress = true;
+    if (change == 8) g_enterUiState = ENTER_UI_ACQUIRING;
     updateDoneKey(1100);
     Net::actionable = true; Net::pending = tareLocked = false;
     shortRelease();
-    require(Net::stages.empty(), "context change must cancel until a fresh press");
+    updateDoneKey(4000);
+    require(Net::stages.empty() && errors == 1 && Audio::requests.empty(),
+            "context change must cancel once with error until a fresh press");
   }
 
   reset(); Net::commandId.clear(); startDoneKey(1000); shortRelease();
